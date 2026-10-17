@@ -259,6 +259,7 @@ import {
   ExperimentalUnsupportedRows,
   loadExperimentalState,
   toolAppliedToast,
+  toolApplyingToast,
 } from "./ExperimentalSetup";
 import {
   ME3TWEAKS_MOD_ID,
@@ -4691,6 +4692,10 @@ export default definePlugin(() => {
   const toolListener = addEventListener<
     [domain: string, result: { ok: boolean; count?: number; error?: string }]
   >("experimental_tool_applied", toolAppliedToast);
+  const toolStartListener = addEventListener(
+    "experimental_tool_applying",
+    toolApplyingToast
+  );
 
   routerHook.addRoute(BROWSE_ROUTE, BrowsePage, { exact: true });
   routerHook.addRoute(DETAIL_ROUTE, ModDetailPage, { exact: true });
@@ -4814,6 +4819,7 @@ export default definePlugin(() => {
       removeEventListener("install_progress", progressListener);
       removeEventListener("experimental_changed", experimentalListener);
       removeEventListener("experimental_tool_applied", toolListener);
+      removeEventListener("experimental_tool_applying", toolStartListener);
       lifetime?.unregister();
     },
   };

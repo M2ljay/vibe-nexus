@@ -35,18 +35,30 @@ import { notifyGameStateChanged } from "./state";
 /** Toast for the backend's automatic re-apply after an install/uninstall. */
 export function toolAppliedToast(
   _domain: string,
-  result: { ok: boolean; count?: number; error?: string }
+  result: { ok: boolean; count?: number; error?: string; restart?: boolean }
 ): void {
   toaster.toast(
     result.ok
       ? {
-          title: "Overstrike applied your mods",
-          body: result.count
-            ? `${result.count} mod file${result.count === 1 ? "" : "s"} active`
-            : "No mods installed - the game is back to vanilla",
+          title: result.restart
+            ? "Mods applied - restart the game to see them"
+            : "Overstrike applied your mods",
+          body: result.restart
+            ? "The game was already running and loaded the old files."
+            : result.count
+              ? `${result.count} mod file${result.count === 1 ? "" : "s"} active - you can play now`
+              : "No mods installed - the game is back to vanilla",
         }
       : { title: "Overstrike couldn't apply mods", body: result.error ?? "" }
   );
+}
+
+/** Shown when the automatic re-apply starts, so nobody launches mid-way. */
+export function toolApplyingToast(): void {
+  toaster.toast({
+    title: "Applying mods with Overstrike…",
+    body: "Wait for the next message before starting the game",
+  });
 }
 
 /** Pull the saved experimental state from the backend into games.ts. */

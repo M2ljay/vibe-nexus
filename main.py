@@ -7560,7 +7560,22 @@ async def _overstrike_apply(game: dict) -> dict:
 _TOOL_APPLY_TASKS: dict = {}
 
 
-def _schedule_tool_apply(game_domain: str, delay: float = 6.0) -> None:
+async def _process_running(exe_name: str) -> bool:
+    """Is a process with this image name running? (Windows only.)"""
+    if sys.platform != "win32" or not exe_name:
+        return False
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "tasklist", "/FI", f"IMAGENAME eq {exe_name}", "/NH",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=_host_env(), **_NO_WINDOW)
+        out, _ = await asyncio.wait_for(proc.communicate(), 20)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    return exe_name.lower() in out.decode(errors="replace").lower()
+
+
+def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
     """Re-apply a tool-managed game's mods shortly after the last change,
     so a collection of 40 installs runs the tool once, not 40 times."""
     game = _experimental_game_for(game_domain)
@@ -7572,7 +7587,15 @@ def _schedule_tool_apply(game_domain: str, delay: float = 6.0) -> None:
 
     async def later():
         await asyncio.sleep(delay)
-        result = await _overstrike_apply(_experimental_game_for(game_domain) or game)
+        await decky.emit("experimental_tool_applying", game_domain)
+        current = _experimental_game_for(game_domain) or game
+        result = await _overstrike_apply(current)
+        # A game started while the tool was writing read the old files:
+        # 2026-10-17, Spider-Man launched 4s before Overstrike finished and
+        # ran vanilla. Say so instead of looking like the mod did nothing.
+        exe = os.path.basename(current.get("processName") or "")
+        if result.get("ok") and await _process_running(exe):
+            result["restart"] = True
         settings = _load_settings()
         settings.setdefault("tool_apply_last", {})[game_domain] = {
             **result, "at": int(time.time())}
@@ -31072,6 +31095,9 @@ query CollectionInstructions($slug: String!) {
         if not game or game.get("toolApply") != "overstrike":
             return {"ok": False, "error": "This game has no mod tool to run"}
         result = await _overstrike_apply(game)
+        if result.get("ok") and await _process_running(
+                os.path.basename(game.get("processName") or "")):
+            result["restart"] = True
         settings = _load_settings()
         settings.setdefault("tool_apply_last", {})[game["nexusDomain"]] = {
             **result, "at": int(time.time())}
