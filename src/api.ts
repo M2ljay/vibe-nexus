@@ -717,7 +717,7 @@ export const installFramework = callable<
     game_domain: string,
     mod_id: number,
     install_dir: string,
-    install_kind: "smapi" | "copyRoot" | "masseffectBink",
+    install_kind: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked",
     detect_file: string,
     avoid_file_keywords: string[],
     install_subdir: string,
@@ -2315,3 +2315,8 @@ export const removeExperimentalGame = callable<
   [app_id: number],
   { ok: boolean; removed?: boolean }
 >("remove_experimental_game");
+
+export const removeExperimentalFramework = callable<
+  [app_id: number],
+  { ok: boolean; removed?: number; error?: string }
+>("remove_experimental_framework");

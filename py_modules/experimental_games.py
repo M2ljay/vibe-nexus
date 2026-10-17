@@ -322,3 +322,89 @@ def build_game(app_id: int, display_name: str, install_dir: str,
     if inspection.get("flatModExtensions"):
         game["flatModExtensions"] = inspection["flatModExtensions"]
     return game
+
+
+# ---- Game-wide requirements ("frameworks") ----------------------------------
+# Some games load no mods at all until a loader or bypass is installed (Marvel
+# Rivals: a signature bypass dll beside the game exe). Such a requirement is
+# found from the data: the mod most of the game's top mods list as required,
+# whose archive holds program files rather than ordinary mod content.
+
+_LOADER_EXTS = (".dll", ".asi")
+
+
+def pick_common_requirement(nodes: list, domain: str, min_share: float = 0.2,
+                            min_count: int = 3):
+    """The requirement shared by enough of the given legacyMods nodes.
+
+    nodes are {"modId", "modRequirements": {"nexusRequirements": {"nodes":
+    [{"modId", "modName", "url"}]}}}. Requirements on another game's page
+    are ignored. Returns {"modId", "modName", "count"} or None.
+    """
+    counts = {}
+    names = {}
+    own = {int(n.get("modId") or 0) for n in nodes or [] if isinstance(n, dict)}
+    for n in nodes or []:
+        if not isinstance(n, dict):
+            continue
+        reqs = (((n.get("modRequirements") or {}).get("nexusRequirements") or {})
+                .get("nodes") or [])
+        seen = set()
+        for r in reqs:
+            try:
+                rid = int(r.get("modId") or 0)
+            except (TypeError, ValueError):
+                continue
+            url = str(r.get("url") or "").lower()
+            if not rid or rid in seen:
+                continue
+            if url and f"/{domain.lower()}/mods/" not in url:
+                continue
+            seen.add(rid)
+            counts[rid] = counts.get(rid, 0) + 1
+            names.setdefault(rid, str(r.get("modName") or f"mod {rid}"))
+    if not counts:
+        return None
+    rid, count = max(counts.items(), key=lambda kv: (kv[1], -kv[0]))
+    total = max(len(own), 1)
+    if count < min_count or count / total < min_share:
+        return None
+    return {"modId": rid, "modName": names[rid], "count": count}
+
+
+def framework_layout(paths: list, exe_dir: str):
+    """Where a requirement archive installs, from its file listing.
+
+    Returns {"installSubdir", "detectFile"} (both relative to the game root,
+    forward slashes) when the archive carries a loader (.dll/.asi), else None
+    - an archive of ordinary mod files is just a mod, installed normally.
+
+    A single wrapper folder is ignored (as the copyRoot installer flattens
+    it). An archive laid out from the game root (its paths start with the
+    exe folder's first component) installs at the root; anything else goes
+    beside the game exe.
+    """
+    rels = [p.replace("\\", "/").strip("/") for p in paths or [] if p]
+    rels = [p for p in rels if p]
+    if not rels:
+        return None
+    tops = {p.split("/")[0] for p in rels}
+    exe_parts = [p for p in (exe_dir or "").split("/") if p]
+    if (len(tops) == 1 and all("/" in p for p in rels)
+            and (not exe_parts or next(iter(tops)).lower() != exe_parts[0].lower())):
+        wrapper = next(iter(tops))
+        rels = [p[len(wrapper) + 1:] for p in rels]
+    loaders = [p for p in rels if p.lower().endswith(_LOADER_EXTS)]
+    if not loaders:
+        return None
+    if exe_parts and any(p.split("/")[0].lower() == exe_parts[0].lower() for p in rels):
+        detect = min(loaders, key=lambda p: (p.count("/"), p.lower()))
+        return {"installSubdir": "", "detectFile": detect}
+    detect = min(loaders, key=lambda p: (p.count("/"), p.lower()))
+    sub = "/".join(exe_parts)
+    return {"installSubdir": sub, "detectFile": (sub + "/" + detect) if sub else detect}
+
+
+def exe_dir_of(process_name: str) -> str:
+    parts = (process_name or "").replace("\\", "/").split("/")
+    return "/".join(parts[:-1])

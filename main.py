@@ -2591,7 +2591,7 @@ def _force_rmtree(path: str) -> None:
 
 
 def _copy_root_payload(scratch: str, dest_root: str, detect_file: str,
-                       install_subdir: str = "") -> None:
+                       install_subdir: str = "", backup: bool = False) -> tuple:
     """Move a copyRoot framework archive's payload into dest_root.
 
     The archive is the game-dir payload, usually inside one wrapper
@@ -2637,6 +2637,7 @@ def _copy_root_payload(scratch: str, dest_root: str, detect_file: str,
         and top[0].lower() != detect_root
     ):
         src = os.path.join(scratch, top[0])
+    moved, backed_up = [], []
     for root, _dirs, names in os.walk(src):
         for name in names:
             rel = os.path.relpath(os.path.join(root, name), src)
@@ -2645,8 +2646,15 @@ def _copy_root_payload(scratch: str, dest_root: str, detect_file: str,
             dst = os.path.join(dest_root, rel)
             _makedirs_for(dst)
             if os.path.isfile(dst):
-                os.remove(dst)
+                if backup and not os.path.exists(dst + ".nexusbak"):
+                    # Tracked installs (experimental games) keep the game's
+                    # own file so removing the loader can put it back.
+                    os.replace(dst, dst + ".nexusbak")
+                    backed_up.append(rel.replace(os.sep, "/"))
+                else:
+                    os.remove(dst)
             shutil.move(os.path.join(root, name), dst)
+            moved.append(rel.replace(os.sep, "/"))
             # .sh too: Valheim's loader starts from
             # start_game_bepinex.sh, which its zip stores
             # without the executable bit, and Steam cannot run
@@ -2657,6 +2665,7 @@ def _copy_root_payload(scratch: str, dest_root: str, detect_file: str,
                     os.chmod(dst, 0o755)
                 except OSError:
                     pass
+    return moved, backed_up
 
 
 def _normalize_perms(path: str) -> None:
@@ -23645,7 +23654,7 @@ query Link($slug: String!, $domainName: String!) {
                 {"matched_game_version": matched_version} if matched_version
                 else {}
             )
-            if install_kind == "copyRoot":
+            if install_kind == "copyRoot" or install_kind == "copyRootTracked":
                 # SKSE-style: the archive is the game-dir payload, usually
                 # inside one versioned wrapper folder - flatten and merge.
                 # install_subdir targets loaders that live deeper than the
@@ -23658,9 +23667,22 @@ query Link($slug: String!, $domainName: String!) {
                         install_path, *install_subdir.split("/")
                     )
                     os.makedirs(dest_root, exist_ok=True)
-                _copy_root_payload(
-                    scratch, dest_root, detect_file, install_subdir)
+                tracked = install_kind == "copyRootTracked"
+                moved, backed_up = _copy_root_payload(
+                    scratch, dest_root, detect_file, install_subdir,
+                    backup=tracked)
                 _force_rmtree(scratch)
+                if tracked:
+                    # Exact record so the experimental "remove" can undo it.
+                    prefix = (install_subdir + "/") if install_subdir else ""
+                    st = _load_settings()
+                    st.setdefault("experimental_frameworks", {})[
+                        f"{game_domain}/{int(mod_id)}"] = {
+                        "install_dir": install_dir,
+                        "files": [prefix + r for r in moved],
+                        "backups": [prefix + r for r in backed_up],
+                    }
+                    _save_settings(st)
                 # detect_file may itself be a subpath relative to the game
                 # root (matches get_game_status).
                 if "/" in detect_file:
@@ -24265,6 +24287,10 @@ query Link($slug: String!, $domainName: String!) {
         every mod*.xml menu file, and their filelist lines are swept."""
         if not re.fullmatch(r"[a-z0-9_-]+", game_domain or ""):
             return {"ok": False, "error": "Invalid game domain"}
+        # Experimental loaders keep an exact file record: undo them first.
+        if app_id and any(k.startswith(game_domain + "/") for k in
+                          (_load_settings().get("experimental_frameworks") or {})):
+            await self.remove_experimental_framework(app_id)
         settings = _load_settings()
         install_path, mods_path, disabled_path = _game_paths(
             install_dir, mods_subdir
@@ -30373,6 +30399,14 @@ query CollectionInstructions($slug: String!) {
     async def get_experimental_state(self) -> dict:
         settings = _load_settings()
         games = settings.get("experimental_games") or {}
+        # Games saved before requirement detection existed get checked once,
+        # in the background; the frontend reloads on the event.
+        unchecked = [int(k) for k, g in games.items()
+                     if isinstance(g, dict) and "frameworkChecked" not in g]
+        if unchecked and not getattr(self, "_exp_checking", False):
+            self._exp_checking = True
+            asyncio.get_running_loop().create_task(
+                self._recheck_experimental(unchecked))
         return {
             "ok": True,
             "enabled": bool(settings.get("experimental_any_game")),
@@ -30515,6 +30549,10 @@ query CollectionInstructions($slug: String!) {
                 local.get("installDir", ""), domain, nexus_name,
                 local["inspection"],
             )
+            try:
+                await self._experimental_framework(game)
+            except Exception:  # noqa: BLE001 - retried on next load
+                decky.logger.exception("experimental framework check failed")
             settings = _load_settings()
             settings.setdefault("experimental_games", {})[str(app_id)] = game
             _save_settings(settings)
@@ -30522,6 +30560,137 @@ query CollectionInstructions($slug: String!) {
             return {"ok": True, "game": game}
         except Exception as e:  # noqa: BLE001
             decky.logger.exception("save_experimental_game crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def _recheck_experimental(self, app_ids: list) -> None:
+        try:
+            changed = False
+            for app_id in app_ids:
+                settings = _load_settings()
+                game = (settings.get("experimental_games") or {}).get(str(app_id))
+                if not isinstance(game, dict):
+                    continue
+                await self._experimental_framework(game)
+                settings = _load_settings()
+                settings.setdefault("experimental_games", {})[str(app_id)] = game
+                _save_settings(settings)
+                changed = True
+            if changed:
+                await decky.emit("experimental_changed")
+        except Exception:  # noqa: BLE001 - background, logged
+            decky.logger.exception("experimental recheck failed")
+        finally:
+            self._exp_checking = False
+
+    async def _experimental_framework(self, game: dict) -> None:
+        """Find a requirement most of the game's top mods share that is a
+        loader (dlls), and make it the game's Step 1 framework.
+
+        Sets game["frameworkChecked"] either way, so a network failure is
+        retried (the key is only set once the lookups answered)."""
+        domain = game.get("nexusDomain") or ""
+        api_key = _load_settings().get("api_key")
+        top = await self.get_mods(domain, "endorsements", 20, 0, "",
+                                  int(game.get("appId") or 0))
+        if not top.get("ok"):
+            decky.logger.info(f"experimental framework {domain}: top mods failed")
+            return
+        ids = [int(m.get("modId") or 0) for m in top.get("mods") or []
+               if m.get("modId")]
+        game_id = await _resolve_game_id(domain, api_key)
+        nodes = await _legacy_mods_in_batches(
+            game_id, ids,
+            "modId modRequirements { nexusRequirements { nodes "
+            "{ modId modName url } } }",
+            api_key,
+        )
+        req = experimental_games.pick_common_requirement(nodes, domain)
+        game["frameworkChecked"] = True
+        game.pop("framework", None)
+        if not req:
+            decky.logger.info(f"experimental framework {domain}: none shared")
+            return
+        files = await self.get_mod_files(domain, req["modId"])
+        main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
+        listing = (await _mod_file_listing(domain, req["modId"], main["file_id"])
+                   if main else None)
+        if listing is None:
+            # Cannot see inside it: say nothing rather than guess.
+            game.pop("frameworkChecked", None)
+            decky.logger.info(
+                f"experimental framework {domain}: {req['modName']} has no "
+                "file listing")
+            return
+        layout = experimental_games.framework_layout(
+            _listing_paths(listing),
+            experimental_games.exe_dir_of(game.get("processName") or ""),
+        )
+        decky.logger.info(
+            f"experimental framework {domain}: {req['modName']} "
+            f"(mod {req['modId']}, required by {req['count']} of {len(nodes)} "
+            f"top mods) layout={layout}")
+        if not layout:
+            return  # an ordinary mod everyone needs; installs like any mod
+        game["framework"] = {
+            "name": req["modName"],
+            "nexusModId": req["modId"],
+            "detectFile": layout["detectFile"],
+            "url": f"https://www.nexusmods.com/{domain}/mods/{req['modId']}",
+            "installKind": "copyRootTracked",
+            "installSubdir": layout["installSubdir"],
+            "warning": (
+                f"{req['count']} of the top {len(nodes)} mods need it. It "
+                "loads code into the game: online games with anti-cheat may "
+                "penalise or ban accounts that use it."
+            ),
+        }
+
+    async def remove_experimental_framework(self, app_id: int) -> dict:
+        """Delete the files an experimental loader install put in the game
+        and restore any game file it replaced."""
+        try:
+            settings = _load_settings()
+            game = (settings.get("experimental_games") or {}).get(str(int(app_id)))
+            fw = (game or {}).get("framework") or {}
+            key = f"{game.get('nexusDomain')}/{int(fw.get('nexusModId') or 0)}" if game else ""
+            rec = (settings.get("experimental_frameworks") or {}).get(key)
+            if not rec:
+                return {"ok": False, "error": "No install record for this loader"}
+            root = _game_dir(rec.get("install_dir") or game.get("installDirName"))
+            removed = 0
+            for rel in rec.get("files") or []:
+                if not _safe_rel_path(rel):
+                    continue
+                path = os.path.join(root, *rel.split("/"))
+                try:
+                    os.remove(path)
+                    removed += 1
+                except OSError:
+                    pass
+            for rel in rec.get("backups") or []:
+                if not _safe_rel_path(rel):
+                    continue
+                path = os.path.join(root, *rel.split("/"))
+                if os.path.isfile(path + ".nexusbak"):
+                    os.replace(path + ".nexusbak", path)
+            # Empty folders the loader created (plugins/) go too.
+            dirs = sorted({os.path.dirname(r) for r in rec.get("files") or [] if "/" in r},
+                          key=len, reverse=True)
+            for d in dirs:
+                p = os.path.join(root, *d.split("/"))
+                while p.startswith(root) and p != root:
+                    try:
+                        os.rmdir(p)
+                    except OSError:
+                        break
+                    p = os.path.dirname(p)
+            settings = _load_settings()
+            settings.get("experimental_frameworks", {}).pop(key, None)
+            _save_settings(settings)
+            decky.logger.info(f"experimental framework {key} removed: {removed} files")
+            return {"ok": True, "removed": removed}
+        except Exception as e:  # noqa: BLE001
+            decky.logger.exception("remove_experimental_framework crashed")
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
     async def remove_experimental_game(self, app_id: int) -> dict:

@@ -18,6 +18,7 @@ import {
   ExperimentalCandidate,
   findExperimentalGame,
   getExperimentalState,
+  removeExperimentalFramework,
   removeExperimentalGame,
   saveExperimentalGame,
   setExperimentalEnabled,
@@ -200,11 +201,37 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
       <PanelSectionRow>
         <Field label="Mods folder">{game.modsSubdir}</Field>
       </PanelSectionRow>
+      {game.framework?.installKind === "copyRootTracked" && (
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            disabled={busy}
+            description={`Deletes the files ${game.framework.name} added and puts back any game file it replaced.`}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const r = await removeExperimentalFramework(game.appId);
+                toaster.toast({
+                  title: r.ok
+                    ? `${game.framework?.name} removed`
+                    : "Nothing to remove",
+                  body: r.ok ? `${r.removed ?? 0} files deleted` : r.error ?? "",
+                });
+                notifyGameStateChanged();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Remove {game.framework.name}
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
       <PanelSectionRow>
         <ButtonItem
           layout="below"
           disabled={busy}
-          description="Stops treating this game as set up. Installed mods stay where they are; uninstall them first to remove them."
+          description="Stops treating this game as set up. Installed mods and loaders stay where they are; remove them first if you want them gone."
           onClick={async () => {
             setBusy(true);
             try {

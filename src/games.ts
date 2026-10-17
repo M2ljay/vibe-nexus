@@ -80,7 +80,10 @@ export interface GameFramework {
   aliasModIds?: number[];
   /** How the framework archive installs: SMAPI's install.dat method, or
    * flatten-and-copy into the game dir (SKSE-style) */
-  installKind?: "smapi" | "copyRoot" | "masseffectBink";
+  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked";
+  /** Shown with Step 1 and confirmed before installing (experimental
+   * games: the loader is inferred, and may carry a ban risk). */
+  warning?: string;
   /** Skip files whose name contains any of these (case-insensitive) when
    * auto-picking the download - filters out other stores' builds (e.g.
    * SKSE publishes Steam and GOG variants on the same mod page) */

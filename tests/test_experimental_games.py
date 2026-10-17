@@ -134,5 +134,45 @@ class InspectTests(unittest.TestCase):
         self.assertEqual(g["modsSubdir"], "BepInEx/plugins")
 
 
+class FrameworkTests(unittest.TestCase):
+    def node(self, mid, *reqs):
+        return {"modId": mid, "modRequirements": {"nexusRequirements": {"nodes": [
+            {"modId": r, "modName": f"m{r}", "url": f"https://www.nexusmods.com/marvelrivals/mods/{r}"}
+            for r in reqs]}}}
+
+    def test_common_requirement(self):
+        nodes = [self.node(i, 2940) for i in range(1, 8)] + [self.node(i) for i in range(8, 21)]
+        self.assertEqual(eg.pick_common_requirement(nodes, "marvelrivals")["modId"], 2940)
+
+    def test_rare_requirement_ignored(self):
+        nodes = [self.node(1, 5), self.node(2, 5)] + [self.node(i) for i in range(3, 21)]
+        self.assertIsNone(eg.pick_common_requirement(nodes, "marvelrivals"))
+
+    def test_other_game_requirement_ignored(self):
+        n = [{"modId": i, "modRequirements": {"nexusRequirements": {"nodes": [
+            {"modId": 9, "modName": "x", "url": "https://www.nexusmods.com/site/mods/9"}]}}} for i in range(10)]
+        self.assertIsNone(eg.pick_common_requirement(n, "marvelrivals"))
+
+    def test_bypass_goes_beside_exe(self):
+        r = eg.framework_layout(["dsound.dll", "plugins/bypass.asi"], "MarvelGame/Marvel/Binaries/Win64")
+        self.assertEqual(r, {"installSubdir": "MarvelGame/Marvel/Binaries/Win64",
+                             "detectFile": "MarvelGame/Marvel/Binaries/Win64/dsound.dll"})
+
+    def test_wrapper_flattened(self):
+        r = eg.framework_layout(["Bypass v2/dsound.dll", "Bypass v2/plugins/x.asi"], "G/Binaries/Win64")
+        self.assertEqual(r["detectFile"], "G/Binaries/Win64/dsound.dll")
+
+    def test_game_root_layout(self):
+        r = eg.framework_layout(["MarvelGame/Marvel/Binaries/Win64/dsound.dll"], "MarvelGame/Marvel/Binaries/Win64")
+        self.assertEqual(r, {"installSubdir": "", "detectFile": "MarvelGame/Marvel/Binaries/Win64/dsound.dll"})
+
+    def test_plain_mod_is_not_a_framework(self):
+        self.assertIsNone(eg.framework_layout(["Mod_P.pak", "Mod_P.utoc"], "G/Binaries/Win64"))
+
+    def test_exe_dir(self):
+        self.assertEqual(eg.exe_dir_of("A/B/c.exe"), "A/B")
+        self.assertEqual(eg.exe_dir_of("c.exe"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

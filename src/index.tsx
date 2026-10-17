@@ -898,7 +898,25 @@ function CurrentGameSection() {
     });
   }, [game?.appId]);
 
-  const onInstallFramework = async () => {
+  // Experimental games: the loader was inferred from the data and may load
+  // code an online game's anti-cheat objects to - ask first.
+  const onInstallFramework = () => {
+    const fw = game?.framework;
+    if (!fw?.warning) return void runInstallFramework();
+    showModal(
+      <ConfirmModal
+        strTitle={`Install ${fw.name}?`}
+        strDescription={`${fw.warning} Files go in ${
+          fw.installSubdir || "the game folder"
+        }; game files it replaces are kept and put back if you remove it.`}
+        strOKButtonText={`Install ${fw.name}`}
+        bDestructiveWarning={true}
+        onOK={() => void runInstallFramework()}
+      />
+    );
+  };
+
+  const runInstallFramework = async () => {
     // The SAME question the button's disabled prop asks. Asking a
     // different one here turned a greyed-out button into a button that
     // silently did nothing, which is worse: Michael clicked it and
@@ -1557,7 +1575,9 @@ function CurrentGameSection() {
                   label={`Step ${fwSteps.install}`}
                   layout="below"
                   disabled={frameworkBusy || !frameworkInstallable(game.framework)}
-                  description={`Most ${game.displayName} mods require ${game.framework.name}. Downloads from Nexus Mods (author gets the credit).`}
+                  description={`Most ${game.displayName} mods require ${game.framework.name}. Downloads from Nexus Mods (author gets the credit).${
+                    game.framework.warning ? ` ⚠ ${game.framework.warning}` : ""
+                  }`}
                   onClick={onInstallFramework}
                 >
                   {frameworkBusy
@@ -4637,6 +4657,10 @@ function Content() {
 export default definePlugin(() => {
   console.log("Nexus Mods plugin initializing");
   void loadExperimentalState();
+  const experimentalListener = addEventListener(
+    "experimental_changed",
+    () => void loadExperimentalState()
+  );
 
   routerHook.addRoute(BROWSE_ROUTE, BrowsePage, { exact: true });
   routerHook.addRoute(DETAIL_ROUTE, ModDetailPage, { exact: true });
@@ -4758,6 +4782,7 @@ export default definePlugin(() => {
       routerHook.removeRoute(SETTINGS_ROUTE);
       removeEventListener("backend_event", listener);
       removeEventListener("install_progress", progressListener);
+      removeEventListener("experimental_changed", experimentalListener);
       lifetime?.unregister();
     },
   };
