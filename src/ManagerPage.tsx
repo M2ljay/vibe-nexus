@@ -25,7 +25,7 @@ import {
   uninstallCollection,
   getShowAdult,
 } from "./api";
-import { ALL_GAMES, SupportedGame, getActiveGame, modeParams } from "./games";
+import { SupportedGame, getActiveGame, managedGames, modeParams } from "./games";
 import { removeMod, toggleMod } from "./install";
 import {
   getBrowseGame,
@@ -339,7 +339,7 @@ export function ManagerPage() {
 
   const refresh = async () => {
     const found: GameMods[] = [];
-    for (const game of ALL_GAMES) {
+    for (const game of managedGames()) {
       const r = await getInstalledMods(
         game.nexusDomain,
         game.installDirName,

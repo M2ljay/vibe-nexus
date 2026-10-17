@@ -258,5 +258,53 @@ class ToolGameTests(unittest.TestCase):
         self.assertEqual(out, [["a.smpcmod", True], ["sub\\b.suit", True]])
 
 
+class Ue4ssTests(unittest.TestCase):
+    def test_ue4ss_archive_is_a_loader_beside_exe(self):
+        r = eg.framework_layout(["dwmapi.dll", "ue4ss/UE4SS.dll", "ue4ss/UE4SS-settings.ini",
+                                 "ue4ss/Mods/mods.txt"], "Pal/Binaries/Win64")
+        self.assertEqual(r, {"installSubdir": "Pal/Binaries/Win64",
+                             "detectFile": "Pal/Binaries/Win64/dwmapi.dll"})
+
+    def test_after_install_inspection_routes_scripts(self):
+        with tempfile.TemporaryDirectory() as d:
+            touch(d, "Pal/Content/Paks/Pal-Windows.pak", 100)
+            touch(d, "Pal/Binaries/Win64/Palworld-Win64-Shipping.exe", 1)
+            self.assertNotIn("ue4ss", eg.inspect_install(d))
+            touch(d, "Pal/Binaries/Win64/dwmapi.dll", 1)
+            touch(d, "Pal/Binaries/Win64/ue4ss/UE4SS.dll", 1)
+            touch(d, "Pal/Binaries/Win64/ue4ss/Mods/mods.txt", 1)
+            self.assertEqual(eg.inspect_install(d)["ue4ss"]["modsSubdir"], "Pal/Binaries/Win64/ue4ss/Mods")
+
+
+class ClassifyTests(unittest.TestCase):
+    UE = {"engine": "unreal", "modsSubdir": "SparkingZERO/Content/Paks/~mods",
+          "processName": "SparkingZERO/Binaries/Win64/SparkingZERO-Win64-Shipping.exe"}
+    ROOT = {"SparkingZERO", "Engine"}
+    INDEX = {"sparkingzero": ["SparkingZERO"], "binaries": ["SparkingZERO/Binaries"],
+             "content": ["SparkingZERO/Content"], "win64": ["SparkingZERO/Binaries/Win64"]}
+
+    def c(self, paths, game=None, **kw):
+        return eg.classify_mod(paths, game or self.UE, self.ROOT, self.INDEX, **kw)
+
+    def test_verdicts(self):
+        self.assertEqual(self.c(["Goku_P.pak", "Goku_P.utoc", "Goku_P.ucas"]), "mods_folder")
+        self.assertEqual(self.c(["Binaries/Win64/dinput8.dll"]), "game_folder")
+        self.assertEqual(self.c(["fomod/ModuleConfig.xml", "a/x.pak"]), "wizard")
+        self.assertEqual(self.c(["Tool.exe", "lib.dll", "readme.txt"]), "program")
+        self.assertEqual(self.c(["textures/x.dds"]), "no_target")
+        self.assertEqual(self.c(None), "unknown")
+        self.assertEqual(self.c(["dsound.dll"], is_framework=True), "loader")
+
+    def test_tool_game(self):
+        g = {"toolApply": "overstrike", "flatModExtensions": [".smpcmod", ".suit"]}
+        self.assertEqual(self.c(["x.smpcmod"], g), "tool_managed")
+        self.assertEqual(self.c(["Suit Tool.exe"], g), "program")
+        self.assertEqual(self.c(["x.png"], g), "no_target")
+
+    def test_summary(self):
+        s = eg.summarize([{"verdict": "mods_folder"}, {"verdict": "unknown"}, {"verdict": "program"}])
+        self.assertEqual((s["working"], s["checked"], s["total"]), (1, 2, 3))
+
+
 if __name__ == "__main__":
     unittest.main()

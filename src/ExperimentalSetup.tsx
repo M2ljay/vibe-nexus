@@ -15,8 +15,10 @@ import { toaster } from "@decky/api";
 import { useState } from "react";
 
 import {
+  CoverageRow,
   ExperimentalCandidate,
   applyExperimentalTool,
+  checkExperimentalCoverage,
   findExperimentalGame,
   getExperimentalState,
   removeExperimentalFramework,
@@ -107,6 +109,52 @@ function PickGameModal({
           {c.name}
         </ButtonItem>
       ))}
+    </ModalRoot>
+  );
+}
+
+const VERDICT_TEXT: Record<CoverageRow["verdict"], string> = {
+  mods_folder: "Works · mods folder",
+  game_folder: "Works · game folder",
+  wizard: "Works · installer wizard",
+  tool_managed: "Works · applied by the mod tool",
+  loader: "Step 1 loader",
+  program: "Desktop program - can't install",
+  no_target: "No clear place - likely won't load",
+  unknown: "Can't check (no file list)",
+};
+
+function CoverageModal({
+  gameName,
+  result,
+  closeModal,
+}: {
+  gameName: string;
+  result: { working?: number; checked?: number; total?: number; rows?: CoverageRow[] };
+  closeModal?: () => void;
+}) {
+  const rows = result.rows ?? [];
+  const problems = rows.filter((r) =>
+    ["program", "no_target", "unknown"].includes(r.verdict)
+  );
+  return (
+    <ModalRoot closeModal={closeModal}>
+      <h3 style={{ marginTop: 0 }}>
+        {gameName}: {result.working ?? 0} of {result.checked ?? 0} checked mods should work
+      </h3>
+      <div style={{ fontSize: "13px", opacity: 0.85, marginBottom: "8px" }}>
+        The {result.total ?? 0} most-endorsed mods, judged from the files Nexus
+        Mods lists for them - nothing was downloaded. A prediction, not a promise.
+      </div>
+      {problems.length === 0 ? (
+        <div style={{ fontSize: "13px" }}>No problem mods found.</div>
+      ) : (
+        problems.map((r) => (
+          <Field key={r.modId} label={r.name} childrenLayout="below">
+            {VERDICT_TEXT[r.verdict]}
+          </Field>
+        ))
+      )}
     </ModalRoot>
   );
 }
@@ -230,6 +278,28 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
     <>
       <PanelSectionRow>
         <Field label="Mods folder">{game.modsSubdir}</Field>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          disabled={busy}
+          description="Checks the 50 most popular mods for this game, without downloading them, and lists the ones the plugin can't place where the game loads them."
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await checkExperimentalCoverage(game.appId, 50);
+              if (!r.ok) {
+                toaster.toast({ title: "Check failed", body: r.error ?? "" });
+                return;
+              }
+              showModal(<CoverageModal gameName={game.displayName} result={r} />);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Checking…" : "Check mod compatibility"}
+        </ButtonItem>
       </PanelSectionRow>
       {game.toolApply === "overstrike" && (
         <PanelSectionRow>

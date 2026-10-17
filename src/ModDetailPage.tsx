@@ -479,7 +479,10 @@ export function ModDetailPage() {
         // dxgi unless told otherwise, so the override is applied for the
         // user rather than described to them - and the warning (anti-cheat
         // risk, author's own words) stays on the page, not in a toast.
-        setLaunchOptions(game.appId, game.reshade.launchOptionsTemplate);
+        // Windows loads the dxgi beside the exe by itself: no options.
+        if (game.reshade.launchOptionsTemplate) {
+          setLaunchOptions(game.appId, game.reshade.launchOptionsTemplate);
+        }
         setInstalledFileIds((prev) => new Set(prev).add(file.file_id));
         await afterInstall(file);
         refreshInstalled(sel);

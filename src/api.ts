@@ -2332,3 +2332,31 @@ export const applyExperimentalTool = callable<
   [app_id: number],
   { ok: boolean; count?: number; error?: string; restart?: boolean }
 >("apply_experimental_tool");
+
+export interface CoverageRow {
+  modId: number;
+  name: string;
+  verdict:
+    | "mods_folder"
+    | "game_folder"
+    | "wizard"
+    | "tool_managed"
+    | "loader"
+    | "program"
+    | "no_target"
+    | "unknown";
+  file: string;
+}
+
+export const checkExperimentalCoverage = callable<
+  [app_id: number, count: number],
+  {
+    ok: boolean;
+    error?: string;
+    working?: number;
+    checked?: number;
+    total?: number;
+    counts?: Record<string, number>;
+    rows?: CoverageRow[];
+  }
+>("check_experimental_coverage");

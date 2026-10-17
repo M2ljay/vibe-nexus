@@ -316,7 +316,7 @@ export interface SupportedGame {
   gameNote?: string;
   /** ReShade support: where the game's exe lives (injector files land
    * there), and the launch options Proton needs to load a native dxgi. */
-  reshade?: { subdir: string; launchOptionsTemplate: string };
+  reshade?: { subdir: string; launchOptionsTemplate?: string };
   /** Shown at the top of the game panel until the given Documents-file
    * exists - for games that must run once before modding works (their
    * launcher creates the activation config on first run). For
@@ -1782,6 +1782,63 @@ export const SUPPORTED_GAMES: Record<number, SupportedGame> = {
   },
 };
 
+// ---- Windows ------------------------------------------------------------------
+// The curated entries were written for SteamOS, where Windows games run
+// under Proton. On Windows itself the DLL-override launch options do
+// nothing (the game loads a proxy dll from its folder by itself), the bash
+// wrappers that swap the launcher for a script-extender loader become a
+// plain "loader.exe %command%", and there is no Proton prefix to repair.
+
+export const IS_WINDOWS =
+  typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+
+/** A SteamOS launch-options template rewritten for Windows Steam, or
+ * undefined when Windows needs no launch options at all. */
+export function windowsLaunchOptions(
+  template: string | undefined
+): string | undefined {
+  if (!template) return template;
+  const t = template.trim();
+  if (/^WINEDLLOVERRIDES="[^"]*"\s+%command%$/.test(t)) return undefined;
+  if (/start_game_bepinex\.sh/.test(t)) return undefined;
+  // Bannerlord: the backend's BLSE script is a shell script for Proton;
+  // on Windows BLSE's own launcher takes its place.
+  if (t.includes("{blse_script}")) {
+    return '"{install_path}\\bin\\Win64_Shipping_Client\\Bannerlord.BLSE.Launcher.exe" %command%';
+  }
+  // bash -c 'exec "${@/Launcher.exe/loader.exe}"' -- %command%
+  const swap = t.match(/\$\{@\/[^/]+\/([^}]+)\}/);
+  if (swap) return `"{install_path}\\${swap[1]}" %command%`;
+  const direct = t.match(/^"\{install_path\}\/([^"]+)"\s+%command%$/);
+  if (direct) {
+    const exe = direct[1].replace(/\//g, "\\");
+    return `"{install_path}\\${/\.exe$/i.test(exe) ? exe : exe + ".exe"}" %command%`;
+  }
+  return template;
+}
+
+function adaptForWindows(g: SupportedGame): void {
+  const fix = (o?: { launchOptionsTemplate?: string }) => {
+    if (o && "launchOptionsTemplate" in o) {
+      const w = windowsLaunchOptions(o.launchOptionsTemplate);
+      if (w === undefined) delete o.launchOptionsTemplate;
+      else o.launchOptionsTemplate = w;
+    }
+  };
+  fix(g.framework);
+  (g.extraFrameworks ?? []).forEach(fix);
+  fix(g.launcherBypass as { launchOptionsTemplate?: string } | undefined);
+  if (g.launcherBypass && !g.launcherBypass.launchOptionsTemplate) {
+    // Nothing to swap on Windows: the stock launcher runs fine there.
+    delete g.launcherBypass;
+  }
+  fix(g.reshade as { launchOptionsTemplate?: string } | undefined);
+  delete g.protonRequired;
+  delete g.prefixRuntimeFix;
+}
+
+if (IS_WINDOWS) Object.values(SUPPORTED_GAMES).forEach(adaptForWindows);
+
 /** Positional params several backend calls need for install-mode dispatch. */
 export function modeParams(
   g: SupportedGame
@@ -1826,6 +1883,15 @@ export function setExperimentalState(
   for (const g of games) {
     if (g && g.appId && !SUPPORTED_GAMES[g.appId]) EXPERIMENTAL_GAMES[g.appId] = g;
   }
+}
+
+/** Every game the plugin manages right now: the curated list plus, while
+ * experimental support is on, the games set up through it. Use this rather
+ * than ALL_GAMES wherever installed mods are listed or checked. */
+export function managedGames(): SupportedGame[] {
+  return experimentalEnabled
+    ? [...ALL_GAMES, ...Object.values(EXPERIMENTAL_GAMES)]
+    : ALL_GAMES;
 }
 
 export function isExperimentalGame(g: SupportedGame | undefined): boolean {

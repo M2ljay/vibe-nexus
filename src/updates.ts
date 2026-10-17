@@ -6,7 +6,7 @@ import {
   getBlamedFolders,
   getInstalledMods,
 } from "./api";
-import { ALL_GAMES, SupportedGame, modeParams } from "./games";
+import { SupportedGame, managedGames, modeParams } from "./games";
 
 export interface PendingUpdate {
   game: SupportedGame;
@@ -30,7 +30,7 @@ export async function scanUpdates(
   scopedGame?: SupportedGame
 ): Promise<PendingUpdate[]> {
   const found: PendingUpdate[] = [];
-  for (const game of scopedGame ? [scopedGame] : ALL_GAMES) {
+  for (const game of scopedGame ? [scopedGame] : managedGames()) {
     // A collection pins its mods on purpose, so they are normally left out
     // of update checks. One the game blamed for errors has forfeited that -
     // the badge should not stay silent about the fix for a crash.

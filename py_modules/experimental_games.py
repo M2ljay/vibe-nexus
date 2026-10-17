@@ -366,13 +366,43 @@ def pick_common_requirement(nodes: list, domain: str, min_share: float = 0.2,
             seen.add(rid)
             counts[rid] = counts.get(rid, 0) + 1
             names.setdefault(rid, str(r.get("modName") or f"mod {rid}"))
-    if not counts:
-        return None
-    rid, count = max(counts.items(), key=lambda kv: (kv[1], -kv[0]))
-    total = max(len(own), 1)
-    if count < min_count or count / total < min_share:
-        return None
-    return {"modId": rid, "modName": names[rid], "count": count}
+    picks = common_requirements(counts, names, len(own), min_share, min_count)
+    return picks[0] if picks else None
+
+
+def common_requirements(counts: dict, names: dict, total: int,
+                        min_share: float = 0.2, min_count: int = 3) -> list:
+    """Every requirement over the threshold, most required first."""
+    total = max(total, 1)
+    out = [{"modId": rid, "modName": names[rid], "count": c}
+           for rid, c in counts.items()
+           if c >= min_count and c / total >= min_share]
+    out.sort(key=lambda r: (-r["count"], r["modId"]))
+    return out
+
+
+def requirement_counts(nodes: list, domain: str) -> tuple:
+    """(counts, names, total) of same-game requirements across nodes."""
+    counts, names = {}, {}
+    own = {int(n.get("modId") or 0) for n in nodes or [] if isinstance(n, dict)}
+    for n in nodes or []:
+        if not isinstance(n, dict):
+            continue
+        reqs = (((n.get("modRequirements") or {}).get("nexusRequirements") or {})
+                .get("nodes") or [])
+        seen = set()
+        for r in reqs:
+            try:
+                rid = int(r.get("modId") or 0)
+            except (TypeError, ValueError):
+                continue
+            url = str(r.get("url") or "").lower()
+            if not rid or rid in seen or (url and f"/{domain.lower()}/mods/" not in url):
+                continue
+            seen.add(rid)
+            counts[rid] = counts.get(rid, 0) + 1
+            names.setdefault(rid, str(r.get("modName") or f"mod {rid}"))
+    return counts, names, len(own)
 
 
 def framework_layout(paths: list, exe_dir: str):
@@ -433,6 +463,8 @@ PROXY_DLLS = {
     "d3d9.dll", "d3d10.dll", "d3d11.dll", "d3d12.dll", "dxgi.dll",
     "xinput1_3.dll", "xinput1_4.dll", "xinput9_1_0.dll", "wininet.dll",
     "opengl32.dll", "bink2w64.dll", "binkw64.dll", "msimg32.dll",
+    # UE4SS 3.x hooks in through dwmapi; old DirectX games through ddraw/d3d8.
+    "dwmapi.dll", "ddraw.dll", "d3d8.dll", "dbghelp.dll", "iphlpapi.dll",
 }
 # Top-level names that mean "this archive is laid out from the game root".
 ROOT_MARKERS = {"bepinex", "melonloader", "doorstop_config.ini", "winhttp.dll",
@@ -609,3 +641,116 @@ def overstrike_profile_mods(records: list, old_mods: list) -> list:
                 entry.append(extras[path.lower()])
             out.append(entry)
     return out
+
+
+
+# ---- Bethesda games without a curated entry --------------------------------
+# Their mods merge into Data/ and are switched on in plugins.txt, which the
+# plugin's dataDir tier already does for Skyrim and Fallout. These need only
+# where plugins.txt lives (under %LOCALAPPDATA%) and how it marks a plugin
+# active: "starred" ('*Name.esp', Skyrim SE onwards) or "listed" (presence).
+BETHESDA_GAMES = {
+    "oblivion": ("Oblivion/plugins.txt", "listed"),
+    "skyrim": ("Skyrim/plugins.txt", "listed"),
+    "enderalspecialedition": ("Enderal Special Edition/plugins.txt", "starred"),
+    "enderal": ("enderal/plugins.txt", "listed"),
+    "fallout4vr": ("Fallout4VR/plugins.txt", "starred"),
+    "skyrimspecialeditionvr": ("Skyrim VR/plugins.txt", "starred"),
+}
+
+
+def apply_bethesda_profile(game: dict) -> bool:
+    """dataDir install settings for a known Bethesda domain. False if the
+    domain is not one of BETHESDA_GAMES."""
+    entry = BETHESDA_GAMES.get(game.get("nexusDomain") or "")
+    if not entry:
+        return False
+    game["engine"] = "bethesda"
+    game["installMode"] = "dataDir"
+    game["modsSubdir"] = "Data"
+    game["pluginsTxtSubpath"], game["pluginsTxtStyle"] = entry
+    game.pop("flatModExtensions", None)
+    game["underConstruction"] = (
+        "Experimental generic support. Bethesda game: mods merge into Data "
+        "and their plugins are switched on in plugins.txt, as for Skyrim. "
+        "Script-extender mods need the extender installed by hand."
+    )
+    return True
+
+
+# ---- Compatibility check -------------------------------------------------------
+# For "as many mods working as possible" the gaps have to be measured, not
+# guessed: classify_mod() predicts, from a mod file's published listing and
+# without downloading it, what the installer would do with it and whether
+# the game would then load it.
+
+# Files each engine's drop-in folder actually loads.
+_LOADABLE = {
+    "unreal": (".pak", ".utoc", ".ucas"),
+    "unity-bepinex": (".dll",),
+    "unity": (".dll",),
+    "unity-melonloader": (".dll",),
+}
+_EXE_OR_INSTALLER = (".exe", ".msi", ".bat", ".cmd")
+
+VERDICTS = {
+    "mods_folder": "installs into the mods folder",
+    "game_folder": "installs into the game folder, file by file",
+    "wizard": "has an installer wizard (FOMOD) the plugin runs",
+    "tool_managed": "applied by the game's mod tool",
+    "loader": "is the game's loader (Step 1)",
+    "program": "is a program you run on the desktop",
+    "no_target": "has no clear place to go - would land in the mods folder unused",
+    "unknown": "has no published file list to check",
+}
+
+
+def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
+                 is_framework: bool = False) -> str:
+    """One of VERDICTS' keys for a mod file, from its listing paths.
+
+    paths is None when Nexus publishes no listing for the file.
+    """
+    if is_framework:
+        return "loader"
+    if paths is None:
+        return "unknown"
+    files = [p.replace("\\", "/").strip("/") for p in paths if p]
+    low = [f.lower() for f in files]
+    if any(f.endswith("fomod/moduleconfig.xml") for f in low):
+        return "wizard"
+    exts = tuple(game.get("flatModExtensions") or [])
+    if game.get("toolApply") or exts:
+        if exts and any(f.endswith(exts) for f in low):
+            return "tool_managed" if game.get("toolApply") else "mods_folder"
+        if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
+            return "program"
+        return "no_target"
+    payload = [f for f in low if not f.endswith(_DOC_EXTS)]
+    if payload and all(f.endswith(_EXE_OR_INSTALLER) or f.endswith(".dll") for f in payload) \
+            and any(f.endswith(_EXE_OR_INSTALLER) for f in payload):
+        return "program"
+    plan = plan_root_install(files, root_entries, dir_index,
+                             game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""))
+    if plan:
+        return "game_folder"
+    loadable = _LOADABLE.get(game.get("engine") or "")
+    if loadable is None:
+        # Unknown engine: a mods folder the game itself created is trusted.
+        return "mods_folder" if game.get("engine") == "generic" else "no_target"
+    if any(f.endswith(loadable) for f in low):
+        return "mods_folder"
+    if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
+        return "program"
+    return "no_target"
+
+
+def summarize(rows: list) -> dict:
+    """{verdict: count} plus the share that should work."""
+    counts = {}
+    for r in rows:
+        counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
+    good = sum(counts.get(k, 0) for k in
+               ("mods_folder", "game_folder", "wizard", "tool_managed", "loader"))
+    checked = len(rows) - counts.get("unknown", 0)
+    return {"counts": counts, "working": good, "checked": checked, "total": len(rows)}

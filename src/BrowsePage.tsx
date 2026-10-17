@@ -26,7 +26,7 @@ import {
   getCollectionVerdicts,
 } from "./api";
 import {
-  ALL_GAMES,
+  managedGames,
   SupportedGame,
   frameworkModIds,
   getActiveGame,
@@ -976,7 +976,7 @@ export function BrowsePage() {
         } else if (r.adult_hidden) {
           setLinkHit({ kind: "adult" });
         } else {
-          const target = ALL_GAMES.find((g) => g.nexusDomain === r.game_domain);
+          const target = managedGames().find((g) => g.nexusDomain === r.game_domain);
           if (!target || !r.collection) {
             setLinkHit({ kind: "unsupported", domain: r.game_domain ?? "" });
           } else {

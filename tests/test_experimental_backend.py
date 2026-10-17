@@ -187,6 +187,33 @@ class ExperimentalRootInstallTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.root, "SparkingZERO/Content/Paks/~mods/c_P.pak")))
         self.assertTrue(os.path.isfile(os.path.join(self.root, "SparkingZERO/Content/Paks/pakchunk0.pak")))
 
+    def test_coverage_check(self):
+        async def get_mods(*a, **k):
+            return {"ok": True, "mods": [{"modId": 1, "name": "Pak"}, {"modId": 2, "name": "Dll"},
+                                         {"modId": 3, "name": "Tool"}, {"modId": 4, "name": "Bare"}]}
+
+        async def files(domain, mid):
+            return {"ok": True, "files": [{"file_id": mid, "category_name": "MAIN",
+                                           "file_name": f"f{mid}.zip",
+                                           "content_preview_link": "" if mid == 4 else f"L{mid}"}]}
+
+        listings = {"L1": ["a_P.pak"], "L2": ["Binaries/Win64/dinput8.dll"], "L3": ["T.exe"]}
+
+        async def preview(link):
+            return listings[link]
+
+        self.game["engine"] = "unreal"
+        main._save_settings({"experimental_games": {"1790600": self.game}})
+        with unittest.mock.patch.object(self.plugin, "get_mods", get_mods), \
+                unittest.mock.patch.object(self.plugin, "get_mod_files", files), \
+                unittest.mock.patch.object(main, "_preview_paths", preview):
+            r = _run(self.plugin.check_experimental_coverage(1790600, 4))
+        self.assertTrue(r["ok"], r)
+        verdicts = {row["name"]: row["verdict"] for row in r["rows"]}
+        self.assertEqual(verdicts, {"Pak": "mods_folder", "Dll": "game_folder",
+                                    "Tool": "program", "Bare": "unknown"})
+        self.assertEqual((r["working"], r["checked"]), (2, 3))
+
     def test_plain_pak_left_to_mods_folder(self):
         d = self.scratch(["Goku_P.pak", "Goku_P.utoc"])
         self.assertEqual(main._experimental_root_install(
@@ -236,6 +263,26 @@ class OverstrikeTests(unittest.TestCase):
         self.assertTrue(lines[0].startswith("create-profile Nexus "))
         self.assertEqual(lines[-1], "install-mods Nexus")
 
+    def test_reapply_after_update_or_verify(self):
+        r = _run(main._overstrike_apply(self.game))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(main._tool_reapply_reason(self.game), "")
+        toc = os.path.join(self.root, "asset_archive", "toc")
+        os.makedirs(os.path.dirname(toc), exist_ok=True)
+        st = main._load_settings()
+        open(toc, "w").close()
+        os.utime(toc, (1000, 1000))
+        st["tool_apply_state"]["marvelsspidermanremastered"]["toc_mtime"] = 1000.0
+        st["tool_apply_state"]["marvelsspidermanremastered"]["buildid"] = "100"
+        main._save_settings(st)
+        with unittest.mock.patch.object(main, "_steam_build_id", lambda a: "100"):
+            self.assertEqual(main._tool_reapply_reason(self.game), "")
+            os.utime(toc, (5000, 5000))
+            self.assertEqual(main._tool_reapply_reason(self.game), "Steam restored the game's files")
+        os.utime(toc, (1000, 1000))
+        with unittest.mock.patch.object(main, "_steam_build_id", lambda a: "999"):
+            self.assertEqual(main._tool_reapply_reason(self.game), "the game updated")
+
     def test_no_mods_uninstalls(self):
         main._save_settings({"experimental_games": {"1817070": self.game}})
         r = _run(main._overstrike_apply(self.game))
@@ -266,6 +313,31 @@ class OverstrikeTests(unittest.TestCase):
         self.assertNotIn("Play As Blackcat", st["installed"]["marvelsspidermanremastered"])
         self.assertIn("Mod A", st["installed"]["marvelsspidermanremastered"])
         self.assertEqual(st["experimental_dropped"]["marvelsspidermanremastered"], ["Play As Blackcat"])
+
+
+class WindowsPathTests(unittest.TestCase):
+    def test_prefix_paths_map_to_the_real_profile(self):
+        env = {"LOCALAPPDATA": "/u/AppData/Local", "APPDATA": "/u/AppData/Roaming",
+               "USERPROFILE": "/u"}
+        with unittest.mock.patch.dict(os.environ, env), \
+                unittest.mock.patch.object(main.sys, "platform", "win32"):
+            self.assertEqual(main._prefix_user_path(489830, "AppData", "Local", "Skyrim Special Edition", "plugins.txt"),
+                             os.path.join("/u/AppData/Local", "Skyrim Special Edition", "plugins.txt"))
+            self.assertEqual(main._prefix_user_path(1, "Documents", "My Games", "Fallout4", "Fallout4.ini"),
+                             os.path.join("/u", "Documents", "My Games", "Fallout4", "Fallout4.ini"))
+            self.assertEqual(main._prefix_user_path(1, "AppData", "Roaming", "x"),
+                             os.path.join("/u/AppData/Roaming", "x"))
+            r = _run(main.Plugin().fix_prefix_runtime(1))
+            self.assertTrue(r["ok"])
+            self.assertFalse(r["updated"])
+
+    def test_bethesda_profile(self):
+        g = {"nexusDomain": "oblivion", "modsSubdir": "Mods", "flatModExtensions": [".x"]}
+        self.assertTrue(main.experimental_games.apply_bethesda_profile(g))
+        self.assertEqual((g["installMode"], g["modsSubdir"], g["pluginsTxtSubpath"], g["pluginsTxtStyle"]),
+                         ("dataDir", "Data", "Oblivion/plugins.txt", "listed"))
+        self.assertNotIn("flatModExtensions", g)
+        self.assertFalse(main.experimental_games.apply_bethesda_profile({"nexusDomain": "witcher3"}))
 
 
 if __name__ == "__main__":

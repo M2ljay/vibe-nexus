@@ -4515,6 +4515,8 @@ def _prefix_drive_c(app_id: int, *parts: str) -> str:
     # compatdata sits in whichever library holds the game, so an SD-card
     # game's prefix is on the SD card - the main library is only the
     # fallback for a game not found anywhere.
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("SystemDrive", "C:") + os.sep, *parts)
     base = _find_in_libraries("compatdata", str(int(app_id))) or os.path.join(
         os.path.dirname(STEAM_COMMON), "compatdata", str(int(app_id))
     )
@@ -4627,8 +4629,39 @@ def _bl_clear_stale_shader_caches(
     return fixed
 
 
+def _windows_documents() -> str:
+    """The real Documents folder (it may be redirected, e.g. to OneDrive)."""
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+        # CSIDL_PERSONAL = 5: the user's Documents, wherever it lives.
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0 and buf.value:
+            return buf.value
+    except Exception:  # noqa: BLE001 - fall back to the default location
+        pass
+    return os.path.join(os.environ.get("USERPROFILE", HOME_ROOT), "Documents")
+
+
+def _windows_user_path(*parts: str) -> str:
+    """What a Proton prefix path means on real Windows: the game's files
+    live in this user's own profile, not a per-game prefix."""
+    lowered = [p.lower() for p in parts]
+    if lowered[:1] == ["documents"]:
+        return os.path.join(_windows_documents(), *parts[1:])
+    if lowered[:2] == ["appdata", "local"]:
+        return os.path.join(os.environ.get("LOCALAPPDATA", ""), *parts[2:])
+    if lowered[:2] == ["appdata", "roaming"]:
+        return os.path.join(os.environ.get("APPDATA", ""), *parts[2:])
+    return os.path.join(os.environ.get("USERPROFILE", HOME_ROOT), *parts)
+
+
 def _prefix_user_path(app_id: int, *parts: str) -> str:
-    """A path inside the Proton prefix's Windows user profile."""
+    """A path inside the Proton prefix's Windows user profile (on Windows
+    itself: the same place in the real user profile)."""
+    if sys.platform == "win32":
+        return _windows_user_path(*parts)
     return os.path.join(
         decky.DECKY_USER_HOME, ".steam", "steam", "steamapps", "compatdata",
         str(int(app_id)), "pfx", "drive_c", "users", "steamuser", *parts,
@@ -7410,6 +7443,36 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     return key
 
 
+def _refresh_experimental_inspection(game_domain: str) -> bool:
+    """Re-read an experimental game's folder after a loader install and pick
+    up what it enables (UE4SS script-mod routing, a BepInEx plugins folder).
+    Tool-managed and Bethesda games keep their profile. True if changed."""
+    settings = _load_settings()
+    for key, game in (settings.get("experimental_games") or {}).items():
+        if not isinstance(game, dict) or game.get("nexusDomain") != game_domain:
+            continue
+        if game.get("toolApply") or game.get("installMode") == "dataDir":
+            return False
+        found = experimental_games.inspect_install(
+            _game_dir(game.get("installDirName") or ""))
+        changed = False
+        if found.get("ue4ss") and found["ue4ss"] != game.get("ue4ss"):
+            game["ue4ss"] = found["ue4ss"]
+            changed = True
+        if (found.get("engine") == "unity-bepinex"
+                and game.get("modsSubdir") != found.get("modsSubdir")):
+            game["modsSubdir"] = found["modsSubdir"]
+            changed = True
+        if changed:
+            settings["experimental_games"][key] = game
+            _save_settings(settings)
+            decky.logger.info(
+                f"experimental {game_domain}: loader detected, now "
+                f"mods={game.get('modsSubdir')!r} ue4ss={game.get('ue4ss')}")
+        return changed
+    return False
+
+
 def _remove_tracked_framework(game: dict, mod_id: int, subdir: str = "") -> int:
     """Delete the files an experimental loader install recorded and put
     back what it replaced. Returns the number of files removed."""
@@ -7554,7 +7617,59 @@ async def _overstrike_apply(game: dict) -> dict:
     if code != 0:
         return {"ok": False, "error": (
             f"Overstrike stopped with code {code} - is the game still running?")}
+    # What the game looked like right after: a patch (new build id) or a
+    # "verify files" (toc rewritten by Steam) both undo the mods silently.
+    settings = _load_settings()
+    settings.setdefault("tool_apply_state", {})[domain] = {
+        "buildid": _steam_build_id(int(game.get("appId") or 0)),
+        "toc_mtime": _toc_mtime(root),
+        "count": count,
+    }
+    _save_settings(settings)
     return {"ok": True, "count": count}
+
+
+def _toc_mtime(game_root: str) -> float:
+    try:
+        return os.path.getmtime(os.path.join(game_root, "asset_archive", "toc"))
+    except OSError:
+        return 0.0
+
+
+def _tool_reapply_reason(game: dict) -> str:
+    """Why a tool-managed game's mods need applying again, or ""."""
+    domain = game.get("nexusDomain") or ""
+    state = (_load_settings().get("tool_apply_state") or {}).get(domain)
+    if not state or not state.get("count"):
+        return ""
+    build = _steam_build_id(int(game.get("appId") or 0))
+    if state.get("buildid") and build and build != state["buildid"]:
+        return "the game updated"
+    mtime = _toc_mtime(_game_dir(game.get("installDirName") or ""))
+    if mtime and state.get("toc_mtime") and abs(mtime - state["toc_mtime"]) > 2:
+        return "Steam restored the game's files"
+    return ""
+
+
+async def _watch_tool_games() -> None:
+    """Every few minutes, re-apply tool-managed games whose mods a patch or
+    a file verify undid - unless the game is running right now."""
+    while True:
+        try:
+            for game in list((_load_settings().get("experimental_games") or {}).values()):
+                if not isinstance(game, dict) or game.get("toolApply") != "overstrike":
+                    continue
+                reason = _tool_reapply_reason(game)
+                if not reason:
+                    continue
+                if await _process_running(os.path.basename(game.get("processName") or "")):
+                    continue
+                decky.logger.info(
+                    f"Overstrike: re-applying {game.get('nexusDomain')} because {reason}")
+                _schedule_tool_apply(game["nexusDomain"], delay=0.5)
+        except Exception:  # noqa: BLE001 - a watcher must never die
+            decky.logger.exception("tool watcher failed")
+        await asyncio.sleep(300)
 
 
 _TOOL_APPLY_TASKS: dict = {}
@@ -11249,6 +11364,24 @@ async def _mod_file_listing(game_domain: str, mod_id: int, file_id: int):
     if not isinstance(preview, dict):
         return None
     return preview.get("children") or []
+
+
+async def _preview_paths(link: str):
+    """File paths from a Nexus content-preview link, or None."""
+    try:
+        safe = urllib.parse.quote(link, safe=":/?#[]@!$&'()*+,;=%~")
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=25)
+        ) as session:
+            async with session.get(safe, ssl=SSL_CONTEXT) as r:
+                if r.status != 200:
+                    return None
+                preview = await r.json(content_type=None)
+    except Exception:  # noqa: BLE001 - no listing is "cannot tell"
+        return None
+    if not isinstance(preview, dict):
+        return None
+    return _listing_paths(preview.get("children") or [])
 
 
 def _listing_paths(node) -> list:
@@ -19828,6 +19961,8 @@ query Link($slug: String!, $domainName: String!) {
                 "is_primary": bool(f.get("is_primary")),
                 "description": f.get("description") or "",
                 "uploaded_timestamp": f.get("uploaded_timestamp") or 0,
+                # Lets a caller read what is inside without downloading it.
+                "content_preview_link": f.get("content_preview_link") or "",
             }
             for f in body.get("files", [])
             if f.get("category_id") in VISIBLE_FILE_CATEGORIES
@@ -23237,13 +23372,16 @@ query Link($slug: String!, $domainName: String!) {
         install_path = _game_dir(install_dir)
         if not os.path.isdir(install_path):
             return _fail("game", "Game install folder not found")
-        proton, compat, steam_root, perr = _proton_binary_for(app_id)
-        if perr:
-            return _fail("proton", perr)
-        if not os.path.isdir(os.path.join(compat, "pfx")):
-            return _fail(
-                "prefix", "No Proton prefix yet - launch the game once first"
-            )
+        native = sys.platform == "win32"  # Windows runs the tool directly
+        proton = compat = steam_root = ""
+        if not native:
+            proton, compat, steam_root, perr = _proton_binary_for(app_id)
+            if perr:
+                return _fail("proton", perr)
+            if not os.path.isdir(os.path.join(compat, "pfx")):
+                return _fail(
+                    "prefix", "No Proton prefix yet - launch the game once first"
+                )
 
         files = await self.get_mod_files(game_domain, mod_id)
         if not files.get("ok"):
@@ -23405,7 +23543,9 @@ query Link($slug: String!, $domainName: String!) {
             "STEAM_COMPAT_CLIENT_INSTALL_PATH": steam_root,
             "STEAM_COMPAT_DATA_PATH": compat,
         })
-        if getattr(os, "geteuid", lambda: 1000)() == 0:
+        if native:
+            cmd = [exe_abs]
+        elif getattr(os, "geteuid", lambda: 1000)() == 0:
             cmd = [
                 "runuser", "-u", "deck", "--", "env",
                 f"STEAM_COMPAT_CLIENT_INSTALL_PATH={steam_root}",
@@ -23416,7 +23556,7 @@ query Link($slug: String!, $domainName: String!) {
             cmd = ["python3", proton, "run", exe_abs]
         decky.logger.info(
             f"prefix tool {game_domain}/{mod_id}: running {exe_rel!r} "
-            f"via {os.path.basename(os.path.dirname(proton))!r}"
+            f"via {os.path.basename(os.path.dirname(proton)) if proton else 'Windows'!r}"
         )
         await _emit_progress(mod_id, "extracting", 100)
         timed_out = False
@@ -23429,7 +23569,8 @@ query Link($slug: String!, $domainName: String!) {
                 env=run_env,
                 # Own session: on timeout the WHOLE tree dies (killing
                 # just the proton wrapper orphaned Patcher.exe on device).
-                start_new_session=True,
+                **({"creationflags": 0x00000200} if native  # NEW_PROCESS_GROUP
+                   else {"start_new_session": True}),
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
@@ -23462,6 +23603,14 @@ query Link($slug: String!, $domainName: String!) {
                 return False
 
             def _kill_tree():
+                if native:
+                    import subprocess  # noqa: PLC0415
+
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        env=_host_env(), check=False, **_NO_WINDOW)
+                    return
                 try:
                     import signal
 
@@ -23802,6 +23951,11 @@ query Link($slug: String!, $domainName: String!) {
         installed Proton bundles. Idempotent: reports updated=False when
         the prefix is already current. See the CRT_DLLS block comment for
         why Cyberpunk prefixes ship a too-old runtime."""
+        if sys.platform == "win32":
+            # No prefix: games use the system's own VC++ runtime, which
+            # Windows Update and installers keep current. Never touch
+            # the real System32.
+            return {"ok": True, "updated": False, "version": "system"}
         sys32 = _prefix_system32(app_id)
         if not os.path.isdir(sys32):
             return {
@@ -23855,6 +24009,8 @@ query Link($slug: String!, $domainName: String!) {
         (device, 2026-08-08). Nothing in the game says why; SKSE just
         logs "fatal error occurred while loading plugin".
         """
+        if sys.platform == "win32":
+            return {"ok": True, "prefix_exists": False}
         sys32 = _prefix_system32(app_id)
         if not os.path.isdir(sys32):
             return {"ok": True, "prefix_exists": False}
@@ -30953,6 +31109,12 @@ query CollectionInstructions($slug: String!) {
         retried (the key is only set once the lookups answered)."""
         domain = game.get("nexusDomain") or ""
         api_key = _load_settings().get("api_key")
+        if experimental_games.apply_bethesda_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            game.pop("framework", None)
+            decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
         if domain in experimental_games.TOOL_GAMES:
             ovs_id = experimental_games.TOOL_GAMES[domain]
             if not ovs_id:
@@ -30977,47 +31139,55 @@ query CollectionInstructions($slug: String!) {
             "{ modId modName url } } }",
             api_key,
         )
-        req = experimental_games.pick_common_requirement(nodes, domain)
+        counts, names, total = experimental_games.requirement_counts(nodes, domain)
+        reqs = experimental_games.common_requirements(counts, names, total)
         game["frameworkChecked"] = True
         game["profileVersion"] = experimental_games.PROFILE_VERSION
         game.pop("framework", None)
-        if not req:
+        game.pop("extraFrameworks", None)
+        if not reqs:
             decky.logger.info(f"experimental framework {domain}: none shared")
             return
-        files = await self.get_mod_files(domain, req["modId"])
-        main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
-        listing = (await _mod_file_listing(domain, req["modId"], main["file_id"])
-                   if main else None)
-        if listing is None:
-            # Cannot see inside it: say nothing rather than guess.
-            game.pop("frameworkChecked", None)
+        exe_dir = experimental_games.exe_dir_of(game.get("processName") or "")
+        loaders = []
+        for req in reqs[:4]:
+            files = await self.get_mod_files(domain, req["modId"])
+            main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
+            listing = (await _mod_file_listing(domain, req["modId"], main["file_id"])
+                       if main else None)
+            if listing is None:
+                # Cannot see inside it: say nothing rather than guess, and
+                # look again next time.
+                game.pop("frameworkChecked", None)
+                decky.logger.info(
+                    f"experimental framework {domain}: {req['modName']} has no "
+                    "file listing")
+                continue
+            layout = experimental_games.framework_layout(_listing_paths(listing), exe_dir)
             decky.logger.info(
-                f"experimental framework {domain}: {req['modName']} has no "
-                "file listing")
-            return
-        layout = experimental_games.framework_layout(
-            _listing_paths(listing),
-            experimental_games.exe_dir_of(game.get("processName") or ""),
-        )
-        decky.logger.info(
-            f"experimental framework {domain}: {req['modName']} "
-            f"(mod {req['modId']}, required by {req['count']} of {len(nodes)} "
-            f"top mods) layout={layout}")
-        if not layout:
-            return  # an ordinary mod everyone needs; installs like any mod
-        game["framework"] = {
-            "name": req["modName"],
-            "nexusModId": req["modId"],
-            "detectFile": layout["detectFile"],
-            "url": f"https://www.nexusmods.com/{domain}/mods/{req['modId']}",
-            "installKind": "copyRootTracked",
-            "installSubdir": layout["installSubdir"],
-            "warning": (
-                f"{req['count']} of the top {len(nodes)} mods need it. It "
-                "loads code into the game: online games with anti-cheat may "
-                "penalise or ban accounts that use it."
-            ),
-        }
+                f"experimental framework {domain}: {req['modName']} "
+                f"(mod {req['modId']}, required by {req['count']} of {len(nodes)} "
+                f"top mods) layout={layout}")
+            if layout:  # else an ordinary mod everyone needs: installs normally
+                loaders.append({
+                    "name": req["modName"],
+                    "nexusModId": req["modId"],
+                    "detectFile": layout["detectFile"],
+                    "url": f"https://www.nexusmods.com/{domain}/mods/{req['modId']}",
+                    "installKind": "copyRootTracked",
+                    "installSubdir": layout["installSubdir"],
+                    "warning": (
+                        f"{req['count']} of the top {len(nodes)} mods need it. It "
+                        "loads code into the game: online games with anti-cheat "
+                        "may penalise or ban accounts that use it."
+                    ),
+                })
+        if loaders:
+            # Several loaders (a signature bypass AND UE4SS) install together
+            # through the panel's one-button multi-framework Step 1.
+            game["framework"] = loaders[0]
+            if len(loaders) > 1:
+                game["extraFrameworks"] = loaders[1:]
 
     async def set_experimental_framework_enabled(
         self, app_id: int, enabled: bool
@@ -31105,6 +31275,67 @@ query CollectionInstructions($slug: String!) {
         decky.logger.info(f"Overstrike apply for {game['nexusDomain']} (manual): {result}")
         return result
 
+    async def check_experimental_coverage(self, app_id: int, count: int = 50) -> dict:
+        """Predict, for the game's most-endorsed mods, whether each would
+        install somewhere the game loads it - from Nexus's published file
+        listings, without downloading anything."""
+        try:
+            game = (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
+            if not game:
+                return {"ok": False, "error": "Set the game up first"}
+            domain = game["nexusDomain"]
+            top = await self.get_mods(domain, "endorsements", int(count), 0, "", int(app_id))
+            if not top.get("ok"):
+                return {"ok": False, "error": top.get("error") or "Could not list mods"}
+            install_path = _game_dir(game.get("installDirName") or "")
+
+            def local():
+                try:
+                    roots = set(os.listdir(install_path))
+                except OSError:
+                    roots = set()
+                return roots, experimental_games.index_game_dirs(install_path)
+
+            roots, index = await asyncio.to_thread(local)
+            fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
+            sem = asyncio.Semaphore(4)
+
+            async def one(m):
+                mid = int(m.get("modId") or 0)
+                async with sem:
+                    files = await self.get_mod_files(domain, mid)
+                    main_file = _pick_main_file(
+                        (files.get("files") or []) if files.get("ok") else [])
+                    paths = None
+                    if main_file and main_file.get("content_preview_link"):
+                        paths = await _preview_paths(main_file["content_preview_link"])
+                verdict = experimental_games.classify_mod(
+                    paths, game, roots, index, is_framework=(mid == fw_id))
+                return {"modId": mid, "name": m.get("name") or str(mid),
+                        "verdict": verdict,
+                        "file": (main_file or {}).get("file_name") or "",
+                        "sample": (paths or [])[:6]}
+
+            rows = await asyncio.gather(*(one(m) for m in top.get("mods") or []))
+            summary = experimental_games.summarize(rows)
+            settings = _load_settings()
+            settings.setdefault("coverage", {})[domain] = {
+                "at": int(time.time()), **summary,
+                "problems": [r for r in rows if r["verdict"] in ("program", "no_target", "unknown")],
+            }
+            _save_settings(settings)
+            decky.logger.info(f"coverage {domain}: {summary}")
+            for r in rows:
+                if r["verdict"] not in ("mods_folder", "game_folder", "wizard",
+                                        "tool_managed", "loader"):
+                    decky.logger.info(
+                        f"coverage {domain}: {r['verdict']}: {r['name']!r} "
+                        f"(mod {r['modId']}, {r['file']}) {r['sample']}")
+            return {"ok": True, **summary, "rows": rows}
+        except Exception as e:  # noqa: BLE001
+            decky.logger.exception("check_experimental_coverage crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
     async def remove_experimental_game(self, app_id: int) -> dict:
         settings = _load_settings()
         removed = (settings.get("experimental_games") or {}).pop(str(int(app_id)), None)
@@ -31132,6 +31363,7 @@ query CollectionInstructions($slug: String!) {
 
     async def _main(self):
         decky.logger.info("Nexus Mods plugin loaded")
+        self._tool_watcher = asyncio.get_running_loop().create_task(_watch_tool_games())
 
     async def _unload(self):
         # Stop what is in flight, and make sure this process really goes.
@@ -31164,6 +31396,11 @@ def _wrap_tool_apply(name: str) -> None:
         result = await original(self, game_domain, *args, **kwargs)
         if isinstance(result, dict) and result.get("ok"):
             _schedule_tool_apply(game_domain)
+            if name == "install_framework":
+                # A loader just landed (UE4SS, BepInEx): look again, so
+                # script mods start routing to it straight away.
+                if await asyncio.to_thread(_refresh_experimental_inspection, game_domain):
+                    await decky.emit("experimental_changed")
         return result
 
     setattr(Plugin, name, wrapper)

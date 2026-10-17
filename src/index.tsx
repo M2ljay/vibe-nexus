@@ -141,6 +141,7 @@ import {
 import {
   ALL_GAMES,
   DEFAULT_GAME,
+  managedGames,
   getLastActiveGame,
   getSupportedGame,
   modeParams,
@@ -2610,7 +2611,7 @@ function AllInstalledModsSection() {
 
   const refresh = () => {
     Promise.all(
-      ALL_GAMES.map(async (g) => ({
+      managedGames().map(async (g) => ({
         game: g,
         mods:
           (
