@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import {
   ExperimentalCandidate,
+  applyExperimentalTool,
   findExperimentalGame,
   getExperimentalState,
   removeExperimentalFramework,
@@ -30,6 +31,23 @@ import {
   setExperimentalState,
 } from "./games";
 import { notifyGameStateChanged } from "./state";
+
+/** Toast for the backend's automatic re-apply after an install/uninstall. */
+export function toolAppliedToast(
+  _domain: string,
+  result: { ok: boolean; count?: number; error?: string }
+): void {
+  toaster.toast(
+    result.ok
+      ? {
+          title: "Overstrike applied your mods",
+          body: result.count
+            ? `${result.count} mod file${result.count === 1 ? "" : "s"} active`
+            : "No mods installed - the game is back to vanilla",
+        }
+      : { title: "Overstrike couldn't apply mods", body: result.error ?? "" }
+  );
+}
 
 /** Pull the saved experimental state from the backend into games.ts. */
 export async function loadExperimentalState(): Promise<void> {
@@ -201,6 +219,25 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
       <PanelSectionRow>
         <Field label="Mods folder">{game.modsSubdir}</Field>
       </PanelSectionRow>
+      {game.toolApply === "overstrike" && (
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            disabled={busy}
+            description="Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
+            onClick={async () => {
+              setBusy(true);
+              try {
+                toolAppliedToast(game.nexusDomain, await applyExperimentalTool(game.appId));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Applying…" : "Apply mods with Overstrike"}
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
       {game.framework?.installKind === "copyRootTracked" && (
         <PanelSectionRow>
           <ButtonItem

@@ -303,6 +303,9 @@ export interface SupportedGame {
    * these games route through the frosty* backend calls rather than the
    * normal installer. See docs/frosty-swbf2/WORKING.md. */
   frostbite?: boolean;
+  /** Experimental tool-managed games: the backend applies installed mods
+   * with this tool after every change (Insomniac ports: Overstrike). */
+  toolApply?: "overstrike";
   /** Shown as a banner at the top of the QAM panel: support for this game
    * is real but rough. Honest signposting beats silent rough edges. */
   underConstruction?: string;

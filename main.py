@@ -7410,6 +7410,182 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     return key
 
 
+def _remove_tracked_framework(game: dict, mod_id: int, subdir: str = "") -> int:
+    """Delete the files an experimental loader install recorded and put
+    back what it replaced. Returns the number of files removed."""
+    settings = _load_settings()
+    key = f"{game.get('nexusDomain')}/{int(mod_id or 0)}"
+    rec = (settings.get("experimental_frameworks") or {}).get(key)
+    if not rec:
+        return 0
+    root = _game_dir(rec.get("install_dir") or game.get("installDirName") or "")
+    removed = 0
+    for rel in rec.get("files") or []:
+        if not _safe_rel_path(rel):
+            continue
+        path = os.path.join(root, *rel.split("/"))
+        for candidate in (path, path + ".nexusoff"):
+            try:
+                os.remove(candidate)
+                removed += 1
+            except OSError:
+                pass
+    _restore_backups(root, rec.get("backups"))
+    # Only folders BELOW where the loader was put: that folder itself
+    # belongs to the game, empty or not.
+    base = os.path.join(root, *[x for x in (subdir or "").split("/") if x])
+    dirs = sorted({os.path.dirname(r) for r in rec.get("files") or [] if "/" in r},
+                  key=len, reverse=True)
+    for d in dirs:
+        p = os.path.join(root, *d.split("/"))
+        while p.startswith(base + os.sep):
+            try:
+                os.rmdir(p)
+            except OSError:
+                break
+            p = os.path.dirname(p)
+    settings = _load_settings()
+    settings.get("experimental_frameworks", {}).pop(key, None)
+    _save_settings(settings)
+    decky.logger.info(f"experimental framework {key} removed: {removed} files")
+    return removed
+
+
+def _undo_superseded_experimental(game: dict, old_fw: int, old_mods: str) -> None:
+    """After a game's experimental profile changed, take out what the old
+    guess installed and cannot work any more: a loader it no longer uses,
+    and mod folders left in a mods folder it no longer reads."""
+    new_fw = int((game.get("framework") or {}).get("nexusModId") or 0)
+    if old_fw and old_fw != new_fw:
+        _remove_tracked_framework(game, old_fw, "")
+    new_mods = game.get("modsSubdir") or ""
+    if not old_mods or old_mods == new_mods:
+        return
+    domain = game.get("nexusDomain") or ""
+    root = _game_dir(game.get("installDirName") or "")
+    old_dir = os.path.join(root, *old_mods.split("/"))
+    settings = _load_settings()
+    records = settings.get("installed", {}).get(domain, {})
+    dropped = []
+    for key, rec in list(records.items()):
+        if rec.get("mode") or rec.get("target"):
+            continue  # files records keep working wherever they are
+        for base in (old_dir, _disabled_dir(old_dir)):
+            folder = os.path.join(base, rec.get("folder") or key)
+            if os.path.isdir(folder):
+                _force_rmtree(folder)
+        records.pop(key, None)
+        dropped.append(rec.get("name") or key)
+    _save_settings(settings)
+    for d in (_disabled_dir(old_dir), old_dir):
+        try:
+            os.rmdir(d)
+        except OSError:
+            pass
+    if dropped:
+        settings = _load_settings()
+        settings.setdefault("experimental_dropped", {})[domain] = dropped
+        _save_settings(settings)
+        decky.logger.info(
+            f"experimental {domain}: mods folder moved from {old_mods!r} to "
+            f"{new_mods!r}; removed {dropped} (installed where the game "
+            "never reads them - reinstall to use them)")
+
+
+def _dotnet_desktop_runtime(major: int) -> bool:
+    base = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                        "dotnet", "shared", "Microsoft.WindowsDesktop.App")
+    try:
+        return any(n.split(".")[0] == str(major) for n in os.listdir(base))
+    except OSError:
+        return False
+
+
+async def _overstrike_apply(game: dict) -> dict:
+    """Bring Overstrike's "Nexus" profile in line with the installed mods
+    and run its install-mods command. With no mods, restores vanilla."""
+    domain = game.get("nexusDomain") or ""
+    root = _game_dir(game.get("installDirName") or "")
+    ovs = os.path.join(root, experimental_games.OVERSTRIKE_DIR)
+    exe = os.path.join(ovs, "Overstrike.exe")
+    if not os.path.isfile(exe):
+        return {"ok": False, "error": "Overstrike isn't installed yet - Step 1 installs it."}
+    if sys.platform == "win32" and not _dotnet_desktop_runtime(7):
+        return {"ok": False, "error": (
+            "Overstrike needs Microsoft's .NET 7 Desktop Runtime. Install it "
+            "(winget install Microsoft.DotNet.DesktopRuntime.7), then press "
+            "Apply mods.")}
+    name = experimental_games.OVERSTRIKE_PROFILE
+
+    async def run(*args, timeout=900):
+        proc = await asyncio.create_subprocess_exec(
+            exe, *args, cwd=ovs, stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL, env=_host_env(), **_NO_WINDOW)
+        try:
+            return await asyncio.wait_for(proc.wait(), timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return -9
+
+    profile = os.path.join(ovs, "Profiles", name + ".json")
+    if not os.path.isfile(profile):
+        code = await run("create-profile", name, root, timeout=120)
+        if code != 0 or not os.path.isfile(profile):
+            return {"ok": False, "error": (
+                f"Overstrike could not set up a profile for this game (code {code}).")}
+    settings = _load_settings()
+    lib = game.get("modsSubdir") or experimental_games.OVERSTRIKE_LIBRARY
+    records = [
+        (rec.get("install_seq") or 0, rec.get("files") or [])
+        for rec in (settings.get("installed", {}).get(domain, {}) or {}).values()
+        if rec.get("mode") == "files" and rec.get("target") == lib
+        and rec.get("enabled") is not False
+    ]
+    try:
+        with open(profile, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        return {"ok": False, "error": f"Overstrike profile unreadable: {e}"}
+    data["mods"] = experimental_games.overstrike_profile_mods(records, data.get("mods"))
+    with open(profile, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    count = len(data["mods"])
+    code = await run("install-mods" if count else "uninstall-mods", name)
+    if code != 0:
+        return {"ok": False, "error": (
+            f"Overstrike stopped with code {code} - is the game still running?")}
+    return {"ok": True, "count": count}
+
+
+_TOOL_APPLY_TASKS: dict = {}
+
+
+def _schedule_tool_apply(game_domain: str, delay: float = 6.0) -> None:
+    """Re-apply a tool-managed game's mods shortly after the last change,
+    so a collection of 40 installs runs the tool once, not 40 times."""
+    game = _experimental_game_for(game_domain)
+    if not game or game.get("toolApply") != "overstrike":
+        return
+    old = _TOOL_APPLY_TASKS.get(game_domain)
+    if old and not old.done():
+        old.cancel()
+
+    async def later():
+        await asyncio.sleep(delay)
+        result = await _overstrike_apply(_experimental_game_for(game_domain) or game)
+        settings = _load_settings()
+        settings.setdefault("tool_apply_last", {})[game_domain] = {
+            **result, "at": int(time.time())}
+        _save_settings(settings)
+        decky.logger.info(f"Overstrike apply for {game_domain}: {result}")
+        await decky.emit("experimental_tool_applied", game_domain, result)
+
+    try:
+        _TOOL_APPLY_TASKS[game_domain] = asyncio.get_running_loop().create_task(later())
+    except RuntimeError:
+        pass
+
+
 def _restore_backups(install_path: str, rels: list) -> None:
     """Put back game files a files-mode install set aside as .nexusbak."""
     for rel in rels or []:
@@ -14916,6 +15092,13 @@ async def _extract_archive(archive_path: str, dest_dir: str) -> str:
         errors.append(f"zipfile: {e}")
     if not errors:
         return "no extractor available for this archive type"
+    if (sys.platform == "win32" and _is_rar(archive_path)
+            and not os.path.isfile(_WIN_7Z)):
+        # Windows' own tar reads few RAR archives; 7-Zip reads them all and
+        # is picked up automatically once installed.
+        return ("This mod is a RAR archive, which Windows can't unpack by "
+                "itself. Install 7-Zip (winget install 7zip.7zip) and try "
+                "again.")
     return " | ".join(errors)[:300]
 
 
@@ -30543,7 +30726,9 @@ query CollectionInstructions($slug: String!) {
         if stale:
             _save_settings(settings)
         unchecked = [int(k) for k, g in games.items()
-                     if isinstance(g, dict) and "frameworkChecked" not in g]
+                     if isinstance(g, dict) and (
+                         "frameworkChecked" not in g
+                         or g.get("profileVersion") != experimental_games.PROFILE_VERSION)]
         if unchecked and not getattr(self, "_exp_checking", False):
             self._exp_checking = True
             asyncio.get_running_loop().create_task(
@@ -30711,11 +30896,15 @@ query CollectionInstructions($slug: String!) {
                 game = (settings.get("experimental_games") or {}).get(str(app_id))
                 if not isinstance(game, dict):
                     continue
+                old_fw = int((game.get("framework") or {}).get("nexusModId") or 0)
+                old_mods = game.get("modsSubdir") or ""
                 await self._experimental_framework(game)
                 settings = _load_settings()
                 settings.setdefault("experimental_games", {})[str(app_id)] = game
                 _save_settings(settings)
                 changed = True
+                await asyncio.to_thread(
+                    _undo_superseded_experimental, game, old_fw, old_mods)
             if changed:
                 await decky.emit("experimental_changed")
         except Exception:  # noqa: BLE001 - background, logged
@@ -30731,6 +30920,16 @@ query CollectionInstructions($slug: String!) {
         retried (the key is only set once the lookups answered)."""
         domain = game.get("nexusDomain") or ""
         api_key = _load_settings().get("api_key")
+        if domain in experimental_games.TOOL_GAMES:
+            ovs_id = experimental_games.TOOL_GAMES[domain]
+            if not ovs_id:
+                ovs_id = await self._find_requirement_named(domain, "overstrike")
+            if experimental_games.apply_tool_profile(game, ovs_id):
+                game["frameworkChecked"] = True
+                game["profileVersion"] = experimental_games.PROFILE_VERSION
+                decky.logger.info(
+                    f"experimental framework {domain}: Overstrike (mod {ovs_id})")
+                return
         top = await self.get_mods(domain, "endorsements", 20, 0, "",
                                   int(game.get("appId") or 0))
         if not top.get("ok"):
@@ -30747,6 +30946,7 @@ query CollectionInstructions($slug: String!) {
         )
         req = experimental_games.pick_common_requirement(nodes, domain)
         game["frameworkChecked"] = True
+        game["profileVersion"] = experimental_games.PROFILE_VERSION
         game.pop("framework", None)
         if not req:
             decky.logger.info(f"experimental framework {domain}: none shared")
@@ -30819,6 +31019,25 @@ query CollectionInstructions($slug: String!) {
             decky.logger.exception("set_experimental_framework_enabled crashed")
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
+    async def _find_requirement_named(self, domain: str, needle: str):
+        """A mod id among the requirements of the game's top mods whose name
+        contains `needle` (case-insensitive), or None."""
+        api_key = _load_settings().get("api_key")
+        top = await self.get_mods(domain, "endorsements", 40, 0, "", 0)
+        ids = [int(m.get("modId") or 0) for m in top.get("mods") or [] if m.get("modId")]
+        if not ids:
+            return None
+        nodes = await _legacy_mods_in_batches(
+            await _resolve_game_id(domain, api_key), ids,
+            "modId modRequirements { nexusRequirements { nodes { modId modName url } } }",
+            api_key)
+        for n in nodes:
+            for r in (((n.get("modRequirements") or {}).get("nexusRequirements") or {})
+                      .get("nodes") or []):
+                if needle in str(r.get("modName") or "").lower() and r.get("modId"):
+                    return int(r["modId"])
+        return None
+
     async def remove_experimental_framework(self, app_id: int) -> dict:
         """Delete the files an experimental loader install put in the game
         and restore any game file it replaced."""
@@ -30826,50 +31045,29 @@ query CollectionInstructions($slug: String!) {
             settings = _load_settings()
             game = (settings.get("experimental_games") or {}).get(str(int(app_id)))
             fw = (game or {}).get("framework") or {}
-            key = f"{game.get('nexusDomain')}/{int(fw.get('nexusModId') or 0)}" if game else ""
-            rec = (settings.get("experimental_frameworks") or {}).get(key)
-            if not rec:
+            key = f"{(game or {}).get('nexusDomain')}/{int(fw.get('nexusModId') or 0)}"
+            if not game or key not in (settings.get("experimental_frameworks") or {}):
                 return {"ok": False, "error": "No install record for this loader"}
-            root = _game_dir(rec.get("install_dir") or game.get("installDirName"))
-            removed = 0
-            for rel in rec.get("files") or []:
-                if not _safe_rel_path(rel):
-                    continue
-                path = os.path.join(root, *rel.split("/"))
-                for candidate in (path, path + ".nexusoff"):
-                    try:
-                        os.remove(candidate)
-                        removed += 1
-                    except OSError:
-                        pass
-            for rel in rec.get("backups") or []:
-                if not _safe_rel_path(rel):
-                    continue
-                path = os.path.join(root, *rel.split("/"))
-                if os.path.isfile(path + ".nexusbak"):
-                    os.replace(path + ".nexusbak", path)
-            # Empty folders the loader created (plugins/) go too.
-            dirs = sorted({os.path.dirname(r) for r in rec.get("files") or [] if "/" in r},
-                          key=len, reverse=True)
-            # Only folders BELOW where the loader was put: the exe folder
-            # itself belongs to the game, empty or not.
-            base = os.path.join(root, *[x for x in (fw.get("installSubdir") or "").split("/") if x])
-            for d in dirs:
-                p = os.path.join(root, *d.split("/"))
-                while p.startswith(base + os.sep):
-                    try:
-                        os.rmdir(p)
-                    except OSError:
-                        break
-                    p = os.path.dirname(p)
-            settings = _load_settings()
-            settings.get("experimental_frameworks", {}).pop(key, None)
-            _save_settings(settings)
-            decky.logger.info(f"experimental framework {key} removed: {removed} files")
+            removed = await asyncio.to_thread(
+                _remove_tracked_framework, game, fw.get("nexusModId"),
+                fw.get("installSubdir") or "")
             return {"ok": True, "removed": removed}
         except Exception as e:  # noqa: BLE001
             decky.logger.exception("remove_experimental_framework crashed")
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def apply_experimental_tool(self, app_id: int) -> dict:
+        """Run a tool-managed game's mod tool now (the panel's Apply button)."""
+        game = (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
+        if not game or game.get("toolApply") != "overstrike":
+            return {"ok": False, "error": "This game has no mod tool to run"}
+        result = await _overstrike_apply(game)
+        settings = _load_settings()
+        settings.setdefault("tool_apply_last", {})[game["nexusDomain"]] = {
+            **result, "at": int(time.time())}
+        _save_settings(settings)
+        decky.logger.info(f"Overstrike apply for {game['nexusDomain']} (manual): {result}")
+        return result
 
     async def remove_experimental_game(self, app_id: int) -> dict:
         settings = _load_settings()
@@ -30917,3 +31115,24 @@ query CollectionInstructions($slug: String!) {
 
     async def _uninstall(self):
         decky.logger.info("Nexus Mods plugin uninstalled")
+
+
+# Experimental tool-managed games (Overstrike): every change to what is
+# installed re-applies the set, debounced. Wrapped here rather than edited
+# into each method so the upstream code stays untouched.
+def _wrap_tool_apply(name: str) -> None:
+    original = getattr(Plugin, name)
+
+    @functools.wraps(original)
+    async def wrapper(self, game_domain, *args, **kwargs):
+        result = await original(self, game_domain, *args, **kwargs)
+        if isinstance(result, dict) and result.get("ok"):
+            _schedule_tool_apply(game_domain)
+        return result
+
+    setattr(Plugin, name, wrapper)
+
+
+for _name in ("install_mod", "uninstall_mod", "uninstall_all_mods",
+              "reset_game_modding", "install_framework"):
+    _wrap_tool_apply(_name)

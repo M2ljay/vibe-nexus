@@ -196,5 +196,77 @@ class ExperimentalRootInstallTests(unittest.TestCase):
         self.assertIsNone(main._experimental_game_for("skyrimspecialedition"))
 
 
+class OverstrikeTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin = main.Plugin()
+        self.root = main._game_dir("Marvel's Spider-Man Remastered")
+        main._force_rmtree(self.root)
+        self.ovs = os.path.join(self.root, "Overstrike")
+        os.makedirs(os.path.join(self.ovs, "Mods Library"), exist_ok=True)
+        self.calls = os.path.join(self.ovs, "calls.txt")
+        exe = os.path.join(self.ovs, "Overstrike.exe")
+        with open(exe, "w") as f:
+            f.write("#!/bin/sh\n"
+                    "echo \"$@\" >> calls.txt\n"
+                    "if [ \"$1\" = create-profile ]; then mkdir -p Profiles; "
+                    "printf '{\"game\":\"MSMR\",\"path\":\"x\",\"mods\":[]}' > Profiles/$2.json; fi\n")
+        os.chmod(exe, 0o755)
+        self.game = {"appId": 1817070, "nexusDomain": "marvelsspidermanremastered",
+                     "installDirName": "Marvel's Spider-Man Remastered"}
+        main.experimental_games.apply_tool_profile(self.game, 4199)
+        main._save_settings({
+            "experimental_games": {"1817070": self.game},
+            "installed": {"marvelsspidermanremastered": {
+                "Suit B": {"mode": "files", "target": "Overstrike/Mods Library",
+                           "files": ["b.suit"], "install_seq": 2},
+                "Mod A": {"mode": "files", "target": "Overstrike/Mods Library",
+                          "files": ["a.smpcmod"], "install_seq": 1}}},
+        })
+
+    def test_apply_writes_profile_and_runs_install(self):
+        r = _run(main._overstrike_apply(self.game))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["count"], 2)
+        with open(os.path.join(self.ovs, "Profiles", "Nexus.json")) as f:
+            data = main.json.load(f)
+        self.assertEqual(data["mods"], [["a.smpcmod", True], ["b.suit", True]])
+        self.assertEqual(data["game"], "MSMR")
+        with open(self.calls) as f:
+            lines = f.read().splitlines()
+        self.assertTrue(lines[0].startswith("create-profile Nexus "))
+        self.assertEqual(lines[-1], "install-mods Nexus")
+
+    def test_no_mods_uninstalls(self):
+        main._save_settings({"experimental_games": {"1817070": self.game}})
+        r = _run(main._overstrike_apply(self.game))
+        self.assertTrue(r["ok"], r)
+        with open(self.calls) as f:
+            self.assertEqual(f.read().splitlines()[-1], "uninstall-mods Nexus")
+
+    def test_missing_overstrike(self):
+        os.remove(os.path.join(self.ovs, "Overstrike.exe"))
+        self.assertFalse(_run(main._overstrike_apply(self.game))["ok"])
+
+    def test_superseded_guess_is_cleaned_up(self):
+        # The earlier guess: the old modding tool in the game root, a mod in Mods/.
+        for rel in ("DotNetZip.dll", "SpiderManPCTool.exe", "Mods/Play As Blackcat/x.smpcmod"):
+            path = os.path.join(self.root, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            open(path, "w").close()
+        st = main._load_settings()
+        st["experimental_frameworks"] = {"marvelsspidermanremastered/51": {
+            "install_dir": "Marvel's Spider-Man Remastered",
+            "files": ["DotNetZip.dll", "SpiderManPCTool.exe"], "backups": []}}
+        st["installed"]["marvelsspidermanremastered"]["Play As Blackcat"] = {"name": "Play As Blackcat"}
+        main._save_settings(st)
+        main._undo_superseded_experimental(self.game, 51, "Mods")
+        self.assertFalse(os.path.exists(os.path.join(self.root, "DotNetZip.dll")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "Mods")))
+        st = main._load_settings()
+        self.assertNotIn("Play As Blackcat", st["installed"]["marvelsspidermanremastered"])
+        self.assertIn("Mod A", st["installed"]["marvelsspidermanremastered"])
+        self.assertEqual(st["experimental_dropped"]["marvelsspidermanremastered"], ["Play As Blackcat"])
+
+
 if __name__ == "__main__":
     unittest.main()

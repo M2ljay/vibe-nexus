@@ -236,5 +236,27 @@ class RootPlanTests(unittest.TestCase):
             self.assertEqual(idx["content"], ["Proj/Content"])  # Engine/ is never a mod target
 
 
+class ToolGameTests(unittest.TestCase):
+    def test_tool_archive_is_not_a_loader(self):
+        self.assertIsNone(eg.framework_layout(
+            ["SpiderManPCTool.exe", "DotNetZip.dll", "Newtonsoft.Json.dll"], ""))
+
+    def test_tool_with_proxy_dll_is_still_a_loader(self):
+        self.assertIsNotNone(eg.framework_layout(["Setup.exe", "dinput8.dll"], ""))
+
+    def test_overstrike_profile(self):
+        g = {"nexusDomain": "marvelsspidermanremastered", "modsSubdir": "Mods"}
+        self.assertTrue(eg.apply_tool_profile(g, 4199))
+        self.assertEqual(g["modsSubdir"], "Overstrike/Mods Library")
+        self.assertEqual(g["framework"]["detectFile"], "Overstrike/Overstrike.exe")
+        self.assertIn(".smpcmod", g["flatModExtensions"])
+        self.assertFalse(eg.apply_tool_profile({"nexusDomain": "witcher3"}, 1))
+        self.assertFalse(eg.apply_tool_profile({"nexusDomain": "spidermanmilesmorales"}, None))
+
+    def test_profile_mods_order_and_paths(self):
+        out = eg.overstrike_profile_mods([(5, ["sub/b.suit"]), (1, ["a.smpcmod", "a.smpcmod"])], [])
+        self.assertEqual(out, [["a.smpcmod", True], ["sub\\b.suit", True]])
+
+
 if __name__ == "__main__":
     unittest.main()

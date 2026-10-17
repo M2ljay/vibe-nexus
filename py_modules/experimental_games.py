@@ -400,6 +400,12 @@ def framework_layout(paths: list, exe_dir: str):
     loaders = [p for p in rels if p.lower().endswith(_LOADER_EXTS)]
     if not loaders:
         return None
+    # A program you run (an .exe tool such as a mod packer) is not a loader
+    # the game picks up, unless it also ships a proxy dll or .asi plugin.
+    has_hook = any(p.split("/")[-1].lower() in PROXY_DLLS or p.lower().endswith(".asi")
+                   for p in rels)
+    if any(p.lower().endswith(".exe") for p in rels) and not has_hook:
+        return None
     if exe_parts and any(p.split("/")[0].lower() == exe_parts[0].lower() for p in rels):
         detect = min(loaders, key=lambda p: (p.count("/"), p.lower()))
         return {"installSubdir": "", "detectFile": detect}
@@ -521,3 +527,85 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
             return None
         plan.append((src, dst))
     return plan or None
+
+
+
+# ---- Games whose mods are applied by a tool ----------------------------------
+# Insomniac's PC ports load no loose mod files: Overstrike (open source, GPL)
+# packs .smpcmod/.suit/.stage/.modular files into the game's archives. It
+# has a command line (create-profile, install-mods), so the plugin keeps a
+# profile in step with what is installed and runs it - one press, no desktop.
+
+PROFILE_VERSION = 2
+
+OVERSTRIKE_EXTS = [".smpcmod", ".suit", ".stage", ".modular", ".script"]
+OVERSTRIKE_DIR = "Overstrike"
+OVERSTRIKE_LIBRARY = OVERSTRIKE_DIR + "/Mods Library"
+OVERSTRIKE_PROFILE = "Nexus"
+
+# domain -> Overstrike's mod id on that game's Nexus page (None: look for
+# it among the requirements of the game's top mods).
+TOOL_GAMES = {
+    "marvelsspidermanremastered": 4199,
+    "marvelsspiderman2": 1,
+    "ratchetandclankriftapart": 1,
+    "spidermanmilesmorales": None,
+}
+
+
+def apply_tool_profile(game: dict, overstrike_id) -> bool:
+    """Turn a game into an Overstrike-managed one. Returns False when the
+    game is not one of TOOL_GAMES or Overstrike's mod id is unknown."""
+    if game.get("nexusDomain") not in TOOL_GAMES or not overstrike_id:
+        return False
+    game["engine"] = "insomniac"
+    game["modsSubdir"] = OVERSTRIKE_LIBRARY
+    game["flatModExtensions"] = list(OVERSTRIKE_EXTS)
+    game["toolApply"] = "overstrike"
+    game.pop("ue4ss", None)
+    game["framework"] = {
+        "name": "Overstrike",
+        "nexusModId": int(overstrike_id),
+        "detectFile": OVERSTRIKE_DIR + "/Overstrike.exe",
+        "url": f"https://www.nexusmods.com/{game['nexusDomain']}/mods/{int(overstrike_id)}",
+        "installKind": "copyRootTracked",
+        "installSubdir": OVERSTRIKE_DIR,
+        "warning": (
+            "Overstrike is the mod manager this game's mods are made for. It "
+            "needs Microsoft's .NET 7 Desktop Runtime. The plugin keeps its "
+            "own Overstrike profile and applies your mods with it after every "
+            "install or uninstall."
+        ),
+    }
+    game["underConstruction"] = (
+        "Experimental generic support. This game's mods are applied by "
+        "Overstrike: Step 1 installs it, then each install or uninstall here "
+        "re-applies your mods automatically (the game must be closed)."
+    )
+    return True
+
+
+def overstrike_profile_mods(records: list, old_mods: list) -> list:
+    """The "mods" list for Overstrike's profile JSON.
+
+    records: [(install_seq, [library-relative file paths])] for installed
+    mods, in any order. old_mods: the profile's current list, whose per-mod
+    extras (suit settings) are kept. Every installed file is switched on, in
+    install order - the order Overstrike applies them in.
+    """
+    extras = {}
+    for m in old_mods or []:
+        if isinstance(m, list) and m and isinstance(m[0], str) and len(m) > 2:
+            extras[m[0].lower()] = m[2]
+    out, seen = [], set()
+    for _seq, files in sorted(records, key=lambda r: r[0] or 0):
+        for f in files:
+            path = f.replace("/", "\\")
+            if path.lower() in seen:
+                continue
+            seen.add(path.lower())
+            entry = [path, True]
+            if path.lower() in extras:
+                entry.append(extras[path.lower()])
+            out.append(entry)
+    return out

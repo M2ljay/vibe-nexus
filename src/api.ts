@@ -2327,3 +2327,8 @@ export const setExperimentalFrameworkEnabled = callable<
   [app_id: number, enabled: boolean],
   { ok: boolean; enabled?: boolean; error?: string }
 >("set_experimental_framework_enabled");
+
+export const applyExperimentalTool = callable<
+  [app_id: number],
+  { ok: boolean; count?: number; error?: string }
+>("apply_experimental_tool");
