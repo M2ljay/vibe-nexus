@@ -498,8 +498,27 @@ def _pick_dir(candidates: list, hints: list) -> str:
     return ""
 
 
+def index_game_files(install_path: str, mods_subdir: str = "", max_depth: int = 6,
+                     cap: int = 200000) -> dict:
+    """lower-case file name -> [game-relative paths], for replacement mods
+    that ship a loose file named like one of the game's own. Installed mods
+    (the mods folder and its -disabled twin) are not the game's files."""
+    skip = mods_subdir.lower().rstrip("/") if mods_subdir else ""
+    index, n = {}, 0
+    for rel, _abs, files in _walk_dirs(install_path, max_depth):
+        low = rel.lower()
+        if skip and (low == skip or low.startswith(skip + "/") or low.startswith(skip + "-disabled")):
+            continue
+        for f in files:
+            index.setdefault(f.lower(), []).append(f"{rel}/{f}" if rel else f)
+            n += 1
+            if n >= cap:
+                return index
+    return index
+
+
 def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
-                      mods_subdir: str, exe_dir: str):
+                      mods_subdir: str, exe_dir: str, file_index: dict = None):
     """Map an archive's files onto the game folder, or return None.
 
     rel_files are the extracted archive's files (forward slashes). Returns
@@ -538,6 +557,13 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
     if mods_path and all(r.lower().startswith(mods_path + "/") for _s, r in rels):
         return None
     exe_hint = exe_dir or ""
+    # A proxy dll or .asi at the top means the whole pack goes beside the exe
+    # with its structure (ReShade: dxgi.dll + reshade-shaders/ + preset .ini).
+    if any("/" not in r and (r.lower() in PROXY_DLLS or r.lower().endswith(".asi"))
+           for _s, r in rels):
+        return [(src, (exe_hint + "/" + rel) if exe_hint else rel)
+                for src, rel in rels
+                if not ("/" not in rel and rel.lower().endswith(_DOC_EXTS))] or None
     plan = []
     for src, rel in rels:
         parts = rel.split("/")
@@ -555,6 +581,11 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
             dst = (exe_hint + "/" + rel) if exe_hint else rel
         elif top == "plugins" and any(r.lower().endswith(".asi") for _s, r in rels):
             dst = (exe_hint + "/" + rel) if exe_hint else rel
+        if dst is None and file_index:
+            # A replacement: the game has exactly one file of this name.
+            hits = file_index.get(parts[-1].lower()) or []
+            if len(hits) == 1:
+                dst = hits[0]
         if dst is None:
             return None
         plan.append((src, dst))
@@ -734,7 +765,7 @@ def ue_config_plan(rel_files: list):
 
 
 def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
-                 is_framework: bool = False) -> str:
+                 is_framework: bool = False, file_index: dict = None) -> str:
     """One of VERDICTS' keys for a mod file, from its listing paths.
 
     paths is None when Nexus publishes no listing for the file.
@@ -751,14 +782,15 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if payload_low and all(any(h in f.split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f
                            for f in payload_low):
         return "save_file"
-    if game.get("engine") == "unreal" and ue_config_plan(files):
+    if game.get("engine") == "unreal" and (ue_config_plan(files) or (
+            payload_low and all(f.split("/")[-1] in UE_CONFIG_NAMES for f in payload_low))):
         return "ue_config"
     exts = tuple(game.get("flatModExtensions") or [])
     if game.get("toolApply") or exts:
         if exts and any(f.endswith(exts) for f in low):
             return "tool_managed" if game.get("toolApply") else "mods_folder"
         if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
-                             exe_dir_of(game.get("processName") or "")):
+                             exe_dir_of(game.get("processName") or ""), file_index):
             return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
@@ -767,8 +799,15 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if payload and all(f.endswith(_EXE_OR_INSTALLER) or f.endswith(".dll") for f in payload) \
             and any(f.endswith(_EXE_OR_INSTALLER) for f in payload):
         return "program"
+    # Mods-folder content first: a pak mod is a mods-folder mod even if a
+    # game file happens to share a name with it.
+    loadable = _LOADABLE.get(game.get("engine") or "")
+    if loadable and any(f.endswith(loadable) for f in low) and not any(
+            "/" not in f and (f in PROXY_DLLS or f.endswith(".asi")) for f in low):
+        return "mods_folder"
     plan = plan_root_install(files, root_entries, dir_index,
-                             game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""))
+                             game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""),
+                             file_index)
     if plan:
         return "game_folder"
     loadable = _LOADABLE.get(game.get("engine") or "")
@@ -821,3 +860,15 @@ def folder_options(install_path: str, current: str) -> list:
     except OSError:
         pass
     return out[:40]
+
+
+
+def is_mods_folder_payload(rel_files: list, engine: str) -> bool:
+    """True when an archive carries what the engine's mods folder loads and
+    no loader at its top - the mods-folder install is the right one."""
+    loadable = _LOADABLE.get(engine or "")
+    if not loadable:
+        return False
+    low = [f.replace("\\", "/").strip("/").lower() for f in rel_files]
+    return any(f.endswith(loadable) for f in low) and not any(
+        "/" not in f and (f in PROXY_DLLS or f.endswith(".asi")) for f in low)

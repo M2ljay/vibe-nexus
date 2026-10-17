@@ -212,7 +212,11 @@ class RootPlanTests(unittest.TestCase):
                                               "SparkingZERO/Binaries/Win64/plugins/fix.asi"])
 
     def test_unknown_files_decline(self):
-        self.assertIsNone(self.plan(["dsound.dll", "weird/thing.bin"]))
+        # A loader at the top takes its whole pack beside the exe...
+        self.assertEqual([d for _s, d in self.plan(["dsound.dll", "weird/thing.bin"])],
+                         ["SparkingZERO/Binaries/Win64/dsound.dll", "SparkingZERO/Binaries/Win64/weird/thing.bin"])
+        # ...but files with no loader and no known place still decline.
+        self.assertIsNone(self.plan(["weird/thing.bin", "other.bin"]))
 
     def test_bepinex_pack_goes_to_root(self):
         p = eg.plan_root_install(["BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini"],
@@ -323,8 +327,41 @@ class CoverageFixTests(unittest.TestCase):
         self.assertEqual(c(["slot0-s.save"]), "save_file")
         tool = {"toolApply": "overstrike", "flatModExtensions": [".smpcmod"], "processName": "Spider-Man.exe"}
         self.assertEqual(eg.classify_mod(["reshade preset/dxgi.dll", "reshade preset/reshade-shaders/Shaders/a.fx"],
-                                         tool, {"Spider-Man.exe"}, {}), "no_target")
+                                         tool, {"Spider-Man.exe"}, {}), "game_folder")  # ReShade pack beside the exe
         self.assertEqual(eg.classify_mod(["reshade preset/dxgi.dll"], tool, {"Spider-Man.exe"}, {}), "game_folder")
+
+
+class ReplacementTests(unittest.TestCase):
+    def test_reshade_pack_beside_exe(self):
+        p = eg.plan_root_install(["reshade preset/dxgi.dll", "reshade preset/reshade-shaders/Shaders/a.fx",
+                                  "reshade preset/preset.ini", "reshade preset/readme.txt"],
+                                 {"Spider-Man.exe"}, {}, "Overstrike/Mods Library", "")
+        self.assertEqual(sorted(d for _s, d in p), ["dxgi.dll", "preset.ini", "reshade-shaders/Shaders/a.fx"])
+
+    def test_unique_name_replacement(self):
+        idx = {"transition.bk2": ["MarvelGame/Marvel/Content/Movies/Transition.bk2"],
+               "ui.png": ["a/ui.png", "b/ui.png"]}
+        p = eg.plan_root_install(["Transition.bk2"], {"MarvelGame"}, {}, "MarvelGame/Marvel/Content/Paks/~mods",
+                                 "", idx)
+        self.assertEqual(p, [("Transition.bk2", "MarvelGame/Marvel/Content/Movies/Transition.bk2")])
+        self.assertIsNone(eg.plan_root_install(["ui.png"], set(), {}, "Mods", "", idx))
+
+    def test_file_index_skips_installed_mods(self):
+        with tempfile.TemporaryDirectory() as d:
+            touch(d, "P/Content/Paks/~mods/Goku/Goku_P.pak", 1)
+            touch(d, "P/Content/Movies/Intro.bk2", 1)
+            idx = eg.index_game_files(d, "P/Content/Paks/~mods")
+            self.assertNotIn("goku_p.pak", idx)
+            self.assertEqual(idx["intro.bk2"], ["P/Content/Movies/Intro.bk2"])
+
+    def test_mods_folder_payload(self):
+        self.assertTrue(eg.is_mods_folder_payload(["Goku/Goku_P.pak"], "unreal"))
+        self.assertFalse(eg.is_mods_folder_payload(["dsound.dll", "x_P.pak"], "unreal"))
+        self.assertFalse(eg.is_mods_folder_payload(["x.pak"], "unknown"))
+
+    def test_scalability_alternatives_are_config(self):
+        g = ClassifyTests.UE
+        self.assertEqual(eg.classify_mod(["Darker/Scalability.ini", "Scalability.ini"], g, set(), {}), "ue_config")
 
 
 if __name__ == "__main__":

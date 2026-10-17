@@ -7405,10 +7405,15 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         cfg_dir = _ue_user_config_dir(game)
         if cfg_dir:
             base, plan = cfg_dir, cfg
+    if plan is None and experimental_games.is_mods_folder_payload(
+            rel_files, game.get("engine") or "") and not any(
+            f.lower().startswith(tuple(p.lower() + "/" for p in root_entries)) for f in rel_files):
+        return ""  # plain pak/dll mod: the mods-folder install handles it
     if plan is None:
         plan = experimental_games.plan_root_install(
             rel_files, root_entries, experimental_games.index_game_dirs(install_path),
             mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
+            experimental_games.index_game_files(install_path, mods_subdir),
         )
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
@@ -31368,9 +31373,11 @@ query CollectionInstructions($slug: String!) {
                     roots = set(os.listdir(install_path))
                 except OSError:
                     roots = set()
-                return roots, experimental_games.index_game_dirs(install_path)
+                return (roots, experimental_games.index_game_dirs(install_path),
+                        experimental_games.index_game_files(
+                            install_path, game.get("modsSubdir") or ""))
 
-            roots, index = await asyncio.to_thread(local)
+            roots, index, file_index = await asyncio.to_thread(local)
             game_id = await _resolve_game_id(domain, _load_settings().get("api_key"))
             fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
             sem = asyncio.Semaphore(4)
@@ -31391,7 +31398,8 @@ query CollectionInstructions($slug: String!) {
                             f"{main_file.get('file_name')}.json")
                         paths = await _preview_paths(link)
                 verdict = experimental_games.classify_mod(
-                    paths, game, roots, index, is_framework=(mid == fw_id))
+                    paths, game, roots, index, is_framework=(mid == fw_id),
+                    file_index=file_index)
                 return {"modId": mid, "name": m.get("name") or str(mid),
                         "verdict": verdict,
                         "file": (main_file or {}).get("file_name") or "",
