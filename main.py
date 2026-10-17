@@ -30341,9 +30341,18 @@ query CollectionInstructions($slug: String!) {
                 decky.logger.info(f"RDR2: {name} now loads before the other ASI mods")
         if framework_file:
             if "/" in framework_file:
+                fw_path = os.path.join(install_path, *framework_file.split("/"))
                 status["framework_installed"] = installed and os.path.exists(
-                    os.path.join(install_path, *framework_file.split("/"))
+                    fw_path
                 )
+                # An experimental loader switched off keeps its files under
+                # a .nexusoff suffix: still installed, just not enabled.
+                if (installed and not status["framework_installed"]
+                        and os.path.exists(fw_path + ".nexusoff")):
+                    status["framework_installed"] = True
+                    status["framework_enabled"] = False
+                elif status["framework_installed"]:
+                    status["framework_enabled"] = True
             else:
                 first = ASI_LOAD_FIRST.get(framework_file.lower())
                 status["framework_installed"] = installed and any(
@@ -30645,6 +30654,39 @@ query CollectionInstructions($slug: String!) {
             ),
         }
 
+    async def set_experimental_framework_enabled(
+        self, app_id: int, enabled: bool
+    ) -> dict:
+        """Switch an experimental loader off or on without uninstalling it:
+        its program files (.dll/.asi) are renamed to/from <name>.nexusoff,
+        so nothing loads them while it is off."""
+        try:
+            settings = _load_settings()
+            game = (settings.get("experimental_games") or {}).get(str(int(app_id)))
+            fw = (game or {}).get("framework") or {}
+            key = f"{(game or {}).get('nexusDomain')}/{int(fw.get('nexusModId') or 0)}"
+            rec = (settings.get("experimental_frameworks") or {}).get(key)
+            if not game or not rec:
+                return {"ok": False, "error": "No install record for this loader"}
+            root = _game_dir(rec.get("install_dir") or game.get("installDirName"))
+            changed = 0
+            for rel in rec.get("files") or []:
+                if not _safe_rel_path(rel) or not rel.lower().endswith((".dll", ".asi")):
+                    continue
+                on = os.path.join(root, *rel.split("/"))
+                off = on + ".nexusoff"
+                src, dst = (off, on) if enabled else (on, off)
+                if os.path.isfile(src) and not os.path.exists(dst):
+                    os.replace(src, dst)
+                    changed += 1
+            decky.logger.info(
+                f"experimental framework {key} {'enabled' if enabled else 'disabled'}"
+                f" ({changed} files renamed)")
+            return {"ok": True, "enabled": bool(enabled), "changed": changed}
+        except Exception as e:  # noqa: BLE001
+            decky.logger.exception("set_experimental_framework_enabled crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
     async def remove_experimental_framework(self, app_id: int) -> dict:
         """Delete the files an experimental loader install put in the game
         and restore any game file it replaced."""
@@ -30662,11 +30704,12 @@ query CollectionInstructions($slug: String!) {
                 if not _safe_rel_path(rel):
                     continue
                 path = os.path.join(root, *rel.split("/"))
-                try:
-                    os.remove(path)
-                    removed += 1
-                except OSError:
-                    pass
+                for candidate in (path, path + ".nexusoff"):
+                    try:
+                        os.remove(candidate)
+                        removed += 1
+                    except OSError:
+                        pass
             for rel in rec.get("backups") or []:
                 if not _safe_rel_path(rel):
                     continue
@@ -30676,9 +30719,12 @@ query CollectionInstructions($slug: String!) {
             # Empty folders the loader created (plugins/) go too.
             dirs = sorted({os.path.dirname(r) for r in rec.get("files") or [] if "/" in r},
                           key=len, reverse=True)
+            # Only folders BELOW where the loader was put: the exe folder
+            # itself belongs to the game, empty or not.
+            base = os.path.join(root, *[x for x in (fw.get("installSubdir") or "").split("/") if x])
             for d in dirs:
                 p = os.path.join(root, *d.split("/"))
-                while p.startswith(root) and p != root:
+                while p.startswith(base + os.sep):
                     try:
                         os.rmdir(p)
                     except OSError:

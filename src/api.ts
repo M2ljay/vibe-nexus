@@ -248,6 +248,8 @@ export interface GameStatus {
    * can say what it moved. */
   cc_catalog_fixed?: string;
   framework_installed?: boolean;
+  /** Experimental loaders: false while switched off (files renamed). */
+  framework_enabled?: boolean;
   /** Bannerlord only: the launch script the backend maintains, substituted
    * into the framework's launch template as {blse_script}. */
   blse_script?: string;
@@ -2320,3 +2322,8 @@ export const removeExperimentalFramework = callable<
   [app_id: number],
   { ok: boolean; removed?: number; error?: string }
 >("remove_experimental_framework");
+
+export const setExperimentalFrameworkEnabled = callable<
+  [app_id: number, enabled: boolean],
+  { ok: boolean; enabled?: boolean; error?: string }
+>("set_experimental_framework_enabled");

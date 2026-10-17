@@ -70,7 +70,8 @@ class ExperimentalFrameworkTests(unittest.TestCase):
         self.assertEqual(sorted(moved), ["dsound.dll", "plugins/b.asi"])
         self.assertEqual(backed, ["dsound.dll"])
         sub = "MarvelGame/Marvel/Binaries/Win64"
-        g = dict(self._game(), framework={"nexusModId": 2940, "installKind": "copyRootTracked"})
+        g = dict(self._game(), framework={"nexusModId": 2940, "installKind": "copyRootTracked",
+                                          "installSubdir": "MarvelGame/Marvel/Binaries/Win64"})
         main._save_settings({
             "experimental_games": {"2767030": g},
             "experimental_frameworks": {"marvelrivals/2940": {
@@ -85,6 +86,40 @@ class ExperimentalFrameworkTests(unittest.TestCase):
             self.assertEqual(f.read(), "original")
         self.assertFalse(os.path.exists(os.path.join(win64, "plugins")))
         self.assertTrue(os.path.isdir(win64))
+
+    def test_toggle_renames_loader_and_status_follows(self):
+        root = main._game_dir("MarvelRivals")
+        sub = "MarvelGame/Marvel/Binaries/Win64"
+        win64 = os.path.join(root, *sub.split("/"))
+        os.makedirs(os.path.join(win64, "plugins"), exist_ok=True)
+        for rel in ("dsound.dll", "plugins/b.asi", "License.txt"):
+            with open(os.path.join(win64, *rel.split("/")), "w") as f:
+                f.write("x")
+        g = dict(self._game(), framework={"nexusModId": 2940, "installKind": "copyRootTracked",
+                                          "installSubdir": "MarvelGame/Marvel/Binaries/Win64"})
+        main._save_settings({
+            "experimental_games": {"2767030": g},
+            "experimental_frameworks": {"marvelrivals/2940": {
+                "install_dir": "MarvelRivals",
+                "files": [f"{sub}/dsound.dll", f"{sub}/plugins/b.asi", f"{sub}/License.txt"],
+                "backups": []}},
+        })
+        detect = f"{sub}/dsound.dll"
+        r = _run(self.plugin.set_experimental_framework_enabled(2767030, False))
+        self.assertEqual(r["changed"], 2)
+        self.assertTrue(os.path.isfile(os.path.join(win64, "dsound.dll.nexusoff")))
+        self.assertTrue(os.path.isfile(os.path.join(win64, "License.txt")))
+        st = _run(self.plugin.get_game_status("MarvelRivals", "MarvelGame/Marvel/Content/Paks/~mods", detect))
+        self.assertTrue(st["framework_installed"])
+        self.assertFalse(st["framework_enabled"])
+        _run(self.plugin.set_experimental_framework_enabled(2767030, True))
+        st = _run(self.plugin.get_game_status("MarvelRivals", "MarvelGame/Marvel/Content/Paks/~mods", detect))
+        self.assertTrue(st["framework_enabled"])
+        self.assertTrue(os.path.isfile(os.path.join(win64, "plugins", "b.asi")))
+        _run(self.plugin.set_experimental_framework_enabled(2767030, False))
+        r = _run(self.plugin.remove_experimental_framework(2767030))
+        self.assertEqual(r["removed"], 3)
+        self.assertEqual(os.listdir(win64), [])
 
 
 if __name__ == "__main__":

@@ -105,6 +105,7 @@ import {
   clearFrameworkLaunchOptions,
   setAllModsEnabled,
   setFrameworkEnabled,
+  setExperimentalFrameworkEnabled,
   setApiKey,
   setBg3ModuleCap,
   buildReport,
@@ -2842,14 +2843,21 @@ function InstalledModsSection() {
         )
       );
       if (game.framework) {
+        const tracked = game.framework.installKind === "copyRootTracked";
         getGameStatus(
           game.installDirName,
           game.modsSubdir,
           game.framework.detectFile
-        ).then(setFwStatus);
-        getFrameworkSetup(game.nexusDomain, "").then((r) =>
-          setFwEnabled(r.enabled !== false)
-        );
+        ).then((st) => {
+          setFwStatus(st);
+          // Tracked loaders: on/off is whether their files are renamed.
+          if (tracked) setFwEnabled(st.framework_enabled !== false);
+        });
+        if (!tracked) {
+          getFrameworkSetup(game.nexusDomain, "").then((r) =>
+            setFwEnabled(r.enabled !== false)
+          );
+        }
       }
     }
   };
@@ -2876,6 +2884,24 @@ function InstalledModsSection() {
   );
 
   const onToggleFramework = async (enabled: boolean) => {
+    // Experimental loaders have no launch command: switching one off
+    // renames its dll/asi files so nothing loads them.
+    if (game.framework?.installKind === "copyRootTracked") {
+      const r = await setExperimentalFrameworkEnabled(game.appId, enabled);
+      if (r.ok) setFwEnabled(enabled);
+      toaster.toast({
+        title: r.ok
+          ? `${game.framework.name} ${enabled ? "enabled" : "disabled"}`
+          : `Could not change ${game.framework.name}`,
+        body: r.ok
+          ? enabled
+            ? "Mods will load next launch"
+            : `${game.displayName} will launch without mods`
+          : r.error ?? "",
+      });
+      refresh();
+      return;
+    }
     if (!game.framework?.launchOptionsTemplate || !fwStatus) return;
     const ok = enabled
       ? setLaunchOptions(
