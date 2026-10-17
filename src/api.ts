@@ -2346,6 +2346,8 @@ export interface CoverageRow {
     | "no_target"
     | "ue_config"
     | "save_file"
+    | "cheat_table"
+    | "reshade_preset"
     | "unknown";
   file: string;
 }

@@ -364,5 +364,34 @@ class ReplacementTests(unittest.TestCase):
         self.assertEqual(eg.classify_mod(["Darker/Scalability.ini", "Scalability.ini"], g, set(), {}), "ue_config")
 
 
+class MoreGamesTests(unittest.TestCase):
+    def test_peel_ignores_readmes(self):
+        p = eg.plan_root_install(["Credits.txt", "Read Me.txt", "DIDE/DI/Data3.pak"],
+                                 {"DI", "DeadIslandGame.exe"}, {"di": ["DI"]}, "Mods", "")
+        self.assertEqual(p, [("DIDE/DI/Data3.pak", "DI/Data3.pak")])
+
+    def test_extension_home(self):
+        idx = {"data0.pak": ["DI/Data0.pak"], "data1.pak": ["DI/Data1.pak"]}
+        p = eg.plan_root_install(["Data3.pak", "README.txt"], {"DI"}, {"di": ["DI"]}, "Mods", "", idx)
+        self.assertEqual(p, [("Data3.pak", "DI/Data3.pak")])
+
+    def test_halflife_prefers_valve(self):
+        idx = {"v_gauss.mdl": ["valve/models/v_gauss.mdl", "gearbox/models/v_gauss.mdl"]}
+        dirs = {"models": ["gearbox/models", "valve/models"], "valve": ["valve"]}
+        p = eg.plan_root_install(["glock/models/v_9mm.mdl"], {"valve", "gearbox"}, dirs, "Mods", "", idx, "valve")
+        self.assertEqual(p, [("glock/models/v_9mm.mdl", "valve/models/v_9mm.mdl")])
+
+    def test_standalone_goldsrc_mod(self):
+        p = eg.plan_root_install(["read me.txt", "lamb/liblist.gam", "lamb/dlls/hl.dll"],
+                                 {"valve"}, {}, "Mods", "")
+        self.assertEqual(sorted(d for _s, d in p), ["lamb/dlls/hl.dll", "lamb/liblist.gam"])
+
+    def test_labels(self):
+        g = {"engine": "unknown", "modsSubdir": "Mods"}
+        self.assertEqual(eg.classify_mod(["hl.CT"], g, set(), {}), "cheat_table")
+        self.assertEqual(eg.classify_mod(["Golden.ini"], g, set(), {}), "reshade_preset")
+        self.assertEqual(eg.classify_mod(["GTA3sf1.b", "GTA3sf2.b"], g, set(), {}), "save_file")
+
+
 if __name__ == "__main__":
     unittest.main()

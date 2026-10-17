@@ -127,6 +127,8 @@ const VERDICT_TEXT: Record<CoverageRow["verdict"], string> = {
   no_target: "No clear place - likely won't load",
   ue_config: "Works · settings tweak (Engine.ini)",
   save_file: "Save file - not installed (copy it yourself)",
+  cheat_table: "Cheat Engine table - used from the desktop",
+  reshade_preset: "ReShade preset - needs ReShade installed first",
   unknown: "Can't check (no file list)",
 };
 
@@ -143,7 +145,7 @@ function CoverageModal({
 }) {
   const rows = result.rows ?? [];
   const problems = rows.filter((r) =>
-    ["program", "no_target", "unknown", "save_file"].includes(r.verdict)
+    ["program", "no_target", "unknown", "save_file", "cheat_table", "reshade_preset"].includes(r.verdict)
   );
   return (
     <ModalRoot closeModal={closeModal}>

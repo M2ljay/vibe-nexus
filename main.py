@@ -7414,6 +7414,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
             rel_files, root_entries, experimental_games.index_game_dirs(install_path),
             mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
             experimental_games.index_game_files(install_path, mods_subdir),
+            experimental_games.GAME_CONTENT_ROOT.get(game_domain, ""),
         )
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
@@ -11397,6 +11398,33 @@ async def _mod_file_listing(game_domain: str, mod_id: int, file_id: int):
     if not isinstance(preview, dict):
         return None
     return preview.get("children") or []
+
+
+async def _archive_paths(domain: str, mod_id: int, main_file: dict,
+                         max_mb: int = 300):
+    """File paths inside a mod file, by downloading and unpacking it to a
+    scratch folder (deleted after). None when it is too big or fails."""
+    if int(main_file.get("size_kb") or 0) // 1024 > max_mb:
+        return None
+    err, archive = await _download_archive(
+        domain, int(mod_id), int(main_file["file_id"]),
+        main_file.get("file_name") or f"{mod_id}.zip", _load_settings().get("api_key"))
+    if err:
+        return None
+    scratch = os.path.join(DOWNLOADS_DIR, f"inspect-{mod_id}-{main_file['file_id']}")
+    _force_rmtree(scratch)
+    os.makedirs(scratch, exist_ok=True)
+    try:
+        if await _extract_archive(archive, scratch):
+            return None
+        return [os.path.relpath(os.path.join(d, n), scratch).replace(os.sep, "/")
+                for d, _ds, names in os.walk(scratch) for n in names]
+    finally:
+        _force_rmtree(scratch)
+        try:
+            os.remove(archive)
+        except OSError:
+            pass
 
 
 async def _preview_paths(link: str):
@@ -31234,15 +31262,18 @@ query CollectionInstructions($slug: String!) {
             main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
             listing = (await _mod_file_listing(domain, req["modId"], main["file_id"])
                        if main else None)
-            if listing is None:
-                # Cannot see inside it: say nothing rather than guess, and
-                # look again next time.
-                game.pop("frameworkChecked", None)
+            paths = _listing_paths(listing) if listing is not None else None
+            if paths is None and main:
+                # No published list: look inside the archive itself. Never
+                # retried in a loop - FF9's Memoria has no listing, and
+                # "look again next time" re-ran this on every panel open.
+                paths = await _archive_paths(domain, req["modId"], main)
+            if paths is None:
                 decky.logger.info(
                     f"experimental framework {domain}: {req['modName']} has no "
-                    "file listing")
+                    "file listing and could not be inspected")
                 continue
-            layout = experimental_games.framework_layout(_listing_paths(listing), exe_dir)
+            layout = experimental_games.framework_layout(paths, exe_dir)
             decky.logger.info(
                 f"experimental framework {domain}: {req['modName']} "
                 f"(mod {req['modId']}, required by {req['count']} of {len(nodes)} "

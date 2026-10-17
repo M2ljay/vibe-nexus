@@ -491,6 +491,10 @@ def _pick_dir(candidates: list, hints: list) -> str:
     hinted = [c for c in candidates
               if any(h.lower() == c.lower() or h.lower().startswith(c.lower() + "/")
                      for h in hints if h)]
+    if not hinted:
+        # A preferred root ("valve") picks the candidate living under it.
+        hinted = [c for c in candidates
+                  if any(c.lower().startswith(h.lower() + "/") for h in hints if h)]
     if len(hinted) == 1:
         return hinted[0]
     if len(candidates) == 1:
@@ -517,8 +521,42 @@ def index_game_files(install_path: str, mods_subdir: str = "", max_depth: int = 
     return index
 
 
+# Where a game's own content lives when the same folder name appears in
+# several places (Half-Life's models/ exists under valve/ and every
+# expansion): the base game's folder wins.
+GAME_CONTENT_ROOT = {
+    "halflife": "valve",
+    "halflife2": "hl2",
+    "halflifeblueshift": "valve",
+    "counterstrike": "cstrike",
+    "portal": "portal",
+}
+
+# Extensions too generic to say where a loose file belongs.
+_GENERIC_EXTS = {".txt", ".ini", ".cfg", ".json", ".xml", ".dll", ".exe", ".png",
+                 ".jpg", ".jpeg", ".bmp", ".dds", ".log", ".md", ".html", ".csv",
+                 ".lua", ".bin", ".dat", ".url", ".pdf"}
+
+# A folder holding one of these is a standalone mod that sits in the game
+# root beside the base game's folder (GoldSrc liblist.gam, Source gameinfo.txt).
+_STANDALONE_MARKERS = ("liblist.gam", "gameinfo.txt")
+
+
+def _ext_homes(file_index: dict) -> dict:
+    """extension -> set of game folders holding files of that extension."""
+    homes = {}
+    for name, paths in (file_index or {}).items():
+        ext = os.path.splitext(name)[1]
+        if not ext or ext in _GENERIC_EXTS:
+            continue
+        for p in paths:
+            homes.setdefault(ext, set()).add(p.rsplit("/", 1)[0] if "/" in p else "")
+    return homes
+
+
 def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
-                      mods_subdir: str, exe_dir: str, file_index: dict = None):
+                      mods_subdir: str, exe_dir: str, file_index: dict = None,
+                      prefer: str = ""):
     """Map an archive's files onto the game folder, or return None.
 
     rel_files are the extracted archive's files (forward slashes). Returns
@@ -539,19 +577,37 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
     known = lambda name: (name in roots or name in ROOT_MARKERS  # noqa: E731
                           or (name in dir_index and name != leaf))
 
+    # Standalone mod folders (a whole GoldSrc/Source mod) go to the root as-is.
+    standalone = {f.split("/")[-2] for f in files
+                  if f.count("/") >= 1 and f.split("/")[-1].lower() in _STANDALONE_MARKERS}
+    if standalone:
+        plan = []
+        for f in files:
+            parts = f.split("/")
+            hit = next((i for i, p in enumerate(parts) if p in standalone), None)
+            if hit is None:
+                if "/" not in f and f.lower().endswith(_DOC_EXTS):
+                    continue
+                return None
+            plan.append((f, "/".join(parts[hit:])))
+        return plan or None
+
     # Peel wrapper folders that mean nothing to the game ("MyMod v1.2/").
+    # Readmes and screenshots beside the wrapper do not stop the peel.
+    is_doc = lambda f: "/" not in f and f.lower().endswith(_DOC_EXTS)  # noqa: E731
     prefix = ""
     for _ in range(3):
-        tops = {f[len(prefix):].split("/")[0] for f in files}
-        if len(tops) != 1:
+        body = [f for f in files if f.startswith(prefix) and not is_doc(f[len(prefix):])]
+        tops = {f[len(prefix):].split("/")[0] for f in body}
+        if len(tops) != 1 or not body:
             break
         top = next(iter(tops))
-        if not all("/" in f[len(prefix):] for f in files) or known(top.lower()):
+        if not all("/" in f[len(prefix):] for f in body) or known(top.lower()):
             break
         if top.lower() == leaf:
             break
         prefix += top + "/"
-    rels = [(f, f[len(prefix):]) for f in files]
+    rels = [(f, f[len(prefix):]) for f in files if f.startswith(prefix)]
 
     mods_path = "/".join(mods_parts)
     if mods_path and all(r.lower().startswith(mods_path + "/") for _s, r in rels):
@@ -574,7 +630,7 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
         if top in roots or top in ROOT_MARKERS:
             dst = rel
         elif len(parts) > 1 and top in dir_index and top != leaf:
-            base = _pick_dir(dir_index[top], [mods_subdir, exe_hint])
+            base = _pick_dir(dir_index[top], [prefer, mods_subdir, exe_hint])
             if base:
                 dst = base + "/" + "/".join(parts[1:])
         elif len(parts) == 1 and (top in PROXY_DLLS or top.endswith(".asi")):
@@ -586,6 +642,14 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
             hits = file_index.get(parts[-1].lower()) or []
             if len(hits) == 1:
                 dst = hits[0]
+            elif len(parts) == 1:
+                # A new file of a kind the game keeps in one folder only
+                # (Dead Island's Data3.pak beside Data0-2.pak in DI/).
+                homes = sorted(_ext_homes(file_index).get(os.path.splitext(top)[1], ()))
+                if prefer and len(homes) > 1:
+                    homes = [h for h in homes if h.lower().split("/")[0] == prefer] or homes
+                if len(homes) == 1:
+                    dst = (homes[0] + "/" + rel) if homes[0] else rel
         if dst is None:
             return None
         plan.append((src, dst))
@@ -734,6 +798,8 @@ VERDICTS = {
     "no_target": "has no clear place to go - would land in the mods folder unused",
     "ue_config": "is a settings tweak (Engine.ini), placed in the game's config folder",
     "save_file": "is a save file - copy it yourself if you want it",
+    "cheat_table": "is a Cheat Engine table - used from the desktop, not installed",
+    "reshade_preset": "is a ReShade preset - needs ReShade installed first",
     "unknown": "has no published file list to check",
 }
 
@@ -743,7 +809,8 @@ WORKING_VERDICTS = ("mods_folder", "game_folder", "wizard", "tool_managed",
 
 UE_CONFIG_NAMES = {"engine.ini", "gameusersettings.ini", "game.ini", "input.ini",
                    "scalability.ini", "deviceprofiles.ini"}
-_SAVE_HINTS = (".sav", ".save", "savedata", "savegame", "slot0", "slot1", "slot2")
+_SAVE_HINTS = (".sav", ".save", "savedata", "savegame", "slot0", "slot1", "slot2",
+               "gta3sf", "gtavcsf", "gtasasf")
 
 
 def ue_config_plan(rel_files: list):
@@ -779,18 +846,26 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if any(f.endswith("fomod/moduleconfig.xml") for f in low):
         return "wizard"
     payload_low = [f for f in low if not f.endswith(_DOC_EXTS)]
+    if payload_low and all(f.endswith(".ct") or f.endswith(_EXE_OR_INSTALLER) for f in payload_low) \
+            and any(f.endswith(".ct") for f in payload_low):
+        return "cheat_table"
     if payload_low and all(any(h in f.split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f
                            for f in payload_low):
         return "save_file"
     if game.get("engine") == "unreal" and (ue_config_plan(files) or (
             payload_low and all(f.split("/")[-1] in UE_CONFIG_NAMES for f in payload_low))):
         return "ue_config"
+    if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon64"))
+                           or "reshade-shaders/" in f for f in payload_low) \
+            and not any(f.split("/")[-1] in PROXY_DLLS for f in low):
+        return "reshade_preset"
     exts = tuple(game.get("flatModExtensions") or [])
     if game.get("toolApply") or exts:
         if exts and any(f.endswith(exts) for f in low):
             return "tool_managed" if game.get("toolApply") else "mods_folder"
         if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
-                             exe_dir_of(game.get("processName") or ""), file_index):
+                             exe_dir_of(game.get("processName") or ""), file_index,
+                             GAME_CONTENT_ROOT.get(game.get("nexusDomain") or "", "")):
             return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
@@ -807,7 +882,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "mods_folder"
     plan = plan_root_install(files, root_entries, dir_index,
                              game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""),
-                             file_index)
+                             file_index, GAME_CONTENT_ROOT.get(game.get("nexusDomain") or "", ""))
     if plan:
         return "game_folder"
     loadable = _LOADABLE.get(game.get("engine") or "")
