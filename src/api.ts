@@ -2351,7 +2351,7 @@ export interface CoverageRow {
 }
 
 export const checkExperimentalCoverage = callable<
-  [app_id: number, count: number],
+  [app_id: number, count: number, deep?: boolean],
   {
     ok: boolean;
     error?: string;

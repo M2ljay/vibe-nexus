@@ -31354,7 +31354,8 @@ query CollectionInstructions($slug: String!) {
         decky.logger.info(f"Overstrike apply for {game['nexusDomain']} (manual): {result}")
         return result
 
-    async def check_experimental_coverage(self, app_id: int, count: int = 50) -> dict:
+    async def check_experimental_coverage(self, app_id: int, count: int = 50,
+                                          deep: bool = False) -> dict:
         """Predict, for the game's most-endorsed mods, whether each would
         install somewhere the game loads it - from Nexus's published file
         listings, without downloading anything."""
@@ -31403,9 +31404,13 @@ query CollectionInstructions($slug: String!) {
                 return {"modId": mid, "name": m.get("name") or str(mid),
                         "verdict": verdict,
                         "file": (main_file or {}).get("file_name") or "",
+                        "fileId": int((main_file or {}).get("file_id") or 0),
+                        "sizeKb": int((main_file or {}).get("size_kb") or 0),
                         "sample": (paths or [])[:6]}
 
             rows = await asyncio.gather(*(one(m) for m in top.get("mods") or []))
+            if deep:
+                await self._deep_check(domain, game, rows, roots, index, file_index, fw_id)
             summary = experimental_games.summarize(rows)
             settings = _load_settings()
             settings.setdefault("coverage", {})[domain] = {
@@ -31497,6 +31502,50 @@ query CollectionInstructions($slug: String!) {
         self._exp_save(game)
         decky.logger.info(f"experimental {game['nexusDomain']}: Step 1 {mode}")
         return {"ok": True, "game": game}
+
+    async def _deep_check(self, domain, game, rows, roots, index, file_index, fw_id,
+                          max_file_mb: int = 800, budget_mb: int = 4000) -> None:
+        """For mods Nexus publishes no file list for, download the archive,
+        unpack it to a scratch folder, classify what is really inside, and
+        delete it all again. Nothing is installed."""
+        api_key = _load_settings().get("api_key")
+        spent = 0
+        for r in rows:
+            if r["verdict"] != "unknown" or not r.get("fileId"):
+                continue
+            size_mb = (r.get("sizeKb") or 0) // 1024
+            if size_mb > max_file_mb or spent + size_mb > budget_mb:
+                r["sample"] = [f"(not downloaded: {size_mb} MB)"]
+                continue
+            spent += size_mb
+            err, archive = await _download_archive(
+                domain, r["modId"], r["fileId"], r["file"] or f"{r['modId']}.zip", api_key)
+            if err:
+                decky.logger.info(f"deep check {domain}/{r['modId']}: download: {err}")
+                continue
+            scratch = os.path.join(DOWNLOADS_DIR, f"coverage-{r['modId']}-{r['fileId']}")
+            _force_rmtree(scratch)
+            os.makedirs(scratch, exist_ok=True)
+            try:
+                xerr = await _extract_archive(archive, scratch)
+                if xerr:
+                    r["verdict"] = "program" if "Windows program" in xerr else "no_target"
+                    r["sample"] = [xerr[:120]]
+                    continue
+                paths = [os.path.relpath(os.path.join(d, n), scratch).replace(os.sep, "/")
+                         for d, _ds, names in os.walk(scratch) for n in names]
+                r["verdict"] = experimental_games.classify_mod(
+                    paths, game, roots, index, is_framework=(r["modId"] == fw_id),
+                    file_index=file_index)
+                r["sample"] = paths[:6]
+                r["deep"] = True
+            finally:
+                _force_rmtree(scratch)
+                try:
+                    os.remove(archive)
+                except OSError:
+                    pass
+        decky.logger.info(f"deep check {domain}: downloaded about {spent} MB")
 
     async def remove_experimental_game(self, app_id: int) -> dict:
         settings = _load_settings()

@@ -134,10 +134,12 @@ function CoverageModal({
   gameName,
   result,
   closeModal,
+  onDeep,
 }: {
   gameName: string;
   result: { working?: number; checked?: number; total?: number; rows?: CoverageRow[] };
   closeModal?: () => void;
+  onDeep?: () => void;
 }) {
   const rows = result.rows ?? [];
   const problems = rows.filter((r) =>
@@ -152,6 +154,18 @@ function CoverageModal({
         The {result.total ?? 0} most-endorsed mods, judged from the files Nexus
         Mods lists for them - nothing was downloaded. A prediction, not a promise.
       </div>
+      {(result.rows ?? []).some((r) => r.verdict === "unknown") && onDeep && (
+        <ButtonItem
+          layout="below"
+          description="Downloads the mods Nexus lists no files for (up to 4 GB in total), looks inside, and deletes them again. Nothing is installed."
+          onClick={() => {
+            closeModal?.();
+            onDeep();
+          }}
+        >
+          Check the unlisted ones by downloading them
+        </ButtonItem>
+      )}
       {problems.length === 0 ? (
         <div style={{ fontSize: "13px" }}>No problem mods found.</div>
       ) : (
@@ -393,17 +407,32 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
           disabled={busy}
           description="Checks the 50 most popular mods for this game, without downloading them, and lists the ones the plugin can't place where the game loads them."
           onClick={async () => {
-            setBusy(true);
-            try {
-              const r = await checkExperimentalCoverage(game.appId, 50);
-              if (!r.ok) {
-                toaster.toast({ title: "Check failed", body: r.error ?? "" });
-                return;
+            const run = async (deep: boolean) => {
+              setBusy(true);
+              try {
+                if (deep) {
+                  toaster.toast({
+                    title: "Downloading unlisted mods to check them…",
+                    body: "This can take a few minutes",
+                  });
+                }
+                const r = await checkExperimentalCoverage(game.appId, 50, deep);
+                if (!r.ok) {
+                  toaster.toast({ title: "Check failed", body: r.error ?? "" });
+                  return;
+                }
+                showModal(
+                  <CoverageModal
+                    gameName={game.displayName}
+                    result={r}
+                    onDeep={deep ? undefined : () => void run(true)}
+                  />
+                );
+              } finally {
+                setBusy(false);
               }
-              showModal(<CoverageModal gameName={game.displayName} result={r} />);
-            } finally {
-              setBusy(false);
-            }
+            };
+            await run(false);
           }}
         >
           {busy ? "Checking…" : "Check mod compatibility"}

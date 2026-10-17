@@ -271,6 +271,42 @@ class ExperimentalRootInstallTests(unittest.TestCase):
         self.assertNotIn("framework", g)
         self.assertTrue(g["frameworkDeclined"])
 
+    def test_deep_check_downloads_unlisted(self):
+        async def get_mods(*a, **k):
+            return {"ok": True, "mods": [{"modId": 4, "name": "Bare"}]}
+
+        async def files(domain, mid):
+            return {"ok": True, "files": [{"file_id": 9, "category_name": "MAIN",
+                                           "file_name": "bare.zip", "size_kb": 100,
+                                           "content_preview_link": ""}]}
+
+        async def preview(link):
+            return None
+
+        async def resolve(*a):
+            return 7
+
+        made = []
+
+        async def download(domain, mid, fid, name, key, *a):
+            path = os.path.join(main.DOWNLOADS_DIR, f"deep-{mid}-{fid}.zip")
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("Bare_P.pak", "x")
+            made.append(path)
+            return "", path
+
+        self.game["engine"] = "unreal"
+        main._save_settings({"experimental_games": {"1790600": self.game}})
+        with unittest.mock.patch.object(self.plugin, "get_mods", get_mods), \
+                unittest.mock.patch.object(self.plugin, "get_mod_files", files), \
+                unittest.mock.patch.object(main, "_preview_paths", preview), \
+                unittest.mock.patch.object(main, "_resolve_game_id", resolve), \
+                unittest.mock.patch.object(main, "_download_archive", download):
+            r = _run(self.plugin.check_experimental_coverage(1790600, 1, True))
+        self.assertEqual(r["rows"][0]["verdict"], "mods_folder")
+        self.assertTrue(r["rows"][0]["deep"])
+        self.assertFalse(os.path.exists(made[0]))  # cleaned up
+
     def test_plain_pak_left_to_mods_folder(self):
         d = self.scratch(["Goku_P.pak", "Goku_P.utoc"])
         self.assertEqual(main._experimental_root_install(
