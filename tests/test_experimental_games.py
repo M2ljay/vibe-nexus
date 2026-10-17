@@ -174,5 +174,67 @@ class FrameworkTests(unittest.TestCase):
         self.assertEqual(eg.exe_dir_of("c.exe"), "")
 
 
+class RootPlanTests(unittest.TestCase):
+    ROOT = {"SparkingZERO", "SparkingZERO.exe", "Engine"}
+    INDEX = {"sparkingzero": ["SparkingZERO"], "content": ["Engine/Content", "SparkingZERO/Content"],
+             "paks": ["Engine/Content/Paks", "SparkingZERO/Content/Paks"],
+             "binaries": ["Engine/Binaries", "SparkingZERO/Binaries"],
+             "win64": ["Engine/Binaries/Win64", "SparkingZERO/Binaries/Win64"]}
+    MODS = "SparkingZERO/Content/Paks/~mods"
+    EXE = "SparkingZERO/Binaries/Win64"
+
+    def plan(self, files):
+        return eg.plan_root_install(files, self.ROOT, self.INDEX, self.MODS, self.EXE)
+
+    def test_plain_pak_mod_stays_in_mods_folder(self):
+        self.assertIsNone(self.plan(["Goku_P.pak", "Goku_P.utoc", "Goku_P.ucas"]))
+        self.assertIsNone(self.plan(["Goku/Goku_P.pak"]))
+
+    def test_full_mods_path_left_to_folder_install(self):
+        self.assertIsNone(self.plan(["SparkingZERO/Content/Paks/~mods/a.pak"]))
+
+    def test_root_layout_merges(self):
+        p = self.plan(["SparkingZERO/Binaries/Win64/dinput8.dll", "SparkingZERO/Content/Paks/~mods/a.pak"])
+        self.assertEqual([d for _s, d in p], ["SparkingZERO/Binaries/Win64/dinput8.dll",
+                                              "SparkingZERO/Content/Paks/~mods/a.pak"])
+
+    def test_content_tree_mapped_to_game_project(self):
+        p = self.plan(["Content/Paks/~mods/a.pak"])
+        self.assertEqual(p, [("Content/Paks/~mods/a.pak", "SparkingZERO/Content/Paks/~mods/a.pak")])
+
+    def test_wrapper_peeled_and_readme_dropped(self):
+        p = self.plan(["Cool Mod v2/Binaries/Win64/x.dll", "Cool Mod v2/readme.txt"])
+        self.assertEqual(p, [("Cool Mod v2/Binaries/Win64/x.dll", "SparkingZERO/Binaries/Win64/x.dll")])
+
+    def test_proxy_dll_and_asi_beside_exe(self):
+        p = self.plan(["dsound.dll", "plugins/fix.asi", "readme.md"])
+        self.assertEqual([d for _s, d in p], ["SparkingZERO/Binaries/Win64/dsound.dll",
+                                              "SparkingZERO/Binaries/Win64/plugins/fix.asi"])
+
+    def test_unknown_files_decline(self):
+        self.assertIsNone(self.plan(["dsound.dll", "weird/thing.bin"]))
+
+    def test_bepinex_pack_goes_to_root(self):
+        p = eg.plan_root_install(["BepInEx/core/BepInEx.dll", "winhttp.dll", "doorstop_config.ini"],
+                                 {"Game.exe", "Game_Data"}, {"game_data": ["Game_Data"]}, "BepInEx/plugins", "")
+        self.assertEqual(sorted(d for _s, d in p), ["BepInEx/core/BepInEx.dll", "doorstop_config.ini", "winhttp.dll"])
+
+    def test_bepinex_plugin_mod_left_to_folder(self):
+        self.assertIsNone(eg.plan_root_install(["BepInEx/plugins/Cool/Cool.dll"], {"Game.exe", "BepInEx"},
+                                               {"bepinex": ["BepInEx"], "plugins": ["BepInEx/plugins"]},
+                                               "BepInEx/plugins", ""))
+
+    def test_ambiguous_dir_declines(self):
+        self.assertIsNone(eg.plan_root_install(["Content/x.uasset"], {"A", "B"},
+                                               {"content": ["A/Content", "B/Content"]}, "Mods", ""))
+
+    def test_index_game_dirs(self):
+        with tempfile.TemporaryDirectory() as d:
+            touch(d, "Proj/Content/Paks/a.pak", 1)
+            touch(d, "Engine/Content/x", 1)
+            idx = eg.index_game_dirs(d)
+            self.assertEqual(idx["content"], ["Proj/Content"])  # Engine/ is never a mod target
+
+
 if __name__ == "__main__":
     unittest.main()

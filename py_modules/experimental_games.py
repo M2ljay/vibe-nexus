@@ -233,9 +233,7 @@ def inspect_install(install_path: str) -> dict:
             "processName": exe,
             "note": (
                 "Unreal Engine game: .pak mods go in "
-                + paks.replace("/", "\\") + "\\~mods. Mods that need UE4SS, "
-                "or replace files outside the paks folder, need setting up "
-                "by hand."
+                + paks.replace("/", "\\") + "\\~mods." 
             ),
         }
         win64 = os.path.join(install_path, *project.split("/"), "Binaries", "Win64")
@@ -253,9 +251,7 @@ def inspect_install(install_path: str) -> dict:
                 "modsSubdir": ue4ss,
                 "logicModsSubdir": paks + "/LogicMods",
             }
-            out["note"] = out["note"].replace(
-                "Mods that need UE4SS, or replace", "UE4SS is installed, so "
-                "script mods are routed to it too. Mods that replace")
+            out["note"] += " UE4SS is installed, so script mods go to it too."
         return out
 
     bepinex = _find_child(install_path, "BepInEx")
@@ -292,11 +288,18 @@ def inspect_install(install_path: str) -> dict:
         "modsSubdir": "Mods",
         "processName": exe,
         "note": (
-            "Engine not recognised. Mods are unpacked to a Mods folder in "
-            "the game directory, one folder each - check each mod's "
-            "instructions and move files by hand where needed."
+            "Engine not recognised. Mods without a game-folder layout are "
+            "unpacked to a Mods folder in the game directory, one folder "
+            "each - check each mod's instructions."
         ),
     }
+
+
+ROOT_LAYOUT_NOTE = (
+    "Mods laid out for the game folder (a dll beside the exe, a Content "
+    "tree) are placed file by file; game files they replace are kept and "
+    "put back when the mod is switched off or uninstalled."
+)
 
 
 def build_game(app_id: int, display_name: str, install_dir: str,
@@ -315,7 +318,7 @@ def build_game(app_id: int, display_name: str, install_dir: str,
         "experimental": True,
         "engine": inspection.get("engine") or "unknown",
         "underConstruction": "Experimental generic support. "
-        + (inspection.get("note") or ""),
+        + (inspection.get("note") or "") + " " + ROOT_LAYOUT_NOTE,
     }
     if inspection.get("ue4ss"):
         game["ue4ss"] = inspection["ue4ss"]
@@ -408,3 +411,113 @@ def framework_layout(paths: list, exe_dir: str):
 def exe_dir_of(process_name: str) -> str:
     parts = (process_name or "").replace("\\", "/").split("/")
     return "/".join(parts[:-1])
+
+
+# ---- Mods laid out from the game folder -------------------------------------
+# A drop-in mods folder covers most archives, but plenty ship files for other
+# places: a proxy dll beside the exe, a Content/ tree, a BepInEx pack, file
+# replacements. plan_root_install() maps such an archive onto the game folder
+# when every file has an unambiguous destination, and declines otherwise, so
+# the ordinary mods-folder install still handles everything it handled before.
+
+# DLL names Windows games load from their own folder, which mod loaders and
+# injectors use as their way in.
+PROXY_DLLS = {
+    "dsound.dll", "dinput8.dll", "winmm.dll", "version.dll", "winhttp.dll",
+    "d3d9.dll", "d3d10.dll", "d3d11.dll", "d3d12.dll", "dxgi.dll",
+    "xinput1_3.dll", "xinput1_4.dll", "xinput9_1_0.dll", "wininet.dll",
+    "opengl32.dll", "bink2w64.dll", "binkw64.dll", "msimg32.dll",
+}
+# Top-level names that mean "this archive is laid out from the game root".
+ROOT_MARKERS = {"bepinex", "melonloader", "doorstop_config.ini", "winhttp.dll",
+                "version.dll", ".doorstop_version"}
+# Loose documentation that has no business in a game folder.
+_DOC_EXTS = (".txt", ".md", ".url", ".jpg", ".jpeg", ".png", ".pdf", ".html",
+             ".htm", ".rtf", ".webp", ".gif")
+
+
+def index_game_dirs(install_path: str, max_depth: int = 4) -> dict:
+    """lower-case directory name -> [game-relative paths], shallow first."""
+    index = {}
+    for rel, _abs, _files in _walk_dirs(install_path, max_depth):
+        if not rel:
+            continue
+        index.setdefault(rel.split("/")[-1].lower(), []).append(rel)
+    for paths in index.values():
+        paths.sort(key=lambda p: (p.count("/"), p.lower()))
+    return index
+
+
+def _pick_dir(candidates: list, hints: list) -> str:
+    """The one candidate a hint path runs through, else the only one."""
+    hinted = [c for c in candidates
+              if any(h.lower() == c.lower() or h.lower().startswith(c.lower() + "/")
+                     for h in hints if h)]
+    if len(hinted) == 1:
+        return hinted[0]
+    if len(candidates) == 1:
+        return candidates[0]
+    return ""
+
+
+def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
+                      mods_subdir: str, exe_dir: str):
+    """Map an archive's files onto the game folder, or return None.
+
+    rel_files are the extracted archive's files (forward slashes). Returns
+    [(src_rel, dst_rel)] with dst relative to the game root, or None when the
+    archive should go through the mods-folder install instead: it has files
+    with no clear destination, or it is laid out from the mods folder itself
+    (the mods-folder install unwraps that already).
+    """
+    files = [f.replace("\\", "/").strip("/") for f in rel_files if f]
+    files = [f for f in files if f and not f.lower().startswith(("__macosx/", "fomod/"))]
+    if not files:
+        return None
+    roots = {e.lower() for e in root_entries}
+    mods_parts = [p.lower() for p in (mods_subdir or "").split("/") if p]
+    # The mods folder's own name ("~mods", "plugins") at the top of an
+    # archive is the mods-folder install's job: it unwraps it.
+    leaf = mods_parts[-1] if mods_parts else ""
+    known = lambda name: (name in roots or name in ROOT_MARKERS  # noqa: E731
+                          or (name in dir_index and name != leaf))
+
+    # Peel wrapper folders that mean nothing to the game ("MyMod v1.2/").
+    prefix = ""
+    for _ in range(3):
+        tops = {f[len(prefix):].split("/")[0] for f in files}
+        if len(tops) != 1:
+            break
+        top = next(iter(tops))
+        if not all("/" in f[len(prefix):] for f in files) or known(top.lower()):
+            break
+        if top.lower() == leaf:
+            break
+        prefix += top + "/"
+    rels = [(f, f[len(prefix):]) for f in files]
+
+    mods_path = "/".join(mods_parts)
+    if mods_path and all(r.lower().startswith(mods_path + "/") for _s, r in rels):
+        return None
+    exe_hint = exe_dir or ""
+    plan = []
+    for src, rel in rels:
+        parts = rel.split("/")
+        top = parts[0].lower()
+        if len(parts) == 1 and top.endswith(_DOC_EXTS):
+            continue  # a readme beside the payload
+        dst = None
+        if top in roots or top in ROOT_MARKERS:
+            dst = rel
+        elif len(parts) > 1 and top in dir_index and top != leaf:
+            base = _pick_dir(dir_index[top], [mods_subdir, exe_hint])
+            if base:
+                dst = base + "/" + "/".join(parts[1:])
+        elif len(parts) == 1 and (top in PROXY_DLLS or top.endswith(".asi")):
+            dst = (exe_hint + "/" + rel) if exe_hint else rel
+        elif top == "plugins" and any(r.lower().endswith(".asi") for _s, r in rels):
+            dst = (exe_hint + "/" + rel) if exe_hint else rel
+        if dst is None:
+            return None
+        plan.append((src, dst))
+    return plan or None

@@ -122,5 +122,79 @@ class ExperimentalFrameworkTests(unittest.TestCase):
         self.assertEqual(os.listdir(win64), [])
 
 
+class ExperimentalRootInstallTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin = main.Plugin()
+        self.root = main._game_dir("SparkingZERO")
+        main._force_rmtree(self.root)
+        for rel, text in (("SparkingZERO/Binaries/Win64/SparkingZERO-Win64-Shipping.exe", "exe"),
+                          ("SparkingZERO/Binaries/Win64/dinput8.dll", "game's own"),
+                          ("SparkingZERO/Content/Paks/pakchunk0.pak", "p")):
+            path = os.path.join(self.root, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(text)
+        self.game = {"appId": 1790600, "nexusDomain": "dragonballsparkingzero",
+                     "installDirName": "SparkingZERO",
+                     "modsSubdir": "SparkingZERO/Content/Paks/~mods",
+                     "processName": "SparkingZERO/Binaries/Win64/SparkingZERO-Win64-Shipping.exe"}
+        main._save_settings({"experimental_games": {"1790600": self.game}})
+
+    def scratch(self, files):
+        d = os.path.join(main.DOWNLOADS_DIR, "exp-scratch")
+        main._force_rmtree(d)
+        for rel in files:
+            path = os.path.join(d, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write("mod")
+        return d
+
+    def read(self, rel):
+        with open(os.path.join(self.root, *rel.split("/"))) as f:
+            return f.read()
+
+    def test_install_toggle_uninstall_restores_game_file(self):
+        self.assertEqual(main._experimental_game_for("dragonballsparkingzero"), self.game)
+        d = self.scratch(["Cool v1/Binaries/Win64/dinput8.dll", "Cool v1/Content/Paks/~mods/c_P.pak",
+                          "Cool v1/readme.txt"])
+        key = main._experimental_root_install(d, self.root, self.game["modsSubdir"], self.game,
+                                              "dragonballsparkingzero", 1790600, {"name": "Cool", "file_id": 1})
+        self.assertEqual(key, "Cool")
+        dll = "SparkingZERO/Binaries/Win64/dinput8.dll"
+        self.assertEqual(self.read(dll), "mod")
+        self.assertEqual(self.read(dll + ".nexusbak"), "game's own")
+        self.assertEqual(self.read("SparkingZERO/Content/Paks/~mods/c_P.pak"), "mod")
+        rec = main._load_settings()["installed"]["dragonballsparkingzero"]["Cool"]
+        self.assertEqual(rec["backups"], [dll])
+        listed = _run(self.plugin.get_installed_mods(
+            "dragonballsparkingzero", "SparkingZERO", self.game["modsSubdir"], "folder", 1790600, "", "starred", []))
+        row = [m for m in listed["mods"] if m["folder"] == "Cool"][0]
+        self.assertTrue(row["togglable"])
+        off = _run(self.plugin.set_mod_enabled("SparkingZERO", self.game["modsSubdir"], "Cool", False,
+                                               "folder", "dragonballsparkingzero", 1790600))
+        self.assertTrue(off["ok"], off)
+        self.assertEqual(self.read(dll), "game's own")
+        on = _run(self.plugin.set_mod_enabled("SparkingZERO", self.game["modsSubdir"], "Cool", True,
+                                              "folder", "dragonballsparkingzero", 1790600))
+        self.assertTrue(on["ok"], on)
+        self.assertEqual(self.read(dll), "mod")
+        r = _run(self.plugin.uninstall_mod("dragonballsparkingzero", "SparkingZERO", self.game["modsSubdir"],
+                                           "Cool", "folder", 1790600, "", "starred"))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(self.read(dll), "game's own")
+        self.assertFalse(os.path.exists(os.path.join(self.root, *dll.split("/")) + ".nexusbak"))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "SparkingZERO/Content/Paks/~mods/c_P.pak")))
+        self.assertTrue(os.path.isfile(os.path.join(self.root, "SparkingZERO/Content/Paks/pakchunk0.pak")))
+
+    def test_plain_pak_left_to_mods_folder(self):
+        d = self.scratch(["Goku_P.pak", "Goku_P.utoc"])
+        self.assertEqual(main._experimental_root_install(
+            d, self.root, self.game["modsSubdir"], self.game, "dragonballsparkingzero", 1790600, {"name": "G"}), "")
+
+    def test_curated_domains_never_match(self):
+        self.assertIsNone(main._experimental_game_for("skyrimspecialedition"))
+
+
 if __name__ == "__main__":
     unittest.main()

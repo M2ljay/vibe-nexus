@@ -7336,8 +7336,98 @@ def _remove_files_record(
             except OSError:
                 break
             parent = os.path.dirname(parent)
+    _restore_backups(base, rec.get("backups"))
     records.pop(record_key, None)
     return True
+
+
+def _experimental_game_for(game_domain: str):
+    """The experimental (any-game) entry for a Nexus domain, or None.
+    Curated games never match: their domains have no entry here."""
+    for g in (_load_settings().get("experimental_games") or {}).values():
+        if isinstance(g, dict) and g.get("nexusDomain") == game_domain:
+            return g
+    return None
+
+
+def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str,
+                               game: dict, game_domain: str, app_id,
+                               base_record: dict) -> str:
+    """Install an extracted archive into the game folder when its layout
+    says where every file goes. Returns the record key, or "" to leave the
+    archive to the mods-folder install."""
+    rel_files = []
+    for root, _dirs, names in os.walk(scratch):
+        for n in names:
+            rel_files.append(
+                os.path.relpath(os.path.join(root, n), scratch).replace(os.sep, "/"))
+    try:
+        root_entries = set(os.listdir(install_path))
+    except OSError:
+        return ""
+    plan = experimental_games.plan_root_install(
+        rel_files, root_entries, experimental_games.index_game_dirs(install_path),
+        mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
+    )
+    if not plan or not all(_safe_rel_path(d) for _s, d in plan):
+        return ""
+    _record_vanilla_baseline(
+        game_domain, os.path.join(install_path, *mods_subdir.split("/")),
+        app_id, None, install_path)
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(base_record.get("name") or "mod")
+    prev = installed.get(key) or {}
+    # Files this mod already owns (a reinstall) are replaced, not backed up.
+    owned = {r.lower() for r in prev.get("files") or []}
+    backups = list(prev.get("backups") or [])
+    files = []
+    for src, dst_rel in plan:
+        dst_rel = _case_merge_rel(install_path, dst_rel)
+        dst = os.path.join(install_path, *dst_rel.split("/"))
+        _makedirs_for(dst)
+        if os.path.isfile(dst):
+            if dst_rel.lower() not in owned and not os.path.exists(dst + ".nexusbak"):
+                os.replace(dst, dst + ".nexusbak")
+                backups.append(dst_rel)
+            else:
+                os.remove(dst)
+        shutil.move(os.path.join(scratch, *src.split("/")), dst)
+        files.append(dst_rel)
+    _force_rmtree(scratch)
+    installed[key] = _merge_install_record(prev or None, {
+        **base_record,
+        "mode": "files",
+        "target": ".",
+        "files": files,
+        "backups": backups,
+    })
+    _save_settings(settings)
+    decky.logger.info(
+        f"installed {base_record.get('name')!r} into the game folder: "
+        f"{len(files)} file(s), {len(backups)} game file(s) kept aside "
+        f"(e.g. {files[:3]})")
+    return key
+
+
+def _restore_backups(install_path: str, rels: list) -> None:
+    """Put back game files a files-mode install set aside as .nexusbak."""
+    for rel in rels or []:
+        if not _safe_rel_path(rel):
+            continue
+        path = os.path.join(install_path, *rel.split("/"))
+        if os.path.isfile(path + ".nexusbak") and not os.path.exists(path):
+            os.replace(path + ".nexusbak", path)
+
+
+def _set_aside_backups(install_path: str, rels: list) -> None:
+    """Move restored game files back out of the way before a mod returns."""
+    for rel in rels or []:
+        if not _safe_rel_path(rel):
+            continue
+        path = os.path.join(install_path, *rel.split("/"))
+        if os.path.isfile(path) and not os.path.exists(path + ".nexusbak"):
+            os.replace(path, path + ".nexusbak")
 
 
 def _safe_rel_path(rel: str) -> bool:
@@ -21961,6 +22051,33 @@ query Link($slug: String!, $domainName: String!) {
                 out["warning"] = skip_note
             return out
 
+        # Experimental games: an archive laid out for somewhere other than
+        # the mods folder (a proxy dll beside the exe, a Content/ tree, a
+        # loader pack) is merged into the game folder file by file, with
+        # an exact record and the game's own files kept aside.
+        exp_game = _experimental_game_for(game_domain)
+        if install_mode == "folder" and exp_game is not None:
+            done = await asyncio.to_thread(
+                _experimental_root_install, scratch, install_path, mods_subdir,
+                exp_game, game_domain, app_id, {
+                    "mod_id": mod_id,
+                    "file_id": file_id,
+                    "name": mod_name,
+                    "version": mod_version,
+                    "file_name": file_name,
+                    "installed_at": int(time.time()),
+                    "page_version": page_version,
+                    "source": record_source,
+                    "collection_slug": collection_slug,
+                })
+            if done:
+                try:
+                    os.remove(archive_path)
+                except OSError:
+                    pass
+                await _emit_progress(mod_id, "done", 100)
+                return {"ok": True, "folder": done}
+
         # Archives that ship the mods DIRECTORY itself (Bannerlord zips
         # rooted at Modules/, Stardew at Mods/, BepInEx at plugins/):
         # unwrap it, or the mod nests invisibly (Modules/Modules/X).
@@ -29230,12 +29347,15 @@ query CollectionInstructions($slug: String!) {
                 if r.lower() not in shared
             ]
             if enabled:
+                _set_aside_backups(install_path, rec.get("backups"))
                 moved = _move_mod_files(park, install_path, movable)
                 _force_rmtree(park)
                 rec.pop("parked", None)
                 rec.pop("disabled_reason", None)
             else:
                 moved = _move_mod_files(install_path, park, movable)
+                # Off means the game's own files are back in place.
+                _restore_backups(install_path, rec.get("backups"))
                 # Marked off even when nothing moved, for the same reason
                 # the dataDir tier does: a file another record also claims
                 # stays put, and a mod made only of those would otherwise
@@ -30410,6 +30530,18 @@ query CollectionInstructions($slug: String!) {
         games = settings.get("experimental_games") or {}
         # Games saved before requirement detection existed get checked once,
         # in the background; the frontend reloads on the event.
+        # Notes written before game-folder installs existed say "by hand".
+        stale = False
+        for g in games.values():
+            note = g.get("underConstruction") if isinstance(g, dict) else None
+            if note and experimental_games.ROOT_LAYOUT_NOTE not in note:
+                note = note.replace(
+                    " Mods that need UE4SS, or replace files outside the paks "
+                    "folder, need setting up by hand.", "")
+                g["underConstruction"] = note + " " + experimental_games.ROOT_LAYOUT_NOTE
+                stale = True
+        if stale:
+            _save_settings(settings)
         unchecked = [int(k) for k, g in games.items()
                      if isinstance(g, dict) and "frameworkChecked" not in g]
         if unchecked and not getattr(self, "_exp_checking", False):
