@@ -15092,6 +15092,16 @@ async def _extract_archive(archive_path: str, dest_dir: str) -> str:
         errors.append(f"zipfile: {e}")
     if not errors:
         return "no extractor available for this archive type"
+    try:
+        with open(archive_path, "rb") as f:
+            is_program = f.read(2) == b"MZ"
+    except OSError:
+        is_program = False
+    if is_program:
+        # Not an archive at all: the author uploaded the tool itself.
+        return ("This download is a Windows program (a modding tool), not "
+                "mod files - it has to be run from the desktop, so the "
+                "plugin can't install it.")
     if (sys.platform == "win32" and _is_rar(archive_path)
             and not os.path.isfile(_WIN_7Z)):
         # Windows' own tar reads few RAR archives; 7-Zip reads them all and
