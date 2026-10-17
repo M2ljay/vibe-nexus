@@ -183,6 +183,8 @@ interface GameContext {
   game?: SupportedGame;
   /** Display name of the unsupported context game, when running/viewing one. */
   unsupportedName?: string;
+  /** Steam app id of that game (experimental any-game setup needs it). */
+  unsupportedAppId?: number;
   /** Names of supported games running simultaneously - ambiguous context. */
   multipleNames?: string[];
   /** True on neutral ground (home screen etc.) - no game context at all. */
@@ -216,6 +218,7 @@ function resolveGameContext(): GameContext {
 
   if (runningIds.length > 0) {
     return {
+      unsupportedAppId: runningIds[0],
       unsupportedName:
         Router.MainRunningApp?.display_name ??
         getAppDisplayName(runningIds[0]) ??
@@ -223,7 +226,10 @@ function resolveGameContext(): GameContext {
     };
   }
   if (viewedId !== undefined) {
-    return { unsupportedName: getAppDisplayName(viewedId) ?? "This game" };
+    return {
+      unsupportedAppId: viewedId,
+      unsupportedName: getAppDisplayName(viewedId) ?? "This game",
+    };
   }
   // Route glitch guard: some overlay states report no /library/app path
   // even though the user is sitting on a game's page - the scope used to
@@ -247,6 +253,11 @@ import { UpdatesPage } from "./UpdatesPage";
 import { installLatest, toggleMod } from "./install";
 import HealthCheckPage, { setHealthGame } from "./HealthCheckPage";
 import { scanUpdates } from "./updates";
+import {
+  ExperimentalGameRows,
+  ExperimentalUnsupportedRows,
+  loadExperimentalState,
+} from "./ExperimentalSetup";
 import {
   ME3TWEAKS_MOD_ID,
   MERGE_STEP_EXPLAINER,
@@ -548,7 +559,8 @@ function ResetGameRow({
 }
 
 function CurrentGameSection() {
-  const { game, unsupportedName, multipleNames } = resolveGameContext();
+  const { game, unsupportedName, unsupportedAppId, multipleNames } =
+    resolveGameContext();
   const gameIsRunning = game ? isGameRunning(game.appId) : false;
 
   const [status, setStatus] = useState<GameStatus | undefined>();
@@ -1154,6 +1166,10 @@ function CurrentGameSection() {
               {ALL_GAMES.map((g) => g.displayName).join(", ")}
             </Field>
           </PanelSectionRow>
+          <ExperimentalUnsupportedRows
+            appId={unsupportedAppId}
+            name={unsupportedName}
+          />
         </PanelSection>
       );
     }
@@ -1190,6 +1206,7 @@ function CurrentGameSection() {
           </Field>
         </PanelSectionRow>
       )}
+      <ExperimentalGameRows game={game} />
       {game.gameNote && (
         <PanelSectionRow>
           <Field label="Good to know">{game.gameNote}</Field>
@@ -4572,6 +4589,10 @@ function ScrollToTopOnMount() {
 }
 
 function Content() {
+  // Re-resolve the game when state changes under us (an experimental
+  // any-game setup turns an unsupported game into a managed one).
+  const [, setTick] = useState(0);
+  useEffect(() => subscribeGameState(() => setTick((n) => n + 1)), []);
   const ctx = resolveGameContext();
   return (
     <>
@@ -4615,6 +4636,7 @@ function Content() {
 
 export default definePlugin(() => {
   console.log("Nexus Mods plugin initializing");
+  void loadExperimentalState();
 
   routerHook.addRoute(BROWSE_ROUTE, BrowsePage, { exact: true });
   routerHook.addRoute(DETAIL_ROUTE, ModDetailPage, { exact: true });

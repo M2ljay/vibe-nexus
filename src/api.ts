@@ -1,5 +1,6 @@
 // Typed bridge to the Python backend (main.py). All callables are positional.
 import { callable } from "@decky/api";
+import type { SupportedGame } from "./games";
 
 /** How a game's mods are stored and activated. "folder" per-mod dirs,
  * "dataDir" merged into Data/ with plugins.txt, "me3" outside the game
@@ -2266,3 +2267,51 @@ export const resetFrosty = callable<
   [game_domain: string, install_dir: string, app_id: number],
   { ok: boolean; error?: string }
 >("reset_frosty");
+
+// ---- Experimental: any game (this fork) -------------------------------------
+
+export interface ExperimentalCandidate {
+  domain: string;
+  name: string;
+  mods: number;
+}
+
+export interface ExperimentalInspection {
+  engine: string;
+  modsSubdir: string;
+  processName: string;
+  note: string;
+}
+
+export const getExperimentalState = callable<
+  [],
+  { ok: boolean; enabled: boolean; games: SupportedGame[] }
+>("get_experimental_state");
+
+export const setExperimentalEnabled = callable<
+  [enabled: boolean],
+  { ok: boolean; enabled: boolean; games: SupportedGame[] }
+>("set_experimental_enabled");
+
+export const findExperimentalGame = callable<
+  [app_id: number, display_name: string],
+  {
+    ok: boolean;
+    error?: string;
+    name?: string;
+    exact?: ExperimentalCandidate | null;
+    candidates?: ExperimentalCandidate[];
+    installDir?: string;
+    inspection?: ExperimentalInspection;
+  }
+>("find_experimental_game");
+
+export const saveExperimentalGame = callable<
+  [app_id: number, display_name: string, domain: string, nexus_name: string],
+  { ok: boolean; error?: string; game?: SupportedGame }
+>("save_experimental_game");
+
+export const removeExperimentalGame = callable<
+  [app_id: number],
+  { ok: boolean; removed?: boolean }
+>("remove_experimental_game");

@@ -1789,7 +1789,41 @@ export function modeParams(
 }
 
 export function getSupportedGame(appId: number | undefined): SupportedGame | undefined {
-  return appId === undefined ? undefined : SUPPORTED_GAMES[appId];
+  if (appId === undefined) return undefined;
+  return (
+    SUPPORTED_GAMES[appId] ??
+    (experimentalEnabled ? EXPERIMENTAL_GAMES[appId] : undefined)
+  );
+}
+
+// ---- Experimental: any game -------------------------------------------------
+// Opt-in generic tier (this fork). A Steam game without a curated entry can be
+// matched to its Nexus Mods domain; the backend guesses the mods folder from
+// the installed files (py_modules/experimental_games.py) and the normal
+// folder-mode installer does the rest. Curated entries always win.
+
+const EXPERIMENTAL_GAMES: Record<number, SupportedGame> = {};
+let experimentalEnabled = false;
+
+export function isExperimentalEnabled(): boolean {
+  return experimentalEnabled;
+}
+
+export function setExperimentalState(
+  enabled: boolean,
+  games: SupportedGame[]
+): void {
+  experimentalEnabled = enabled;
+  for (const k of Object.keys(EXPERIMENTAL_GAMES)) {
+    delete EXPERIMENTAL_GAMES[Number(k)];
+  }
+  for (const g of games) {
+    if (g && g.appId && !SUPPORTED_GAMES[g.appId]) EXPERIMENTAL_GAMES[g.appId] = g;
+  }
+}
+
+export function isExperimentalGame(g: SupportedGame | undefined): boolean {
+  return Boolean(g && !SUPPORTED_GAMES[g.appId] && EXPERIMENTAL_GAMES[g.appId]);
 }
 
 // v1 is single-game: the full-screen browser falls back to StS2 when no

@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { UserPrefs, getUserPrefs, setUserPrefs } from "./api";
 import { NEXUS_ORANGE, PAGE_SCROLLER } from "./theme";
 import { TabBar, exitTabsToQam, handleTabButtons } from "./Tabs";
+import { ExperimentalToggle } from "./ExperimentalSetup";
 
 const Scroller: any = ScrollPanelGroup;
 
@@ -276,6 +277,10 @@ export function SettingsPage() {
                 showValue={false}
                 onChange={(v: number) => update({ min_free_gb: v })}
               />
+            </Section>
+
+            <Section title="Experimental" blurb="for games without built-in support">
+              <ExperimentalToggle />
             </Section>
 
             <div style={{ fontSize: "12px", opacity: 0.55, lineHeight: 1.5 }}>

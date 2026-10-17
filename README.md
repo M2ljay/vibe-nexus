@@ -359,3 +359,21 @@ The current hello-world panel has a **Ping backend** button that round-trips a `
 ## License
 
 BSD-3-Clause (inherited from the Decky plugin template, see [LICENSE](./LICENSE)).
+
+## Fork: experimental "any game" support
+
+This fork adds an opt-in **Experimental: any game** switch (Settings, or the
+Current Game section of an unsupported game). With it on, an unsupported Steam
+game gets a **Set up mods for …** button that:
+
+1. matches the game to its Nexus Mods domain by name (a picker appears when
+   the match is not exact), so browsing, downloading and endorsing work, and
+2. looks at the installed files to guess where drop-in mods go - Unreal
+   `Content/Paks/~mods` (plus UE4SS when present), `BepInEx/plugins`,
+   MelonLoader `Mods`, or an existing `Mods` folder - and installs through the
+   normal folder-mode installer, so enable/disable and uninstall work.
+
+Curated games are unaffected. The helpers are in
+`py_modules/experimental_games.py`. The fork also finds Steam on Windows
+(registry), extracts archives with Windows' built-in `tar.exe` or 7-Zip, and
+registers the `nxm://` handler in the Windows registry.

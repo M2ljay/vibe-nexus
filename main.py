@@ -18,13 +18,36 @@ import time
 import urllib.parse
 import zipfile
 
+import sys
+
 import aiohttp
 
 import decky
 
-STEAM_COMMON = os.path.join(
-    decky.DECKY_USER_HOME, ".steam", "steam", "steamapps", "common"
-)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "py_modules"))
+import experimental_games  # noqa: E402 - needs the py_modules path above
+
+
+def _steam_root() -> str:
+    """Steam's install folder. On Windows the registry says where it is;
+    elsewhere it is the ~/.steam/steam link every Linux client keeps."""
+    if sys.platform == "win32":
+        try:
+            import winreg  # noqa: PLC0415 - Windows-only stdlib module
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
+                path = winreg.QueryValueEx(k, "SteamPath")[0]
+            if path and os.path.isdir(path):
+                return os.path.normpath(path)
+        except OSError:
+            pass
+        pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        return os.path.join(pf86, "Steam")
+    return os.path.join(decky.DECKY_USER_HOME, ".steam", "steam")
+
+
+STEAM_ROOT = _steam_root()
+STEAM_COMMON = os.path.join(STEAM_ROOT, "steamapps", "common")
 
 SETTINGS_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
 
@@ -39,7 +62,7 @@ _SETTINGS_LOCK = threading.RLock()
 _SETTINGS_TMP_SEQ = itertools.count()
 DOWNLOADS_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "downloads")
 SAVE_BACKUPS_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "save-backups")
-STEAM_USERDATA = os.path.join(decky.DECKY_USER_HOME, ".steam", "steam", "userdata")
+STEAM_USERDATA = os.path.join(STEAM_ROOT, "userdata")
 
 NEXUS_API_BASE = "https://api.nexusmods.com"
 NEXUS_V2_GRAPHQL = f"{NEXUS_API_BASE}/v2/graphql"
@@ -3221,6 +3244,59 @@ def _pick_main_file(file_list: list, avoid_keywords: list = ()):
 
 
 NXM_QUEUE_NAME = "nxm-queue.log"
+_NXM_WIN_KEY = r"Software\Classes\nxm"
+
+
+def _register_nxm_windows() -> dict:
+    """Windows nxm:// handler: a per-user URL protocol whose command runs a
+    small PowerShell relay that appends "<epoch> <url>" to the queue file -
+    the same line format the Linux shell relay writes."""
+    try:
+        import winreg  # noqa: PLC0415 - Windows-only stdlib module
+
+        runtime = decky.DECKY_PLUGIN_RUNTIME_DIR
+        os.makedirs(runtime, exist_ok=True)
+        queue = os.path.join(runtime, NXM_QUEUE_NAME)
+        script = os.path.join(runtime, "nxm-relay.ps1")
+        with open(script, "w", encoding="utf-8") as f:
+            f.write(
+                "param([string]$url)\r\n"
+                "$t = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()\r\n"
+                "Add-Content -LiteralPath '" + queue.replace("'", "''")
+                + "' -Value (\"$t $url\") -Encoding UTF8\r\n"
+            )
+        command = (
+            'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden '
+            '-ExecutionPolicy Bypass -File "' + script + '" "%1"'
+        )
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _NXM_WIN_KEY) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:Nexus Mods (Decky)")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(
+            winreg.HKEY_CURRENT_USER, _NXM_WIN_KEY + r"\shell\open\command"
+        ) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, command)
+        decky.logger.info("nxm handler registered (windows registry)")
+        return {"ok": True, "tools": {"registry": True}}
+    except Exception as e:  # noqa: BLE001 - surfaced to UI + logged
+        decky.logger.exception("register_nxm_handler (windows) crashed")
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _unregister_nxm_windows() -> dict:
+    try:
+        import winreg  # noqa: PLC0415
+
+        removed = False
+        for sub in (r"\shell\open\command", r"\shell\open", r"\shell", ""):
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, _NXM_WIN_KEY + sub)
+                removed = True
+            except OSError:
+                pass
+        return {"ok": True, "removed": removed}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 # ---- launch options (dlo-aware) ----------------------------------------------
 # The decky-launch-options plugin, when installed, rewrites every game's
@@ -14644,6 +14720,29 @@ _EXTRACTORS = (
     ("unrar", lambda a, d: ["unrar", "x", "-y", "-o+", a, d + os.sep]),
 )
 
+if sys.platform == "win32":
+    # Windows 10+ ships bsdtar as System32\tar.exe; 7-Zip is found on PATH
+    # or in its default install folder. Called by full path so the
+    # shutil.which() check in _extract_archive finds them.
+    _WIN_TAR = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "tar.exe")
+    _WIN_7Z = shutil.which("7z") or next(
+        (p for p in (
+            os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "7-Zip", "7z.exe"),
+            os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "7-Zip", "7z.exe"),
+        ) if os.path.isfile(p)),
+        "7z",
+    )
+    _EXTRACTORS = (
+        ("bsdtar", lambda a, d: [_WIN_TAR, "-xf", a, "-C", d]),
+        ("7z", lambda a, d: [_WIN_7Z, "x", "-y", f"-o{d}", a]),
+        ("unrar", lambda a, d: ["unrar", "x", "-y", "-o+", a, d + os.sep]),
+    )
+
+
+# Windows: console tools started from the windowless loader would each flash
+# a console window over the game.
+_NO_WINDOW = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+
 
 def _is_rar(archive_path: str) -> bool:
     """RAR by its signature ("Rar!\\x1a\\x07"), whatever the extension says."""
@@ -14671,7 +14770,8 @@ async def _extract_archive(archive_path: str, dest_dir: str) -> str:
     until one succeeds. Returns '' on success, error text otherwise."""
     errors = []
     for name, build in _extractor_order(archive_path):
-        if not shutil.which(name):
+        argv = build(archive_path, dest_dir)
+        if not (shutil.which(argv[0]) or os.path.isfile(argv[0])):
             continue
         if errors:
             # A failed attempt can leave a half-written tree behind; the
@@ -14680,10 +14780,11 @@ async def _extract_archive(archive_path: str, dest_dir: str) -> str:
             os.makedirs(dest_dir, exist_ok=True)
         try:
             proc = await asyncio.create_subprocess_exec(
-                *build(archive_path, dest_dir),
+                *argv,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
                 env=_host_env(),
+                **_NO_WINDOW,
             )
             _, err = await proc.communicate()
         except OSError as e:
@@ -18997,6 +19098,8 @@ query Link($slug: String!, $domainName: String!) {
     async def register_nxm_handler(self) -> dict:
         """Install a user-level nxm:// handler: a relay script that appends
         received URLs to a queue file, registered via a desktop entry."""
+        if sys.platform == "win32":
+            return await asyncio.to_thread(_register_nxm_windows)
         try:
             runtime = decky.DECKY_PLUGIN_RUNTIME_DIR
             os.makedirs(runtime, exist_ok=True)
@@ -19047,6 +19150,8 @@ query Link($slug: String!, $domainName: String!) {
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
     async def unregister_nxm_handler(self) -> dict:
+        if sys.platform == "win32":
+            return await asyncio.to_thread(_unregister_nxm_windows)
         try:
             apps_dir = os.path.join(
                 decky.DECKY_USER_HOME, ".local", "share", "applications"
@@ -30257,6 +30362,173 @@ query CollectionInstructions($slug: String!) {
             )
         decky.logger.info(f"game status for {install_dir!r}: {status}")
         return status
+
+    # ---- Experimental: any game -------------------------------------------
+    # Opt-in generic tier for games without a curated entry in games.ts. The
+    # helpers live in py_modules/experimental_games.py; these methods only
+    # do the I/O. State lives in settings.json:
+    #   experimental_any_game: bool
+    #   experimental_games: {"<appid>": <SupportedGame-shaped dict>}
+
+    async def get_experimental_state(self) -> dict:
+        settings = _load_settings()
+        games = settings.get("experimental_games") or {}
+        return {
+            "ok": True,
+            "enabled": bool(settings.get("experimental_any_game")),
+            "games": [g for g in games.values() if isinstance(g, dict)],
+        }
+
+    async def set_experimental_enabled(self, enabled: bool) -> dict:
+        settings = _load_settings()
+        settings["experimental_any_game"] = bool(enabled)
+        _save_settings(settings)
+        decky.logger.info(f"experimental any-game support: {bool(enabled)}")
+        return await self.get_experimental_state()
+
+    async def _nexus_games_list(self) -> list:
+        """Every Nexus game (name, domain, mod count), cached for a week."""
+        cache = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "nexus-games.json")
+        try:
+            if time.time() - os.path.getmtime(cache) < 7 * 86400:
+                with open(cache, encoding="utf-8") as f:
+                    games = json.load(f)
+                if isinstance(games, list) and games:
+                    return games
+        except (OSError, ValueError):
+            pass
+        api_key = _load_settings().get("api_key")
+        sources = []
+        if api_key:
+            sources.append((f"{NEXUS_API_BASE}/v1/games.json", _api_headers(api_key)))
+        sources.append(
+            ("https://data.nexusmods.com/file/nexus-data/games.json", dict(APP_HEADERS))
+        )
+        for url, headers in sources:
+            try:
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as session:
+                    async with session.get(url, headers=headers, ssl=SSL_CONTEXT) as r:
+                        if r.status != 200:
+                            decky.logger.info(f"games list {url}: HTTP {r.status}")
+                            continue
+                        games = await r.json(content_type=None)
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as e:
+                decky.logger.info(f"games list {url}: {type(e).__name__}")
+                continue
+            if isinstance(games, list) and games:
+                slim = []
+                for g in games:
+                    if not isinstance(g, dict):
+                        continue
+                    name, domain, mods = experimental_games._game_fields(g)
+                    if name and domain:
+                        slim.append({"name": name, "domain_name": domain, "mods": mods})
+                try:
+                    os.makedirs(os.path.dirname(cache), exist_ok=True)
+                    with open(cache, "w", encoding="utf-8") as f:
+                        json.dump(slim, f)
+                except OSError:
+                    pass
+                return slim
+        return []
+
+    def _experimental_install(self, app_id: int) -> dict:
+        """installdir/name from the appmanifest, the game path, and a guess at
+        its engine and mods folder."""
+        manifest = _find_in_libraries(f"appmanifest_{int(app_id)}.acf")
+        info = experimental_games.read_appmanifest(manifest) if manifest else {}
+        install_dir = info.get("installdir", "")
+        if not install_dir:
+            return {"installDir": "", "steamName": "",
+                    "inspection": {"engine": "missing", "modsSubdir": "",
+                                   "processName": "",
+                                   "note": "Steam has no install record for "
+                                           "this game on this PC."}}
+        path = _game_dir(install_dir)
+        return {
+            "installDir": install_dir,
+            "steamName": info.get("name", ""),
+            "path": path,
+            "inspection": experimental_games.inspect_install(path),
+        }
+
+    async def find_experimental_game(self, app_id: int, display_name: str) -> dict:
+        """Match a Steam game to a Nexus domain and inspect its install."""
+        try:
+            app_id = int(app_id)
+            local = await asyncio.to_thread(self._experimental_install, app_id)
+            name = local.get("steamName") or display_name or ""
+            games = await self._nexus_games_list()
+            if games:
+                match = experimental_games.match_games(games, name)
+                if not match["exact"] and display_name and display_name != name:
+                    alt = experimental_games.match_games(games, display_name)
+                    match["exact"] = alt["exact"]
+                    seen = {c["domain"] for c in match["candidates"]}
+                    match["candidates"] += [
+                        c for c in alt["candidates"] if c["domain"] not in seen
+                    ]
+            else:
+                # No list reachable: verify a few domain guesses one by one.
+                match = {"exact": None, "candidates": []}
+                api_key = _load_settings().get("api_key")
+                for i, domain in enumerate(experimental_games.guess_domains(name)):
+                    try:
+                        data = await _gql_query(
+                            '{ game(domainName: "%s") { id name domainName } }'
+                            % domain, api_key)
+                    except Exception:  # noqa: BLE001 - a guess that is not a game
+                        continue
+                    g = data.get("game") or {}
+                    if g.get("domainName"):
+                        entry = {"domain": g["domainName"], "name": g.get("name") or domain,
+                                 "mods": 0}
+                        if i == 0:
+                            match["exact"] = entry
+                        else:
+                            match["candidates"].append(entry)
+            decky.logger.info(
+                f"experimental find {app_id} {name!r}: exact="
+                f"{(match['exact'] or {}).get('domain')} candidates="
+                f"{[c['domain'] for c in match['candidates']]} "
+                f"engine={local['inspection'].get('engine')} "
+                f"mods={local['inspection'].get('modsSubdir')!r}"
+            )
+            return {"ok": True, "name": name, **match, **local}
+        except Exception as e:  # noqa: BLE001 - surfaced to UI + logged
+            decky.logger.exception("find_experimental_game crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def save_experimental_game(
+        self, app_id: int, display_name: str, domain: str, nexus_name: str
+    ) -> dict:
+        """Remember a Steam game as an experimental Nexus game."""
+        if not re.fullmatch(r"[a-z0-9_-]+", domain or ""):
+            return {"ok": False, "error": "Invalid game domain"}
+        try:
+            app_id = int(app_id)
+            local = await asyncio.to_thread(self._experimental_install, app_id)
+            game = experimental_games.build_game(
+                app_id, display_name or local.get("steamName", ""),
+                local.get("installDir", ""), domain, nexus_name,
+                local["inspection"],
+            )
+            settings = _load_settings()
+            settings.setdefault("experimental_games", {})[str(app_id)] = game
+            _save_settings(settings)
+            decky.logger.info(f"experimental game saved: {game}")
+            return {"ok": True, "game": game}
+        except Exception as e:  # noqa: BLE001
+            decky.logger.exception("save_experimental_game crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def remove_experimental_game(self, app_id: int) -> dict:
+        settings = _load_settings()
+        removed = (settings.get("experimental_games") or {}).pop(str(int(app_id)), None)
+        _save_settings(settings)
+        return {"ok": True, "removed": bool(removed)}
 
     # ---- Dev loop ----------------------------------------------------------
 
