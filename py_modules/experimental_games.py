@@ -701,8 +701,36 @@ VERDICTS = {
     "loader": "is the game's loader (Step 1)",
     "program": "is a program you run on the desktop",
     "no_target": "has no clear place to go - would land in the mods folder unused",
+    "ue_config": "is a settings tweak (Engine.ini), placed in the game's config folder",
+    "save_file": "is a save file - copy it yourself if you want it",
     "unknown": "has no published file list to check",
 }
+
+
+WORKING_VERDICTS = ("mods_folder", "game_folder", "wizard", "tool_managed",
+                    "loader", "ue_config")
+
+UE_CONFIG_NAMES = {"engine.ini", "gameusersettings.ini", "game.ini", "input.ini",
+                   "scalability.ini", "deviceprofiles.ini"}
+_SAVE_HINTS = (".sav", ".save", "savedata", "savegame", "slot0", "slot1", "slot2")
+
+
+def ue_config_plan(rel_files: list):
+    """[(src, dst)] when an archive is nothing but Unreal user-config files
+    (Engine.ini tweaks), each name once; dst is just the file name, relative
+    to the game's Saved/Config/<platform> folder. None otherwise."""
+    plan, seen = [], set()
+    for f in rel_files:
+        f = f.replace("\\", "/").strip("/")
+        name = f.split("/")[-1]
+        low = name.lower()
+        if low.endswith(_DOC_EXTS):
+            continue
+        if low not in UE_CONFIG_NAMES or low in seen:
+            return None  # something else in it, or alternatives to choose from
+        seen.add(low)
+        plan.append((f, name))
+    return plan or None
 
 
 def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
@@ -719,10 +747,19 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     low = [f.lower() for f in files]
     if any(f.endswith("fomod/moduleconfig.xml") for f in low):
         return "wizard"
+    payload_low = [f for f in low if not f.endswith(_DOC_EXTS)]
+    if payload_low and all(any(h in f.split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f
+                           for f in payload_low):
+        return "save_file"
+    if game.get("engine") == "unreal" and ue_config_plan(files):
+        return "ue_config"
     exts = tuple(game.get("flatModExtensions") or [])
     if game.get("toolApply") or exts:
         if exts and any(f.endswith(exts) for f in low):
             return "tool_managed" if game.get("toolApply") else "mods_folder"
+        if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
+                             exe_dir_of(game.get("processName") or "")):
+            return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
         return "no_target"
@@ -750,7 +787,6 @@ def summarize(rows: list) -> dict:
     counts = {}
     for r in rows:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
-    good = sum(counts.get(k, 0) for k in
-               ("mods_folder", "game_folder", "wizard", "tool_managed", "loader"))
+    good = sum(counts.get(k, 0) for k in WORKING_VERDICTS)
     checked = len(rows) - counts.get("unknown", 0)
     return {"counts": counts, "working": good, "checked": checked, "total": len(rows)}

@@ -7349,7 +7349,7 @@ def _remove_files_record(
         return False
     target = rec.get("target") or "."
     base = (
-        install_path
+        rec.get("base") or install_path
         if target in (".", "")
         else os.path.join(install_path, *target.split("/"))
     )
@@ -7398,15 +7398,24 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         root_entries = set(os.listdir(install_path))
     except OSError:
         return ""
-    plan = experimental_games.plan_root_install(
-        rel_files, root_entries, experimental_games.index_game_dirs(install_path),
-        mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
-    )
+    base = install_path
+    plan = None
+    cfg = experimental_games.ue_config_plan(rel_files) if game.get("engine") == "unreal" else None
+    if cfg:
+        cfg_dir = _ue_user_config_dir(game)
+        if cfg_dir:
+            base, plan = cfg_dir, cfg
+    if plan is None:
+        plan = experimental_games.plan_root_install(
+            rel_files, root_entries, experimental_games.index_game_dirs(install_path),
+            mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
+        )
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
     _record_vanilla_baseline(
         game_domain, os.path.join(install_path, *mods_subdir.split("/")),
         app_id, None, install_path)
+    install_path = base
     settings = _load_settings()
     installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
     key = _safe_name(base_record.get("name") or "mod")
@@ -7434,6 +7443,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         "target": ".",
         "files": files,
         "backups": backups,
+        **({"base": install_path} if install_path != _game_dir(game.get("installDirName") or "") else {}),
     })
     _save_settings(settings)
     decky.logger.info(
@@ -7471,6 +7481,24 @@ def _refresh_experimental_inspection(game_domain: str) -> bool:
                 f"mods={game.get('modsSubdir')!r} ue4ss={game.get('ue4ss')}")
         return changed
     return False
+
+
+def _ue_user_config_dir(game: dict) -> str:
+    """Where an Unreal game reads the player's Engine.ini and friends:
+    %LOCALAPPDATA%/<Project>/Saved/Config/Windows (UE5) or WindowsNoEditor
+    (UE4). The project is the folder that holds Content/Paks. "" when the
+    game is not Unreal or this is not Windows."""
+    if sys.platform != "win32":
+        return ""
+    project = (game.get("modsSubdir") or "").split("/Content/")[0].split("/")[-1]
+    local = os.environ.get("LOCALAPPDATA", "")
+    if not project or not local:
+        return ""
+    cfg = os.path.join(local, project, "Saved", "Config")
+    for name in ("Windows", "WindowsNoEditor", "WinGDK"):
+        if os.path.isdir(os.path.join(cfg, name)):
+            return os.path.join(cfg, name)
+    return os.path.join(cfg, "Windows")
 
 
 def _remove_tracked_framework(game: dict, mod_id: int, subdir: str = "") -> int:
@@ -22109,6 +22137,24 @@ query Link($slug: String!, $domainName: String!) {
             # files rather than refused.
             sk_textures = (_sk_texture_files(scratch)
                            if game_domain == "nierautomata" else {})
+            if not flat and not sk_textures and _experimental_game_for(game_domain):
+                # Tool-managed games still get dll/ReShade-style mods put
+                # where they belong, when the layout says where.
+                done = await asyncio.to_thread(
+                    _experimental_root_install, scratch, install_path, mods_subdir,
+                    _experimental_game_for(game_domain), game_domain, app_id, {
+                        "mod_id": mod_id, "file_id": file_id, "name": mod_name,
+                        "version": mod_version, "file_name": file_name,
+                        "installed_at": int(time.time()), "page_version": page_version,
+                        "source": record_source, "collection_slug": collection_slug,
+                    })
+                if done:
+                    try:
+                        os.remove(archive_path)
+                    except OSError:
+                        pass
+                    await _emit_progress(mod_id, "done", 100)
+                    return {"ok": True, "folder": done}
             if not flat and not sk_textures:
                 is_reshade = hd2_layout and any(
                     "reshade" in n.lower() or n.lower().endswith(".ini")
@@ -29711,7 +29757,9 @@ query CollectionInstructions($slug: String!) {
             settings = _load_settings()
             records = settings.get("installed", {}).get(game_domain, {})
             rec = records.get(folder) or rec
-            install_path = _game_dir(install_dir)
+            # Records outside the game folder (Unreal config tweaks live in
+            # LocalAppData) carry their own absolute base.
+            install_path = rec.get("base") or _game_dir(install_dir)
             park = _parked_files_dir(game_domain, folder)
             shared = _shared_paths(records, folder, modes=("files",))
             movable = [
@@ -31297,6 +31345,7 @@ query CollectionInstructions($slug: String!) {
                 return roots, experimental_games.index_game_dirs(install_path)
 
             roots, index = await asyncio.to_thread(local)
+            game_id = await _resolve_game_id(domain, _load_settings().get("api_key"))
             fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
             sem = asyncio.Semaphore(4)
 
@@ -31307,8 +31356,14 @@ query CollectionInstructions($slug: String!) {
                     main_file = _pick_main_file(
                         (files.get("files") or []) if files.get("ok") else [])
                     paths = None
-                    if main_file and main_file.get("content_preview_link"):
-                        paths = await _preview_paths(main_file["content_preview_link"])
+                    if main_file:
+                        link = main_file.get("content_preview_link") or (
+                            # Newer uploads come back without the link; the
+                            # listing often exists at the usual address.
+                            "https://file-metadata.nexusmods.com/file/"
+                            f"nexus-files-s3-meta/{game_id}/{mid}/"
+                            f"{main_file.get('file_name')}.json")
+                        paths = await _preview_paths(link)
                 verdict = experimental_games.classify_mod(
                     paths, game, roots, index, is_framework=(mid == fw_id))
                 return {"modId": mid, "name": m.get("name") or str(mid),
@@ -31321,13 +31376,13 @@ query CollectionInstructions($slug: String!) {
             settings = _load_settings()
             settings.setdefault("coverage", {})[domain] = {
                 "at": int(time.time()), **summary,
-                "problems": [r for r in rows if r["verdict"] in ("program", "no_target", "unknown")],
+                "problems": [r for r in rows
+                             if r["verdict"] not in experimental_games.WORKING_VERDICTS],
             }
             _save_settings(settings)
             decky.logger.info(f"coverage {domain}: {summary}")
             for r in rows:
-                if r["verdict"] not in ("mods_folder", "game_folder", "wizard",
-                                        "tool_managed", "loader"):
+                if r["verdict"] not in experimental_games.WORKING_VERDICTS:
                     decky.logger.info(
                         f"coverage {domain}: {r['verdict']}: {r['name']!r} "
                         f"(mod {r['modId']}, {r['file']}) {r['sample']}")

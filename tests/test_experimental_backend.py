@@ -200,19 +200,52 @@ class ExperimentalRootInstallTests(unittest.TestCase):
         listings = {"L1": ["a_P.pak"], "L2": ["Binaries/Win64/dinput8.dll"], "L3": ["T.exe"]}
 
         async def preview(link):
-            return listings[link]
+            return listings.get(link)
+
+        async def resolve(*a):
+            return 7
 
         self.game["engine"] = "unreal"
         main._save_settings({"experimental_games": {"1790600": self.game}})
         with unittest.mock.patch.object(self.plugin, "get_mods", get_mods), \
                 unittest.mock.patch.object(self.plugin, "get_mod_files", files), \
-                unittest.mock.patch.object(main, "_preview_paths", preview):
+                unittest.mock.patch.object(main, "_preview_paths", preview), \
+                unittest.mock.patch.object(main, "_resolve_game_id", resolve):
             r = _run(self.plugin.check_experimental_coverage(1790600, 4))
         self.assertTrue(r["ok"], r)
         verdicts = {row["name"]: row["verdict"] for row in r["rows"]}
         self.assertEqual(verdicts, {"Pak": "mods_folder", "Dll": "game_folder",
                                     "Tool": "program", "Bare": "unknown"})
         self.assertEqual((r["working"], r["checked"]), (2, 3))
+
+    def test_ue_config_tweak_goes_to_user_config_and_back(self):
+        cfg = os.path.join(main.DOWNLOADS_DIR, "LocalAppData", "SparkingZERO", "Saved", "Config", "Windows")
+        os.makedirs(cfg, exist_ok=True)
+        with open(os.path.join(cfg, "Engine.ini"), "w") as f:
+            f.write("player's own")
+        self.game["engine"] = "unreal"
+        main._save_settings({"experimental_games": {"1790600": self.game}})
+        d = self.scratch(["Engine.ini", "Instruction Manual.txt"])
+        with unittest.mock.patch.object(main, "_ue_user_config_dir", lambda g: cfg):
+            key = main._experimental_root_install(d, self.root, self.game["modsSubdir"], self.game,
+                                                  "dragonballsparkingzero", 1790600, {"name": "Perf", "file_id": 3})
+        self.assertEqual(key, "Perf")
+        with open(os.path.join(cfg, "Engine.ini")) as f:
+            self.assertEqual(f.read(), "mod")
+        rec = main._load_settings()["installed"]["dragonballsparkingzero"]["Perf"]
+        self.assertEqual(rec["base"], cfg)
+        off = _run(self.plugin.set_mod_enabled("SparkingZERO", self.game["modsSubdir"], "Perf", False,
+                                               "folder", "dragonballsparkingzero", 1790600))
+        self.assertTrue(off["ok"], off)
+        with open(os.path.join(cfg, "Engine.ini")) as f:
+            self.assertEqual(f.read(), "player's own")
+        _run(self.plugin.set_mod_enabled("SparkingZERO", self.game["modsSubdir"], "Perf", True,
+                                         "folder", "dragonballsparkingzero", 1790600))
+        r = _run(self.plugin.uninstall_mod("dragonballsparkingzero", "SparkingZERO", self.game["modsSubdir"],
+                                           "Perf", "folder", 1790600, "", "starred"))
+        self.assertTrue(r["ok"], r)
+        with open(os.path.join(cfg, "Engine.ini")) as f:
+            self.assertEqual(f.read(), "player's own")
 
     def test_plain_pak_left_to_mods_folder(self):
         d = self.scratch(["Goku_P.pak", "Goku_P.utoc"])

@@ -2344,6 +2344,8 @@ export interface CoverageRow {
     | "loader"
     | "program"
     | "no_target"
+    | "ue_config"
+    | "save_file"
     | "unknown";
   file: string;
 }

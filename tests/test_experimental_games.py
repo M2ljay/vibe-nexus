@@ -306,5 +306,26 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual((s["working"], s["checked"], s["total"]), (1, 2, 3))
 
 
+class CoverageFixTests(unittest.TestCase):
+    UE = ClassifyTests.UE
+
+    def test_ue_config_plan(self):
+        self.assertEqual(eg.ue_config_plan(["Engine.ini", "Instruction Manual.txt"]), [("Engine.ini", "Engine.ini")])
+        self.assertEqual(eg.ue_config_plan(["30 FPS/Engine.ini", "30 FPS/GameUserSettings.ini"]),
+                         [("30 FPS/Engine.ini", "Engine.ini"), ("30 FPS/GameUserSettings.ini", "GameUserSettings.ini")])
+        self.assertIsNone(eg.ue_config_plan(["30/Engine.ini", "60/Engine.ini"]))
+        self.assertIsNone(eg.ue_config_plan(["Engine.ini", "x.pak"]))
+
+    def test_new_verdicts(self):
+        c = lambda p, g=None: eg.classify_mod(p, g or self.UE, ClassifyTests.ROOT, ClassifyTests.INDEX)
+        self.assertEqual(c(["Engine.ini", "readme.txt"]), "ue_config")
+        self.assertEqual(c(["MainGameSaveData", "readme.txt"]), "save_file")
+        self.assertEqual(c(["slot0-s.save"]), "save_file")
+        tool = {"toolApply": "overstrike", "flatModExtensions": [".smpcmod"], "processName": "Spider-Man.exe"}
+        self.assertEqual(eg.classify_mod(["reshade preset/dxgi.dll", "reshade preset/reshade-shaders/Shaders/a.fx"],
+                                         tool, {"Spider-Man.exe"}, {}), "no_target")
+        self.assertEqual(eg.classify_mod(["reshade preset/dxgi.dll"], tool, {"Spider-Man.exe"}, {}), "game_folder")
+
+
 if __name__ == "__main__":
     unittest.main()

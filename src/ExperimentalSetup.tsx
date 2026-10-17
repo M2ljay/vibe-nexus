@@ -121,6 +121,8 @@ const VERDICT_TEXT: Record<CoverageRow["verdict"], string> = {
   loader: "Step 1 loader",
   program: "Desktop program - can't install",
   no_target: "No clear place - likely won't load",
+  ue_config: "Works · settings tweak (Engine.ini)",
+  save_file: "Save file - not installed (copy it yourself)",
   unknown: "Can't check (no file list)",
 };
 
@@ -135,7 +137,7 @@ function CoverageModal({
 }) {
   const rows = result.rows ?? [];
   const problems = rows.filter((r) =>
-    ["program", "no_target", "unknown"].includes(r.verdict)
+    ["program", "no_target", "unknown", "save_file"].includes(r.verdict)
   );
   return (
     <ModalRoot closeModal={closeModal}>
