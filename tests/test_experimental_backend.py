@@ -1,6 +1,8 @@
 """Experimental any-game: requirement detection and tracked loader installs."""
 import asyncio
 import os
+import shutil
+import zipfile
 import unittest
 import unittest.mock
 
@@ -247,6 +249,28 @@ class ExperimentalRootInstallTests(unittest.TestCase):
         with open(os.path.join(cfg, "Engine.ini")) as f:
             self.assertEqual(f.read(), "player's own")
 
+    def test_change_mods_folder_and_decline_step1(self):
+        p = self.plugin
+        r = _run(p.experimental_folder_options(1790600))
+        self.assertIn("SparkingZERO/Content/Paks/~mods", r["options"])
+        self.assertFalse(_run(p.set_experimental_mods_folder(1790600, "../x"))["ok"])
+        r = _run(p.set_experimental_mods_folder(1790600, "SparkingZERO/Content/Paks/LogicMods"))
+        self.assertTrue(r["ok"], r)
+        st = main._load_settings()
+        st["installed"] = {"dragonballsparkingzero": {"Goku": {"mod_id": 1, "name": "Goku"}}}
+        main._save_settings(st)
+        r = _run(p.set_experimental_mods_folder(1790600, "SparkingZERO/Content/Paks/~mods"))
+        self.assertFalse(r["ok"])
+        self.assertIn("Uninstall", r["error"])
+        g = main._load_settings()["experimental_games"]["1790600"]
+        g["framework"] = {"nexusModId": 18, "installKind": "copyRootTracked", "installSubdir": ""}
+        st = main._load_settings(); st["experimental_games"]["1790600"] = g; main._save_settings(st)
+        r = _run(p.set_experimental_framework(1790600, "none"))
+        self.assertTrue(r["ok"])
+        g = main._load_settings()["experimental_games"]["1790600"]
+        self.assertNotIn("framework", g)
+        self.assertTrue(g["frameworkDeclined"])
+
     def test_plain_pak_left_to_mods_folder(self):
         d = self.scratch(["Goku_P.pak", "Goku_P.utoc"])
         self.assertEqual(main._experimental_root_install(
@@ -371,6 +395,57 @@ class WindowsPathTests(unittest.TestCase):
                          ("dataDir", "Data", "Oblivion/plugins.txt", "listed"))
         self.assertNotIn("flatModExtensions", g)
         self.assertFalse(main.experimental_games.apply_bethesda_profile({"nexusDomain": "witcher3"}))
+
+
+class ExperimentalInstallEndToEnd(unittest.TestCase):
+    """Through install_mod itself, with the archive pre-cached."""
+    DOMAIN = "marvelsmidnightsuns"
+    GAME = "Merge Test Game"
+    SUB = "MidnightSuns/Content/Paks/~mods"
+
+    def setUp(self):
+        main._save_settings({"api_key": "k", "experimental_games": {"368260": {
+            "appId": 368260, "nexusDomain": self.DOMAIN, "installDirName": self.GAME,
+            "modsSubdir": self.SUB, "engine": "unreal", "installMode": "folder",
+            "processName": "MidnightSuns/Binaries/Win64/MidnightSuns-Win64-Shipping.exe"}}})
+        self.root = main._game_dir(self.GAME)
+        main._force_rmtree(self.root)
+        os.makedirs(os.path.join(self.root, "MidnightSuns", "Content", "Paks"))
+        os.makedirs(os.path.join(self.root, "MidnightSuns", "Binaries", "Win64"))
+        os.makedirs(main.DOWNLOADS_DIR, exist_ok=True)
+        self.plugin = main.Plugin()
+
+    def install(self, file_id, members, slug=""):
+        archive = main._archive_cache_path(110, file_id, f"m{file_id}.zip")
+        shutil.rmtree(main._extract_scratch(110, file_id), ignore_errors=True)
+        with zipfile.ZipFile(archive, "w") as z:
+            for rel in members:
+                z.writestr(rel, str(file_id))
+        return _run(self.plugin.install_mod(
+            self.DOMAIN, 110, file_id, f"m{file_id}.zip", "Magik", "2.0", self.GAME, self.SUB,
+            install_mode="folder", app_id=368260, collection_slug=slug))
+
+    def mods(self):
+        d = os.path.join(self.root, *self.SUB.split("/"), "Magik")
+        return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+    def test_collection_files_of_one_mod_merge(self):
+        self.assertTrue(self.install(1, ["Magik/a_P.pak"], "col")["ok"])
+        self.assertTrue(self.install(2, ["Magik/b_P.pak"], "col")["ok"])
+        self.assertEqual(self.mods(), ["a_P.pak", "b_P.pak"])
+        rec = main._load_settings()["installed"][self.DOMAIN]["Magik"]
+        self.assertEqual(rec["file_ids"], [1, 2])
+
+    def test_outside_a_collection_a_new_file_replaces(self):
+        self.install(1, ["Magik/a_P.pak"])
+        self.install(2, ["Magik/b_P.pak"])
+        self.assertEqual(self.mods(), ["b_P.pak"])
+
+    def test_game_folder_mod_through_install_mod(self):
+        r = self.install(3, ["Binaries/Win64/dxgi.dll", "readme.txt"])
+        self.assertTrue(r["ok"], r)
+        self.assertTrue(os.path.isfile(os.path.join(
+            self.root, "MidnightSuns", "Binaries", "Win64", "dxgi.dll")))
 
 
 if __name__ == "__main__":

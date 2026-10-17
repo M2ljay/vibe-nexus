@@ -8,6 +8,7 @@ import {
   Field,
   ModalRoot,
   PanelSectionRow,
+  TextField,
   ToggleField,
   showModal,
 } from "@decky/ui";
@@ -19,6 +20,9 @@ import {
   ExperimentalCandidate,
   applyExperimentalTool,
   checkExperimentalCoverage,
+  experimentalFolderOptions,
+  setExperimentalFramework,
+  setExperimentalModsFolder,
   findExperimentalGame,
   getExperimentalState,
   removeExperimentalFramework,
@@ -273,13 +277,115 @@ export function ExperimentalUnsupportedRows({
 }
 
 /** Extra rows under "Current Game" for a game set up experimentally. */
+function FolderModal({
+  game,
+  current,
+  options,
+  closeModal,
+}: {
+  game: SupportedGame;
+  current: string;
+  options: string[];
+  closeModal?: () => void;
+}) {
+  const [custom, setCustom] = useState(current);
+  const pick = async (subdir: string) => {
+    const r = await setExperimentalModsFolder(game.appId, subdir);
+    if (!r.ok) {
+      toaster.toast({ title: "Mods folder not changed", body: r.error ?? "" });
+      return;
+    }
+    closeModal?.();
+    toaster.toast({ title: "Mods folder changed", body: subdir });
+    await loadExperimentalState();
+  };
+  return (
+    <ModalRoot closeModal={closeModal}>
+      <h3 style={{ marginTop: 0 }}>Where do {game.displayName} mods go?</h3>
+      <div style={{ fontSize: "13px", opacity: 0.85, marginBottom: "8px" }}>
+        Folders inside the game folder. Each mod gets its own folder in the one
+        you pick. Check a popular mod's instructions if you're unsure.
+      </div>
+      {options.map((o) => (
+        <ButtonItem key={o} layout="below" onClick={() => void pick(o)}>
+          {o === current ? `${o} (current)` : o}
+        </ButtonItem>
+      ))}
+      <TextField
+        label="Or type a folder (relative to the game folder)"
+        value={custom}
+        onChange={(e: any) => setCustom(e.target.value)}
+      />
+      <ButtonItem layout="below" onClick={() => void pick(custom)}>
+        Use this folder
+      </ButtonItem>
+    </ModalRoot>
+  );
+}
+
 export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
   const [busy, setBusy] = useState(false);
   if (!isExperimentalGame(game)) return null;
   return (
     <>
       <PanelSectionRow>
-        <Field label="Mods folder">{game.modsSubdir}</Field>
+        <ButtonItem
+          layout="below"
+          label="Mods folder"
+          disabled={busy || game.toolApply !== undefined || game.installMode === "dataDir"}
+          description={game.modsSubdir}
+          onClick={async () => {
+            const r = await experimentalFolderOptions(game.appId);
+            if (!r.ok) {
+              toaster.toast({ title: "Couldn't list folders", body: r.error ?? "" });
+              return;
+            }
+            showModal(
+              <FolderModal
+                game={game}
+                current={r.current ?? game.modsSubdir}
+                options={r.options ?? []}
+              />
+            );
+          }}
+        >
+          Change
+        </ButtonItem>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          disabled={busy}
+          description={
+            game.framework
+              ? `Step 1 (${game.framework.name}) was guessed from what the top mods require. Remove it if this game doesn't need it - files it installed are taken out.`
+              : "Looks again at what the game's top mods require, in case they need a loader installed first."
+          }
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await setExperimentalFramework(
+                game.appId,
+                game.framework ? "none" : "redetect"
+              );
+              toaster.toast(
+                r.ok
+                  ? {
+                      title: game.framework ? "Step 1 removed" : "Step 1 checked",
+                      body: r.game?.framework
+                        ? `Needs ${r.game.framework.name}`
+                        : "No loader needed",
+                    }
+                  : { title: "Couldn't change Step 1", body: r.error ?? "" }
+              );
+              await loadExperimentalState();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {game.framework ? "This game doesn't need Step 1" : "Look for a Step 1 loader"}
+        </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>
         <ButtonItem

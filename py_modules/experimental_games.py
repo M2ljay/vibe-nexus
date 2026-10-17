@@ -790,3 +790,34 @@ def summarize(rows: list) -> dict:
     good = sum(counts.get(k, 0) for k in WORKING_VERDICTS)
     checked = len(rows) - counts.get("unknown", 0)
     return {"counts": counts, "working": good, "checked": checked, "total": len(rows)}
+
+
+
+
+def folder_options(install_path: str, current: str) -> list:
+    """Likely mods folders for the panel's "change mods folder" list:
+    the current one, conventional names that exist, every Content/Paks
+    ~mods spot, and the game's top-level folders. Game-relative paths."""
+    out = []
+
+    def add(rel):
+        if rel and rel not in out:
+            out.append(rel)
+
+    add(current)
+    for rel, _abs, _files in _walk_dirs(install_path, 4):
+        parts = rel.split("/") if rel else []
+        if len(parts) >= 2 and parts[-1].lower() == "paks" and parts[-2].lower() == "content":
+            add(rel + "/~mods")
+            add(rel + "/LogicMods")
+        if parts and parts[-1].lower() in ("mods", "plugins", "~mods", "modules", "addons"):
+            add(rel)
+    for name in ("Mods", "BepInEx/plugins"):
+        add(name)
+    try:
+        for n in sorted(os.listdir(install_path), key=str.lower):
+            if os.path.isdir(os.path.join(install_path, n)) and n.lower() not in _SKIP_DIRS:
+                add(n)
+    except OSError:
+        pass
+    return out[:40]

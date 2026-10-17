@@ -2362,3 +2362,18 @@ export const checkExperimentalCoverage = callable<
     rows?: CoverageRow[];
   }
 >("check_experimental_coverage");
+
+export const experimentalFolderOptions = callable<
+  [app_id: number],
+  { ok: boolean; error?: string; current?: string; options?: string[] }
+>("experimental_folder_options");
+
+export const setExperimentalModsFolder = callable<
+  [app_id: number, subdir: string],
+  { ok: boolean; error?: string; game?: SupportedGame }
+>("set_experimental_mods_folder");
+
+export const setExperimentalFramework = callable<
+  [app_id: number, mode: "none" | "redetect"],
+  { ok: boolean; error?: string; game?: SupportedGame }
+>("set_experimental_framework");

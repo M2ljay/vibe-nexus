@@ -22622,16 +22622,38 @@ query Link($slug: String!, $domainName: String!) {
             folder = _safe_name(mod_name)
             src = scratch
 
-        # Replace any previous copy (enabled or disabled) - reinstall/update.
-        for base in (mods_path, disabled_path):
-            old = os.path.join(base, folder)
-            if os.path.isdir(old):
-                _force_rmtree(old)
-        # Note: the StS2 loader accepts any *.json manifest in the mod folder
-        # (both "<id>.json" and legacy "mod_manifest.json") - do NOT create
-        # extra manifest copies; the loader treats each as a separate mod and
-        # errors on the duplicate id.
-        shutil.move(src, os.path.join(mods_path, folder))
+        # Experimental games: a collection that pins SEVERAL files of one mod
+        # (a character pack's outfit files) wants them all. Each used to wipe
+        # the folder the previous one made, so only the last file survived -
+        # three Magik files went in for Midnight Suns, one stayed. Within one
+        # collection run, a second file of the same mod merges instead.
+        prev_rec = (_load_settings().get("installed", {}).get(game_domain, {})
+                    .get(folder) or {})
+        merge_into = os.path.join(mods_path, folder)
+        merging = bool(
+            collection_slug
+            and _experimental_game_for(game_domain) is not None
+            and os.path.isdir(merge_into)
+            and int(prev_rec.get("mod_id") or 0) == int(mod_id)
+            and int(prev_rec.get("file_id") or 0) != int(file_id)
+            and prev_rec.get("collection_slug") == collection_slug
+        )
+        if merging:
+            _move_mod_files(src, merge_into, [
+                os.path.relpath(os.path.join(r, n), src).replace(os.sep, "/")
+                for r, _d, names in os.walk(src) for n in names
+            ])
+        else:
+            # Replace any previous copy (enabled or disabled) - reinstall/update.
+            for base in (mods_path, disabled_path):
+                old = os.path.join(base, folder)
+                if os.path.isdir(old):
+                    _force_rmtree(old)
+            # Note: the StS2 loader accepts any *.json manifest in the mod folder
+            # (both "<id>.json" and legacy "mod_manifest.json") - do NOT create
+            # extra manifest copies; the loader treats each as a separate mod and
+            # errors on the duplicate id.
+            shutil.move(src, os.path.join(mods_path, folder))
         _force_rmtree(scratch)
         try:
             os.remove(archive_path)
@@ -22640,6 +22662,8 @@ query Link($slug: String!, $domainName: String!) {
 
         # 4) Record the install.
         record = {
+            **({"file_ids": sorted({*(prev_rec.get("file_ids") or [prev_rec.get("file_id")]),
+                                     file_id})} if merging else {}),
             "mod_id": mod_id,
             "file_id": file_id,
             "name": mod_name,
@@ -31193,6 +31217,8 @@ query CollectionInstructions($slug: String!) {
         game["profileVersion"] = experimental_games.PROFILE_VERSION
         game.pop("framework", None)
         game.pop("extraFrameworks", None)
+        if game.get("frameworkDeclined"):
+            return  # the player said this game needs no Step 1
         if not reqs:
             decky.logger.info(f"experimental framework {domain}: none shared")
             return
@@ -31390,6 +31416,79 @@ query CollectionInstructions($slug: String!) {
         except Exception as e:  # noqa: BLE001
             decky.logger.exception("check_experimental_coverage crashed")
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    def _exp_game(self, app_id: int):
+        return (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
+
+    def _exp_save(self, game: dict) -> None:
+        settings = _load_settings()
+        settings.setdefault("experimental_games", {})[str(int(game["appId"]))] = game
+        _save_settings(settings)
+
+    async def experimental_folder_options(self, app_id: int) -> dict:
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        root = _game_dir(game.get("installDirName") or "")
+        opts = await asyncio.to_thread(
+            experimental_games.folder_options, root, game.get("modsSubdir") or "")
+        return {"ok": True, "current": game.get("modsSubdir") or "", "options": opts}
+
+    async def set_experimental_mods_folder(self, app_id: int, subdir: str) -> dict:
+        """Point an experimental game at a different mods folder. Refused
+        while mods installed into the current folder exist - they would be
+        stranded where the game no longer looks."""
+        game = self._exp_game(app_id)
+        subdir = (subdir or "").replace("\\", "/").strip("/")
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        if not subdir or not _safe_rel_path(subdir):
+            return {"ok": False, "error": "Pick a folder inside the game folder"}
+        if game.get("toolApply") or game.get("installMode") == "dataDir":
+            return {"ok": False, "error": "This game's mods folder is fixed by how it loads mods"}
+        records = _load_settings().get("installed", {}).get(game["nexusDomain"], {})
+        stranded = [r.get("name") or k for k, r in records.items()
+                    if not r.get("mode") and not r.get("target")]
+        if stranded and subdir != game.get("modsSubdir"):
+            return {"ok": False, "error": (
+                f"Uninstall the {len(stranded)} mod(s) in the current folder first "
+                f"(e.g. {stranded[0]}).")}
+        game["modsSubdir"] = subdir
+        game["modsSubdirChosen"] = True
+        game.pop("flatModExtensions", None)
+        self._exp_save(game)
+        decky.logger.info(f"experimental {game['nexusDomain']}: mods folder set to {subdir!r}")
+        return {"ok": True, "game": game}
+
+    async def set_experimental_framework(self, app_id: int, mode: str) -> dict:
+        """mode "none": this game needs no Step 1 (the guess was wrong) - the
+        loaders' tracked files, if installed, are removed. mode "redetect":
+        look again from the data."""
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        if mode == "none":
+            for fw in [game.get("framework") or {}] + list(game.get("extraFrameworks") or []):
+                if fw.get("nexusModId") and fw.get("installKind") == "copyRootTracked":
+                    await asyncio.to_thread(_remove_tracked_framework, game,
+                                            fw.get("nexusModId"), fw.get("installSubdir") or "")
+            game.pop("framework", None)
+            game.pop("extraFrameworks", None)
+            game.pop("toolApply", None)
+            game["frameworkDeclined"] = True
+        elif mode == "redetect":
+            game.pop("frameworkDeclined", None)
+            old_fw = int((game.get("framework") or {}).get("nexusModId") or 0)
+            old_mods = game.get("modsSubdir") or ""
+            await self._experimental_framework(game)
+            if game.get("modsSubdirChosen") and not game.get("toolApply"):
+                game["modsSubdir"] = old_mods
+            await asyncio.to_thread(_undo_superseded_experimental, game, old_fw, old_mods)
+        else:
+            return {"ok": False, "error": f"Unknown mode {mode!r}"}
+        self._exp_save(game)
+        decky.logger.info(f"experimental {game['nexusDomain']}: Step 1 {mode}")
+        return {"ok": True, "game": game}
 
     async def remove_experimental_game(self, app_id: int) -> dict:
         settings = _load_settings()
