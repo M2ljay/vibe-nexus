@@ -12133,7 +12133,10 @@ async def _preview_paths(link: str):
         return None
     if not isinstance(preview, dict):
         return None
-    return _listing_paths(preview.get("children") or [])
+    # An empty preview is "Nexus has not listed this file", not "this
+    # archive is empty": Halloween's newest uploads all came back [] on
+    # 2026-10-20 and every one was reported as having nowhere to go.
+    return _listing_paths(preview.get("children") or []) or None
 
 
 def _listing_paths(node) -> list:
@@ -31918,24 +31921,14 @@ query CollectionInstructions($slug: String!) {
         retried (the key is only set once the lookups answered)."""
         domain = game.get("nexusDomain") or ""
         api_key = _load_settings().get("api_key")
+        game.pop("mergeInto", None)
+        game.pop("vortexRule", None)
         if experimental_games.apply_bethesda_profile(game):
             game["frameworkChecked"] = True
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
             return
-        game.pop("mergeInto", None)
-        game.pop("vortexRule", None)
-        rule = _vortex_rules().get(domain)
-        if rule:
-            try:
-                root_entries = set(os.listdir(_game_dir(game.get("installDirName") or "")))
-            except OSError:
-                root_entries = set()
-            if experimental_games.apply_vortex_rule(game, rule, root_entries):
-                decky.logger.info(
-                    f"experimental {domain}: Vortex rule -> mods in {game.get('mergeInto') or game.get('modsSubdir')!r}"
-                    f" (merge={bool(game.get('mergeInto'))})")
         if reloaded_ii.apply_reloaded_profile(game):
             game["frameworkChecked"] = True
             game["profileVersion"] = experimental_games.PROFILE_VERSION
@@ -31952,6 +31945,18 @@ query CollectionInstructions($slug: String!) {
                 decky.logger.info(
                     f"experimental framework {domain}: Overstrike (mod {ovs_id})")
                 return
+        game.pop("mergeInto", None)
+        game.pop("vortexRule", None)
+        rule = _vortex_rules().get(domain)
+        if rule:
+            try:
+                root_entries = set(os.listdir(_game_dir(game.get("installDirName") or "")))
+            except OSError:
+                root_entries = set()
+            if experimental_games.apply_vortex_rule(game, rule, root_entries):
+                decky.logger.info(
+                    f"experimental {domain}: Vortex rule -> mods in {game.get('mergeInto') or game.get('modsSubdir')!r}"
+                    f" (merge={bool(game.get('mergeInto'))})")
         top = await self.get_mods(domain, "endorsements", 20, 0, "",
                                   int(game.get("appId") or 0))
         if not top.get("ok"):
@@ -31987,7 +31992,7 @@ query CollectionInstructions($slug: String!) {
             main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
             listing = (await _mod_file_listing(domain, req["modId"], main["file_id"])
                        if main else None)
-            paths = _listing_paths(listing) if listing is not None else None
+            paths = (_listing_paths(listing) or None) if listing is not None else None
             if paths is None and main:
                 # No published list: look inside the archive itself. Never
                 # retried in a loop - FF9's Memoria has no listing, and
@@ -32044,7 +32049,7 @@ query CollectionInstructions($slug: String!) {
                 main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
                 listing = (await _mod_file_listing(domain, mid, main["file_id"])
                            if main else None)
-                listings.append(_listing_paths(listing) if listing is not None else None)
+                listings.append((_listing_paths(listing) or None) if listing is not None else None)
             except Exception:  # noqa: BLE001 - one bad mod must not stop the check
                 listings.append(None)
         req_names = [str(r.get("modName") or "")

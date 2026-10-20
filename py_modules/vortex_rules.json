@@ -1,6 +1,24 @@
 {
  "about": "Mod folders per game, extracted from Vortex game extensions (Nexus-Mods/vortex-games and community extensions) by tools/vortex-rules. Facts only: folder names and flags.",
  "games": {
+  "007firstlight": {
+   "name": "007: First Light",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3768760,
+   "executable": "Retail/007FirstLight.exe",
+   "source": "1918-8604",
+   "modTypes": [
+    {
+     "id": "rpkg-patch",
+     "path": "/Runtime"
+    },
+    {
+     "id": "retail-overlay",
+     "path": "/Retail"
+    }
+   ]
+  },
   "7daystodie": {
    "name": "7 Days to Die",
    "modPath": "Mods",
@@ -8,6 +26,36 @@
    "steamAppId": 251570,
    "executable": "7DaysToDie.exe",
    "source": "game-7daystodie"
+  },
+  "The Riftbreaker Prologue": {
+   "name": "The Riftbreaker Prologue",
+   "modPath": "packs",
+   "mergeMods": true,
+   "steamAppId": "1293860",
+   "executable": "bin/riftbreaker_win_release.exe",
+   "source": "263-1099"
+  },
+  "abioticfactor": {
+   "name": "Abiotic Factor",
+   "modPath": "AbioticFactor\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 427410,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1392-7977",
+   "modTypes": [
+    {
+     "id": "abioticfactor-ue5-sortable-modtype",
+     "path": "AbioticFactor\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "ageofmythologyretold": {
+   "name": "Age of Mythology: Retold",
+   "modPath": "Games\\Age of Mythology Retold\\mods\\local",
+   "mergeMods": true,
+   "steamAppId": 1934680,
+   "executable": "AoMRT.exe",
+   "source": "1028-8796"
   },
   "ahatintime": {
    "name": "A Hat in Time",
@@ -17,6 +65,346 @@
    "executable": "Binaries/Win64/HatInTimeGame.exe",
    "source": "game-ahatintime"
   },
+  "alanwake2": {
+   "name": "Alan Wake 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "AlanWake2.exe",
+   "source": "836-7269"
+  },
+  "aleandtaletavern": {
+   "name": "Ale & Tale Tavern",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2683150",
+   "executable": "Ale and Tale Tavern.exe",
+   "source": "1599-6644"
+  },
+  "alienisolation": {
+   "name": "Alien Isolation",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 214490,
+   "executable": "AI.exe",
+   "source": "968-8797"
+  },
+  "aliensdarkdescent": {
+   "name": "Aliens: Dark Descent",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "AliensDarkDescentGameSteam-Win64-Shipping.exe",
+   "source": "594-2170",
+   "modTypes": [
+    {
+     "id": "unreal-modtype-movies",
+     "path": "ASF\\Content"
+    },
+    {
+     "id": "unreal-PAK-modtype",
+     "path": "ASF\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "aliensfireteamelite": {
+   "name": "Aliens: Fireteam Elite",
+   "modPath": "Endeavor/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1549970",
+   "executable": "Endeavor.exe",
+   "source": "828-2969"
+  },
+  "anno117paxromana": {
+   "name": "Anno 117: Pax Romana",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 3274580,
+   "executable": "Bin\\Win64\\Anno117.exe",
+   "source": "1531-8936"
+  },
+  "anno1800": {
+   "name": "Anno 1800",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Bin\\Win64\\Anno1800.exe",
+   "source": "521-1943",
+   "modTypes": [
+    {
+     "id": "anno1800-modtype-modloader",
+     "path": "Bin\\Win64"
+    }
+   ]
+  },
+  "aplaguetalerequiem": {
+   "name": "A Plague Tale: Requiem",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1182900,
+   "executable": "APT2_WinStore.x64.Submission.exe",
+   "source": "837-6366"
+  },
+  "armouredcommander2": {
+   "name": "Armoured Commander II",
+   "modPath": "ArmCom2\\mods",
+   "mergeMods": false,
+   "steamAppId": "1292020",
+   "executable": "armcom2.exe",
+   "source": "448-1674"
+  },
+  "aska": {
+   "name": "ASKA",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1898300,
+   "executable": "Aska.exe",
+   "source": "1549-7429"
+  },
+  "assassinscreed": {
+   "name": "Assassin's Creed",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "15100",
+   "executable": "AssassinsCreed_Game.exe",
+   "source": "976-3618"
+  },
+  "assassinscreedblackflagresynced": {
+   "name": "Assassin's Creed Black Flag Resynced",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3751950,
+   "executable": "ACBlackFlag.exe",
+   "source": "1977-8476"
+  },
+  "assassinscreedbrotherhood": {
+   "name": "Assassin's Creed Brotherhood",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "48190",
+   "executable": "ACBSP.exe",
+   "source": "989-3687"
+  },
+  "assassinscreedii": {
+   "name": "Assassin's Creed II",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "33230",
+   "executable": "AssassinsCreedIIGame.exe",
+   "source": "977-3619"
+  },
+  "assassinscreediii": {
+   "name": "Assassin's Creed III",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "208480",
+   "executable": "AC3SP.exe",
+   "source": "978-3620"
+  },
+  "assassinscreediiiremastered": {
+   "name": "Assassin's Creed III Remastered",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "911400",
+   "executable": "ACIII.exe",
+   "source": "979-3621"
+  },
+  "assassinscreedivblackflag": {
+   "name": "Assassin's Creed IV Black Flag",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 242050,
+   "executable": "AC4BFSP.exe",
+   "source": "971-8358"
+  },
+  "assassinscreedmirage": {
+   "name": "Assassin's Creed Mirage",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3035570",
+   "executable": "ACMirage.exe",
+   "source": "932-4131"
+  },
+  "assassinscreedodyssey": {
+   "name": "Assassin's Creed Odyssey",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "812140",
+   "executable": "ACOdyssey.exe",
+   "source": "910-3674"
+  },
+  "assassinscreedorigins": {
+   "name": "Assassin's Creed Origins",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "582160",
+   "executable": "ACOrigins.exe",
+   "source": "887-3671"
+  },
+  "assassinscreedrevelations": {
+   "name": "Assassin's Creed Revelations",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "201870",
+   "executable": "ACRSP.exe",
+   "source": "990-3688"
+  },
+  "assassinscreedrogue": {
+   "name": "Assassin's Creed Rogue",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "311560",
+   "executable": "ACC.exe",
+   "source": "988-3686"
+  },
+  "assassinscreedshadows": {
+   "name": "Assassin's Creed Shadows",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3159330",
+   "executable": "ACShadows.exe",
+   "source": "973-5010"
+  },
+  "assassinscreedsyndicate": {
+   "name": "Assassin's Creed Syndicate",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "368500",
+   "executable": "ACS.exe",
+   "source": "987-3685"
+  },
+  "assassinscreedunity": {
+   "name": "Assassin's Creed Unity",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 289650,
+   "executable": "ACU.exe",
+   "source": "878-8357"
+  },
+  "assassinscreedvalhalla": {
+   "name": "Assassin's Creed Valhalla",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2208920",
+   "executable": "ACValhalla.exe",
+   "source": "931-3655"
+  },
+  "astroneer": {
+   "name": "ASTRONEER",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 361420,
+   "executable": "Astro.exe",
+   "source": "1547-6749",
+   "modTypes": [
+    {
+     "id": "astroneer-pak-modtype",
+     "path": "Astro\\Content\\Paks\\LogicMods"
+    },
+    {
+     "id": "astroneer-lua-modtype",
+     "path": "Astro\\Binaries\\Win64\\ue4ss\\Mods"
+    }
+   ]
+  },
+  "atomicheart": {
+   "name": "Atomic Heart",
+   "modPath": "AtomicHeart\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 668580,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1832-9457"
+  },
+  "avowed": {
+   "name": "Avowed",
+   "modPath": "Alabama\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2457220,
+   "executable": "gamelaunchhelper.exe",
+   "source": "965-6917",
+   "modTypes": [
+    {
+     "id": "avowed-ue5-sortable-modtype",
+     "path": "Alabama\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Alabama\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "back4blood": {
+   "name": "Back 4 Blood",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 924970,
+   "executable": "start_protected_game.exe",
+   "source": "596-2289"
+  },
+  "ballxpit": {
+   "name": "BALL x PIT",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2062430,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1545-7658"
+  },
+  "batmanarkhamasylum": {
+   "name": "Batman: Arkham Asylum",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 35140,
+   "executable": "Binaries\\BmLauncher.exe",
+   "source": "1536-6833"
+  },
+  "batmanarkhamcity": {
+   "name": "Batman: Arkham City",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 200260,
+   "executable": "Binaries\\Win32\\BmLauncher.exe",
+   "source": "1870-7796"
+  },
+  "batmanarkhamknight": {
+   "name": "Batman Arkham Knight",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "208650",
+   "executable": "Binaries/Win64/BatmanAK.exe",
+   "source": "903-5117"
+  },
+  "batmanarkhamorigins": {
+   "name": "Batman: Arkham Origins",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 209000,
+   "executable": "SinglePlayer\\Binaries\\Win32\\BatmanOrigins.exe",
+   "source": "1989-8957"
+  },
+  "battlebrothers": {
+   "name": "Battle Brothers",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": "365360",
+   "executable": "win32/BattleBrothers.exe",
+   "source": "158-1487"
+  },
+  "battlefield1": {
+   "name": "Battlefield 1",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1238840",
+   "executable": "bf1.exe",
+   "source": "847-3997"
+  },
+  "battlefleetgothicarmada2": {
+   "name": "Battlefleet Gothic: Armada 2",
+   "modPath": "BattlefleetGothic2",
+   "mergeMods": true,
+   "steamAppId": "573100",
+   "executable": "BattlefleetGothic2.exe",
+   "source": "427-3156"
+  },
   "battletech": {
    "name": "BattleTech",
    "modPath": "My Games\\BattleTech\\mods",
@@ -24,6 +412,72 @@
    "steamAppId": 637090,
    "executable": "BattleTech.exe",
    "source": "game-battletech"
+  },
+  "bayonetta": {
+   "name": "Bayonetta",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": "460790",
+   "executable": "Bayonetta.exe",
+   "source": "260-1095"
+  },
+  "bellwright": {
+   "name": "Bellwright",
+   "modPath": "Bellwright\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 1812450,
+   "executable": "BellwrightGame.exe",
+   "source": "1065-7803"
+  },
+  "bioshock": {
+   "name": "BioShock",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 409710,
+   "executable": "Build\\Final\\BioshockHD.exe",
+   "source": "920-7780"
+  },
+  "bioshock2": {
+   "name": "BioShock 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 409720,
+   "executable": "Build\\Final\\Bioshock2HD.exe",
+   "source": "921-7781"
+  },
+  "bioshockinfinite": {
+   "name": "BioShock Infinite",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 8870,
+   "executable": "Binaries\\Win32\\BioShockInfinite.exe",
+   "source": "922-6348"
+  },
+  "blackmesa": {
+   "name": "Black Mesa",
+   "modPath": "bms\\custom",
+   "mergeMods": true,
+   "steamAppId": 362890,
+   "executable": "bms.exe",
+   "source": "81-396"
+  },
+  "blackmythwukong": {
+   "name": "Black Myth: Wukong",
+   "modPath": "b1\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 2358720,
+   "executable": "b1.exe",
+   "source": "957-6895",
+   "modTypes": [
+    {
+     "id": "blackmythwukong-ue5-sortable-modtype",
+     "path": "b1\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "b1\\Content\\Paks\\~mods"
+    }
+   ]
   },
   "bladeandsorcery": {
    "name": "Blade & Sorcery",
@@ -43,6 +497,14 @@
     }
    ]
   },
+  "bladeandsorcerynomad": {
+   "name": "Blade & Sorcery: Nomad",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "exefix.txt",
+   "source": "486-1832"
+  },
   "bloodstainedritualofthenight": {
    "name": "Bloodstained:\tRitual of the Night",
    "modPath": "BloodstainedRotN\\Content\\Paks\\~mods",
@@ -50,6 +512,76 @@
    "steamAppId": 692850,
    "executable": "BloodstainedROTN.exe",
    "source": "game-bloodstainedritualofthenight"
+  },
+  "bloodthief": {
+   "name": "Bloodthief",
+   "modPath": "mods-unpacked",
+   "mergeMods": true,
+   "steamAppId": 2533600,
+   "executable": "bloodthief.exe",
+   "source": "1528-9364"
+  },
+  "bloonstd6": {
+   "name": "Bloons TD6",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "960090",
+   "executable": "BloonsTD6.exe",
+   "source": "289-2169"
+  },
+  "bluefire": {
+   "name": "Blue Fire",
+   "modPath": "Blue Fire\\Content",
+   "mergeMods": true,
+   "steamAppId": "1220150",
+   "executable": "PROA34.exe",
+   "source": "278-2682"
+  },
+  "blueprince": {
+   "name": "Blue Prince",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1569580,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1519-7660"
+  },
+  "borderlands": {
+   "name": "Borderlands",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "729040",
+   "executable": "Binaries\\Win64\\BorderlandsGOTY.exe",
+   "source": "1450-9365"
+  },
+  "borderlands2": {
+   "name": "Borderlands 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 49520,
+   "executable": "Binaries\\Win32\\Borderlands2.exe",
+   "source": "1448-9366"
+  },
+  "borderlands3": {
+   "name": "Borderlands 3",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 397540,
+   "executable": "OakGame\\Binaries\\Win64\\Borderlands3.exe",
+   "source": "1451-9367"
+  },
+  "borderlands4": {
+   "name": "Borderlands 4",
+   "modPath": "OakGame\\Content\\Paks",
+   "mergeMods": true,
+   "steamAppId": 1285190,
+   "executable": "Borderlands4.exe",
+   "source": "1428-9368",
+   "modTypes": [
+    {
+     "id": "borderlands4-uesortablepak",
+     "path": "OakGame\\Content\\Paks"
+    }
+   ]
   },
   "breakingwheel": {
    "name": "Breaking Wheel",
@@ -59,6 +591,140 @@
    "executable": "Ellie_Ball_Project.exe",
    "source": "game-breakingwheel"
   },
+  "bugsnax": {
+   "name": "Bugsnax",
+   "modPath": "C:\\GAME",
+   "mergeMods": true,
+   "steamAppId": 674140,
+   "executable": "Bugsnax.exe",
+   "source": "336-7789"
+  },
+  "bunnygarden": {
+   "name": "Bunny Garden",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2654470",
+   "executable": "Bunny Garden.exe",
+   "source": "899-3277"
+  },
+  "burglingnomes": {
+   "name": "Burglin' Gnomes",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3844970,
+   "executable": "Gnomium.exe",
+   "source": "1702-7655"
+  },
+  "cairn": {
+   "name": "Cairn",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1588550,
+   "executable": "Cairn.exe",
+   "source": "1674-7661"
+  },
+  "callofcthulhudarkcornersoftheearth": {
+   "name": "Call of Cthulhu: Dark Corners of the Earth",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": "22340",
+   "executable": "mods/Engine/DCoTEHook.exe",
+   "source": "211-2161"
+  },
+  "cardsurvivaltropicalisland": {
+   "name": "Card Survival: Tropical Island",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 1694420,
+   "executable": "Card Survival - Tropical Island.exe",
+   "source": "511-1906"
+  },
+  "carriercommand2": {
+   "name": "Carrier Command 2",
+   "modPath": "rom_0",
+   "mergeMods": true,
+   "steamAppId": "1489630",
+   "executable": "carrier_command.exe",
+   "source": "304-1239"
+  },
+  "cashcleanersimulator": {
+   "name": "Cash Cleaner Simulator",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2488370",
+   "executable": "CashCleanerSim.exe",
+   "source": "1387-7413"
+  },
+  "chainedechoes": {
+   "name": "Chained Echoes",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 1229240,
+   "executable": "Chained Echoes.exe",
+   "source": "519-1952"
+  },
+  "citiesskylines": {
+   "name": "Cities: Skylines",
+   "modPath": "Colossal Order\\Cities_Skylines",
+   "mergeMods": true,
+   "steamAppId": "255710",
+   "executable": "Cities.exe",
+   "source": "231-1449"
+  },
+  "citizensleeper": {
+   "name": "Citizen Sleeper",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Citizen Sleeper.exe",
+   "source": "444-1656"
+  },
+  "civilisationvi": {
+   "name": "Sid Meier's Civilization VI",
+   "modPath": "My Games\\Sid Meier's Civilization VI\\Mods",
+   "mergeMods": true,
+   "steamAppId": 289070,
+   "executable": "Base\\Binaries\\Win64Steam\\CivilizationVI.exe",
+   "source": "1183-8781"
+  },
+  "clairobscurexpedition33": {
+   "name": "Clair Obscur: Expedition 33",
+   "modPath": "Sandfall\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1903340,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1279-6900",
+   "modTypes": [
+    {
+     "id": "clairobscurexpedition33-ue5-sortable-modtype",
+     "path": "Sandfall\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "cloverpit": {
+   "name": "CloverPit",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3314790,
+   "executable": "CloverPit.exe",
+   "source": "1496-7662"
+  },
+  "cm2013": {
+   "name": "HL2 CinematicMod 2013",
+   "modPath": "hl2\\custom",
+   "mergeMods": true,
+   "steamAppId": 220,
+   "executable": "hl2.exe",
+   "source": "130-545"
+  },
+  "cobaltcore": {
+   "name": "Cobalt Core",
+   "modPath": "Nickel/ModLibrary",
+   "mergeMods": false,
+   "steamAppId": "2179850",
+   "executable": "Nickel/NickelLauncher.exe",
+   "source": "786-2769"
+  },
   "codevein": {
    "name": "Code Vein",
    "modPath": "CodeVein\\content\\paks\\~mods",
@@ -66,6 +732,38 @@
    "steamAppId": 678960,
    "executable": "CodeVein\\Binaries\\Win64\\CodeVein-Win64-Shipping.exe",
    "source": "game-codevein"
+  },
+  "codevein2": {
+   "name": "CODE VEIN II",
+   "modPath": "CodeVein2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2362060,
+   "executable": "CodeVein2.exe",
+   "source": "1646-6901",
+   "modTypes": [
+    {
+     "id": "codevein2-uesortablepak",
+     "path": "CodeVein2\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "commandandconquerremastered": {
+   "name": "Command & Conquer Remastered",
+   "modPath": "CnCRemastered\\Mods",
+   "mergeMods": false,
+   "steamAppId": 1213210,
+   "executable": "ClientLauncherG.exe",
+   "source": "133-608",
+   "modTypes": [
+    {
+     "id": "cncr-tiberian",
+     "path": "CnCRemastered\\Mods\\Tiberian_Dawn"
+    },
+    {
+     "id": "cncr-ra",
+     "path": "CnCRemastered\\Mods\\Red_Alert"
+    }
+   ]
   },
   "conanexiles": {
    "name": "Conan Exiles",
@@ -75,6 +773,112 @@
    "executable": "ConanSandbox\\Binaries\\Win64\\ConanSandbox.exe",
    "source": "game-conanexiles"
   },
+  "contentwarning": {
+   "name": "Content Warning",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2881650",
+   "executable": "Content Warning.exe",
+   "source": "835-2984"
+  },
+  "control": {
+   "name": "Control",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 870780,
+   "executable": "gamelaunchhelper.exe",
+   "source": "162-6420"
+  },
+  "coralisland": {
+   "name": "Coral Island",
+   "modPath": "ProjectCoral/Content/Paks/mods",
+   "mergeMods": true,
+   "steamAppId": "1158160",
+   "executable": "ProjectCoral.exe",
+   "source": "1120-4408"
+  },
+  "counterstrikesource": {
+   "name": "Counter-Strike Source",
+   "modPath": "cstrike\\custom",
+   "mergeMods": true,
+   "steamAppId": 240,
+   "executable": "hl2.exe",
+   "source": "135-559"
+  },
+  "crabchampions": {
+   "name": "Crab Champions",
+   "modPath": "CrabChampions/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "774801",
+   "executable": "CrabChampions.exe",
+   "source": "870-3159"
+  },
+  "crimsondesert": {
+   "name": "Crimson Desert",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3321460,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1746-7959"
+  },
+  "crisiscoreff7reunion": {
+   "name": "CRISIS CORE \u2013FINAL FANTASY VII\u2013 REUNION",
+   "modPath": "CCFF7R/Content/Paks/~Mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "CCFF7R.exe",
+   "source": "501-1881"
+  },
+  "crisoltheaterofidols": {
+   "name": "Crisol: Theater of Idols",
+   "modPath": "CRToiPrototype\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1790930,
+   "executable": "CrisolTheaterOfIdols.exe",
+   "source": "1690-6974",
+   "modTypes": [
+    {
+     "id": "crisoltheaterofidols-uesortablepak",
+     "path": "CRToiPrototype\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "cronosthenewdawn": {
+   "name": "Cronos: The New Dawn",
+   "modPath": "Cronos\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2101960,
+   "executable": "Cronos.exe",
+   "source": "1421-6166",
+   "modTypes": [
+    {
+     "id": "cronosthenewdawn-uesortablepak",
+     "path": "Cronos\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "cultofthelamb": {
+   "name": "Cult of the Lamb",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": false,
+   "steamAppId": "1313140",
+   "executable": "Cult Of The Lamb.exe",
+   "source": "1022-6898"
+  },
+  "daemonxmachinatitanicscion": {
+   "name": "Daemon X Machina: Titanic Scion",
+   "modPath": "Game\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1342490,
+   "executable": "Game.exe",
+   "source": "1429-5794",
+   "modTypes": [
+    {
+     "id": "daemonxmachinatitanicscion-uesortablepak",
+     "path": "Game\\Content\\Paks\\~mods"
+    }
+   ]
+  },
   "darkestdungeon": {
    "name": "Darkest Dungeon",
    "modPath": "mods",
@@ -82,6 +886,14 @@
    "steamAppId": 262060,
    "executable": "_windows\\win64\\Darkest.exe",
    "source": "game-darkestdungeon"
+  },
+  "darkmessiahofmightandmagic": {
+   "name": "Dark Messiah of Might & Magic",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2100,
+   "executable": "mm.exe",
+   "source": "1056-9241"
   },
   "darksouls": {
    "name": "Dark Souls",
@@ -99,6 +911,22 @@
    "executable": "Game\\DarksoulsII.exe",
    "source": "game-darksouls2"
   },
+  "darksouls3": {
+   "name": "Dark Souls III",
+   "modPath": "game",
+   "mergeMods": true,
+   "steamAppId": "374320",
+   "executable": "game\\DarkSoulsIII.exe",
+   "source": "194-1662"
+  },
+  "darksoulsremastered": {
+   "name": "Dark Souls Remastered",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "570940",
+   "executable": "DarkSoulsRemastered.exe",
+   "source": "205-905"
+  },
   "dawnofman": {
    "name": "Dawn of Man",
    "modPath": "Mods",
@@ -110,6 +938,194 @@
     {
      "id": "dom-scene-modtype",
      "path": "DawnOfMan\\Scenarios"
+    }
+   ]
+  },
+  "dayofdefeatsource": {
+   "name": "Day of Defeat Source",
+   "modPath": "dod\\custom",
+   "mergeMods": true,
+   "steamAppId": 300,
+   "executable": "hl2.exe",
+   "source": "134-558"
+  },
+  "daysgone": {
+   "name": "Days Gone",
+   "modPath": "\\tmp\\claude-0\\-home-claude\\720f7888-6617-5ecf-8101-4094cdfa9089\\scratchpad\\vortex-extract\\Local\\BendGame\\Saved\\Paks",
+   "mergeMods": null,
+   "steamAppId": "1259420",
+   "executable": "BendGame\\Binaries\\Win64\\DaysGone.exe",
+   "source": "255-2916"
+  },
+  "deadasdisco": {
+   "name": "Dead As Disco",
+   "modPath": "Pagoda\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3404260,
+   "executable": "Pagoda.exe",
+   "source": "1626-8938",
+   "modTypes": [
+    {
+     "id": "deadasdisco-uesortablepak",
+     "path": "Pagoda\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "deadrisingdeluxeremaster": {
+   "name": "Dead Rising Deluxe Remaster",
+   "modPath": "Games\\DeadRisingRemaster\\Mods",
+   "mergeMods": true,
+   "steamAppId": 2527390,
+   "executable": "DRDR.exe",
+   "source": "1046-7302"
+  },
+  "deathstranding2onthebeach": {
+   "name": "DEATH STRANDING 2: ON THE BEACH",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3280350,
+   "executable": "DS2.exe",
+   "source": "1796-9353"
+  },
+  "deeprockgalacticsurvivor": {
+   "name": "Deep Rock Galactic: Survivor",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": false,
+   "steamAppId": "2321470",
+   "executable": "DRG Survivor.exe",
+   "source": "1021-5867"
+  },
+  "deltarune": {
+   "name": "DELTARUNE",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1671210",
+   "executable": "DELTARUNE.exe",
+   "source": "707-2566"
+  },
+  "derailvalley": {
+   "name": "Derail Valley",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 588030,
+   "executable": "DerailValley.exe",
+   "source": "527-4764"
+  },
+  "destroyallhumans2reprobed": {
+   "name": "Destroy All Humans! 2 - Reprobed",
+   "modPath": "DH2/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1266700",
+   "executable": "DH.exe",
+   "source": "819-2967"
+  },
+  "deusex": {
+   "name": "Deus Ex",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 6910,
+   "executable": "System\\DeusEx.exe",
+   "source": "1462-9395"
+  },
+  "deusexhumanrevolution": {
+   "name": "Deus Ex: Human Revolution",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 238010,
+   "executable": "dxhr.exe",
+   "source": "1468-6430"
+  },
+  "deusexinvisiblewar": {
+   "name": "Deus Ex: Invisible War",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 6920,
+   "executable": "System\\DeusEx2.exe",
+   "source": "1463-9407"
+  },
+  "deusexmankinddivided": {
+   "name": "Deus Ex: Mankind Divided",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 337000,
+   "executable": "retail\\DXMD.exe",
+   "source": "1466-8795"
+  },
+  "devilmaycry5": {
+   "name": "Devil May Cry 5",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 601150,
+   "executable": "DevilMayCry5.exe",
+   "source": "434-1640"
+  },
+  "digimonstorytimestranger": {
+   "name": "Digimon Story Time Stranger",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1984270",
+   "executable": "Digimon Story Time Stranger.exe",
+   "source": "1480-6043"
+  },
+  "dinkum": {
+   "name": "Dinkum",
+   "modPath": "C:\\GAME\\BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1062520",
+   "executable": "Dinkum.exe",
+   "source": "483-1807"
+  },
+  "diplomacyisnotanoption": {
+   "name": "Diplomacy is Not an Option",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1272320,
+   "executable": "Diplomacy is Not an Option.exe",
+   "source": "1070-8798"
+  },
+  "discoelysium": {
+   "name": "Disco Elysium",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 632470,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1643-7265"
+  },
+  "dishonored": {
+   "name": "Dishonored",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 205100,
+   "executable": "Binaries\\Win32\\Dishonored.exe",
+   "source": "924-7779"
+  },
+  "dishonored2": {
+   "name": "Dishonored 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 403640,
+   "executable": "gamelaunchhelper.exe",
+   "source": "925-6334"
+  },
+  "dishonoreddeathoftheoutsider": {
+   "name": "Dishonored: Death of the Outsider",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 614570,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1532-6386"
+  },
+  "dispatch": {
+   "name": "Dispatch",
+   "modPath": "Dispatch\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2592160,
+   "executable": "Dispatch.exe",
+   "source": "1552-6401",
+   "modTypes": [
+    {
+     "id": "dispatch-uesortablepak",
+     "path": "Dispatch\\Content\\Paks\\~mods"
     }
    ]
   },
@@ -129,6 +1145,62 @@
    "executable": "DefEd/bin/SupportTool.exe",
    "source": "game-divinityoriginalsin2"
   },
+  "dontstarvetogether": {
+   "name": "Don't Starve Together",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": "322330",
+   "executable": "bin\\dontstarve_steam.exe",
+   "source": "223-1570"
+  },
+  "doom": {
+   "name": "DOOM (2016)",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 379720,
+   "executable": "DOOMx64vk.exe",
+   "source": "677-9369"
+  },
+  "doom3": {
+   "name": "DOOM 3",
+   "modPath": "base",
+   "mergeMods": true,
+   "steamAppId": 9050,
+   "executable": "gamelaunchhelper.exe",
+   "source": "686-9398"
+  },
+  "doom3bfgedition": {
+   "name": "DOOM 3: BFG Edition",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 208200,
+   "executable": "gamelaunchhelper.exe",
+   "source": "686-9398"
+  },
+  "doometernal": {
+   "name": "DOOM Eternal",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 782330,
+   "executable": "launcher\\idTechLauncher.exe",
+   "source": "865-9271"
+  },
+  "doomthedarkages": {
+   "name": "DOOM: The Dark Ages",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 3017860,
+   "executable": "idTechLauncher.exe",
+   "source": "1254-9371"
+  },
+  "doorkickers2": {
+   "name": "Door Kickers 2: Task Force North",
+   "modPath": "mods",
+   "mergeMods": false,
+   "steamAppId": "1239080",
+   "executable": "DoorKickers2.exe",
+   "source": "347-2077"
+  },
   "dragonage": {
    "name": "Dragon Age: Origins",
    "modPath": "BioWare\\Dragon Age\\packages\\core\\override",
@@ -145,6 +1217,240 @@
    "executable": "bin_ship/dragonage2.exe",
    "source": "game-dragonage2"
   },
+  "dragonageinquisition": {
+   "name": "Dragon Age: Inquisition",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1222690,
+   "executable": "DragonAgeInquisition.exe",
+   "source": "876-8585"
+  },
+  "dragonagetheveilguard": {
+   "name": "Dragon Age: The Veilguard",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1845910,
+   "executable": "Dragon Age The Veilguard.exe",
+   "source": "1075-9372"
+  },
+  "dragonballsparkingzero": {
+   "name": "Dragon Ball: Sparking! Zero",
+   "modPath": "SparkingZERO\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 1790600,
+   "executable": "SparkingZERO.exe",
+   "source": "1055-6916",
+   "modTypes": [
+    {
+     "id": "dragonballsparkingzero-ue5-sortable-modtype",
+     "path": "SparkingZERO\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "SparkingZERO\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "dragonballzkakarot": {
+   "name": "Dragon Ball Z: Kakarot",
+   "modPath": "dlc/Remaster/AT/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "851850",
+   "executable": "dlc/Remaster/AT.exe",
+   "source": "586-6075"
+  },
+  "dragonquest1and2hd2dremake": {
+   "name": "DRAGON QUEST I & II HD-2D Remake",
+   "modPath": "Game\\Content\\Paks",
+   "mergeMods": true,
+   "steamAppId": 2893570,
+   "executable": "DQIandIIHD2DRemake.exe",
+   "source": "1514-7333",
+   "modTypes": [
+    {
+     "id": "dragonquest1and2hd2dremake-uesortablepak",
+     "path": "Game\\Content\\Paks"
+    }
+   ]
+  },
+  "dragonquest3remake": {
+   "name": "Dragon Quest III HD-2D Remake",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2701660",
+   "executable": "Game/Binaries/Win64/DQIIIHD2DRemake.exe",
+   "source": "1125-5376"
+  },
+  "dragonquest7reimagined": {
+   "name": "DRAGON QUEST VII Reimagined",
+   "modPath": "DQ7R\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2499860,
+   "executable": "DQ7R.exe",
+   "source": "1647-7335",
+   "modTypes": [
+    {
+     "id": "dragonquest7reimagined-uesortablepak",
+     "path": "DQ7R\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "dragonquestxisdefinitiveedition": {
+   "name": "Dragon Quest XI S: Echoes of an Elusive Age - Definitive Edition",
+   "modPath": "Game/Content/Paks",
+   "mergeMods": true,
+   "steamAppId": "1295510",
+   "executable": "Game/Binaries/Win64/DRAGON QUEST XI S.exe",
+   "source": "343-1331"
+  },
+  "dragonsdogma2": {
+   "name": "Dragon's Dogma 2",
+   "modPath": "Games\\DragonsDogma2\\Mods",
+   "mergeMods": true,
+   "steamAppId": 2054970,
+   "executable": "DD2.exe",
+   "source": "851-7124"
+  },
+  "drovaforsakenkin": {
+   "name": "Drova - Forsaken Kin",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1585180,
+   "executable": "Drova.exe",
+   "source": "1937-8386"
+  },
+  "duetnightabyss": {
+   "name": "Duet Night Abyss",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3950020",
+   "executable": "EM.exe",
+   "source": "1522-6264",
+   "modTypes": [
+    {
+     "id": "duetnightabyss-config",
+     "path": "EM\\Saved\\Config\\WindowsNoEditor"
+    },
+    {
+     "id": "duetnightabyss-bitfix",
+     "path": "EM\\Binaries\\Win64"
+    },
+    {
+     "id": "duetnightabyss-lua",
+     "path": "EM\\Binaries\\Win64\\bitfix"
+    }
+   ]
+  },
+  "dungeonsiege1": {
+   "name": "Dungeon Siege 1",
+   "modPath": "Resources",
+   "mergeMods": true,
+   "steamAppId": 39190,
+   "executable": "DungeonSiege.exe",
+   "source": "1072-4159"
+  },
+  "dungeonsiegeii": {
+   "name": "Dungeon Siege II",
+   "modPath": "Resources",
+   "mergeMods": true,
+   "steamAppId": 39200,
+   "executable": "DungeonSiege2.exe",
+   "source": "549-2016"
+  },
+  "dyinglight": {
+   "name": "Dying Light",
+   "modPath": "DW",
+   "mergeMods": true,
+   "steamAppId": "239140",
+   "executable": "DyingLightGame.exe",
+   "source": "240-1160"
+  },
+  "dyinglight2": {
+   "name": "Dying Light 2",
+   "modPath": "ph\\source",
+   "mergeMods": true,
+   "steamAppId": "534380",
+   "executable": "ph\\work\\bin\\x64\\DyingLightGame_x64_rwdi.exe",
+   "source": "346-1568"
+  },
+  "dyinglightthebeast": {
+   "name": "Dying Light: The Beast",
+   "modPath": "ph_ft\\mods",
+   "mergeMods": true,
+   "steamAppId": 3008130,
+   "executable": "ph_ft\\work\\bin\\x64\\DyingLightGame_TheBeast_x64_rwdi.exe",
+   "source": "1456-7268"
+  },
+  "easportswrc": {
+   "name": "EA Sports WRC",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1849250",
+   "executable": "WRC\\Binaries\\Win64\\WRC.exe",
+   "source": "698-2468"
+  },
+  "echoesofaincrad": {
+   "name": "Echoes of Aincrad",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2244210,
+   "executable": "EchoesofAincrad.exe",
+   "source": "2124-8639",
+   "modTypes": [
+    {
+     "id": "echoesofaincrad-ue4ss",
+     "path": "EchoesofAincrad\\Binaries\\Win64"
+    },
+    {
+     "id": "echoesofaincrad-bitfix",
+     "path": "EchoesofAincrad\\Binaries\\Win64"
+    },
+    {
+     "id": "echoesofaincrad-ue4ss-shared",
+     "path": "EchoesofAincrad\\Binaries\\Win64\\ue4ss\\Mods\\shared"
+    },
+    {
+     "id": "echoesofaincrad-ue4ss-sig",
+     "path": "EchoesofAincrad\\Binaries\\Win64\\ue4ss\\Mods"
+    },
+    {
+     "id": "echoesofaincrad-bitfix-mod",
+     "path": "EchoesofAincrad\\Binaries\\Win64\\bitfix"
+    },
+    {
+     "id": "echoesofaincrad-ue4ss-lua",
+     "path": "EchoesofAincrad\\Binaries\\Win64\\ue4ss\\Mods"
+    },
+    {
+     "id": "echoesofaincrad-ue4ss-dll",
+     "path": "EchoesofAincrad\\Binaries\\Win64\\ue4ss\\Mods"
+    },
+    {
+     "id": "echoesofaincrad-logicmod",
+     "path": "EchoesofAincrad\\Content\\Paks\\LogicMods"
+    },
+    {
+     "id": "echoesofaincrad-pak",
+     "path": "EchoesofAincrad\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "echoesofaincrad-pakalt",
+     "path": "EchoesofAincrad\\Content"
+    },
+    {
+     "id": "echoesofaincrad-content",
+     "path": "EchoesofAincrad"
+    }
+   ]
+  },
+  "elegos": {
+   "name": "Elegos",
+   "modPath": "Mods",
+   "mergeMods": null,
+   "steamAppId": "1882300",
+   "executable": "Elegos.exe",
+   "source": "379-1469"
+  },
   "elex": {
    "name": "Elex",
    "modPath": "data\\packed",
@@ -153,6 +1459,36 @@
    "executable": "system\\ELEX.exe",
    "source": "game-elex"
   },
+  "elex2": {
+   "name": "ELEX II",
+   "modPath": "data\\packed",
+   "mergeMods": true,
+   "steamAppId": "900040",
+   "executable": "system\\ELEX2.exe",
+   "source": "372-1443"
+  },
+  "emergency2023": {
+   "name": "EMERGENCY 2023",
+   "modPath": "EMERGENCY\\Binaries\\Win64\\ue4ss\\Mods",
+   "mergeMods": true,
+   "steamAppId": 850170,
+   "executable": "EMERGENCY.exe",
+   "source": "1964-8550",
+   "modTypes": [
+    {
+     "id": "emergency2023-ue4ss-injector",
+     "path": "EMERGENCY\\Binaries\\Win64"
+    }
+   ]
+  },
+  "emuvr": {
+   "name": "WIGUx",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "-1",
+   "executable": "EmuVR.exe",
+   "source": "1031-4071"
+  },
   "enderal": {
    "name": "Enderal",
    "modPath": "Data",
@@ -160,6 +1496,56 @@
    "steamAppId": 933480,
    "executable": "Enderal Launcher.exe",
    "source": "game-enderal"
+  },
+  "enderalspecialedition": {
+   "name": "Enderal Special Edition",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": "976620",
+   "executable": "SkyrimSE.exe",
+   "source": "218-7921"
+  },
+  "endzoneaworldapart": {
+   "name": "Endzone - A World Apart",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 933820,
+   "executable": "Endzone.exe",
+   "source": "251-1074"
+  },
+  "escapefromduckov": {
+   "name": "Escape from Duckov",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3167020,
+   "executable": "Duckov.exe",
+   "source": "1517-7656"
+  },
+  "escapethebackrooms": {
+   "name": "Escape The Backrooms",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Backrooms.exe",
+   "source": "1007-8579",
+   "modTypes": [
+    {
+     "id": "etb-modtype-movies",
+     "path": "EscapeTheBackrooms\\Content"
+    },
+    {
+     "id": "etb-modtype-pak",
+     "path": "EscapeTheBackrooms\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "fableanniversary": {
+   "name": "Fable Anniversary",
+   "modPath": "Fable Anniversary/",
+   "mergeMods": true,
+   "steamAppId": 288470,
+   "executable": "Fable Anniversary/Binaries/Win32/Fable Anniversary.exe",
+   "source": "84-372"
   },
   "factorio": {
    "name": "Factorio",
@@ -193,6 +1579,14 @@
    "executable": "Fallout4VR.exe",
    "source": "game-fallout4vr"
   },
+  "fallout76": {
+   "name": "Fallout 76",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": "1151340",
+   "executable": "Fallout76.exe",
+   "source": "110-7666"
+  },
   "falloutnv": {
    "name": "Fallout:\tNew Vegas",
    "modPath": "Data",
@@ -200,6 +1594,226 @@
    "steamAppId": 22380,
    "executable": "FalloutNV.exe",
    "source": "game-falloutnv"
+  },
+  "fantasylifeithegirlwhostealstime": {
+   "name": "FANTASY LIFE i: The Girl Who Steals Time",
+   "modPath": "Game\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2993780,
+   "executable": "NFL1.exe",
+   "source": "1785-9459"
+  },
+  "farcry3": {
+   "name": "Far Cry 3",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 220240,
+   "executable": "bin\\farcry3_d3d11.exe",
+   "source": "953-9162"
+  },
+  "farcry4": {
+   "name": "Far Cry 4",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 298110,
+   "executable": "bin\\FarCry4.exe",
+   "source": "1474-9163"
+  },
+  "farcry5": {
+   "name": "Far Cry 5",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 552520,
+   "executable": "bin\\FarCry5.exe",
+   "source": "1476-9164"
+  },
+  "farcry6": {
+   "name": "Far Cry 6",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2369390,
+   "executable": "bin\\FarCry6.exe",
+   "source": "1477-9165"
+  },
+  "farcrynewdawn": {
+   "name": "Far Cry New Dawn",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 939960,
+   "executable": "bin\\FarCryNewDawn.exe",
+   "source": "1478-9166"
+  },
+  "farcryprimal": {
+   "name": "Far Cry Primal",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 371660,
+   "executable": "bin\\FCPrimal.exe",
+   "source": "1473-9167"
+  },
+  "farever": {
+   "name": "Farever",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3672400,
+   "executable": "Farever.exe",
+   "source": "2120-8719"
+  },
+  "farfarwest": {
+   "name": "Far Far West",
+   "modPath": "FarFarWest\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3124540,
+   "executable": "FarFarWest.exe",
+   "source": "1900-9460"
+  },
+  "farmingsimulator19": {
+   "name": "Farming Simulator 19",
+   "modPath": "My Games\\FarmingSimulator2019\\mods",
+   "mergeMods": true,
+   "steamAppId": "787860",
+   "executable": "FarmingSimulator2019.exe",
+   "source": "159-7778"
+  },
+  "farmingsimulator22": {
+   "name": "Farming Simulator 22",
+   "modPath": "My Games\\FarmingSimulator2022\\mods",
+   "mergeMods": true,
+   "steamAppId": "1248130",
+   "executable": "FarmingSimulator2022.exe",
+   "source": "382-1474"
+  },
+  "farmingsimulator25": {
+   "name": "Farming Simulator 25",
+   "modPath": "Packages\\GIANTSSoftware.FarmingSimulator25PC_fa8jxm5fj0esw\\LocalCache\\Local\\mods",
+   "mergeMods": true,
+   "steamAppId": 2300320,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1102-6785"
+  },
+  "fate": {
+   "name": "FATE",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 246840,
+   "executable": "fate.exe",
+   "source": "801-3953"
+  },
+  "fatekeeper": {
+   "name": "Fatekeeper",
+   "modPath": "SLASHER\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2186990,
+   "executable": "SLASHER.exe",
+   "source": "1960-9461"
+  },
+  "fearandhunger": {
+   "name": "Fear & Hunger",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1002300",
+   "executable": "Game.exe",
+   "source": "704-3449"
+  },
+  "fellsealarbitersmark": {
+   "name": "Fell Seal: Arbiter's Mark",
+   "modPath": "Fell Seal\\customdata",
+   "mergeMods": true,
+   "steamAppId": 699170,
+   "executable": "Fell Seal.exe",
+   "source": "108-442"
+  },
+  "fieldsofmistria": {
+   "name": "Fields of Mistria",
+   "modPath": "mods",
+   "mergeMods": false,
+   "steamAppId": "2142790",
+   "executable": "FieldsOfMistria.exe",
+   "source": "1222-5746"
+  },
+  "finalfantasy12": {
+   "name": "Final Fantasy XII",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": 595520,
+   "executable": "x64\\FFXII_TZA.exe",
+   "source": "59-3623"
+  },
+  "finalfantasy16": {
+   "name": "Final Fantasy XVI",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2515020,
+   "executable": "ffxvi.exe",
+   "source": "1041-8799"
+  },
+  "finalfantasy7rebirth": {
+   "name": "Final Fantasy VII Rebirth",
+   "modPath": "End\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2909400,
+   "executable": "ff7rebirth.exe",
+   "source": "1150-8977",
+   "modTypes": [
+    {
+     "id": "finalfantasy7rebirth-ue5-sortable-modtype",
+     "path": "End\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "End\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "finalfantasy7remake": {
+   "name": "Final Fantasy 7 Remake",
+   "modPath": "End/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "ff7remake.exe",
+   "source": "325-2162"
+  },
+  "finalfantasytacticstheivalicechronicles": {
+   "name": "FINAL FANTASY TACTICS - The Ivalice Chronicles",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1004640",
+   "executable": "FFT_enhanced.exe",
+   "source": "1515-6176"
+  },
+  "footballmanager26": {
+   "name": "Football Manager 26",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3551340",
+   "executable": "gamelaunchhelper.exe",
+   "source": "1523-6271"
+  },
+  "forzahorizon6": {
+   "name": "Forza Horizon 6",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2483190,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1913-7917"
+  },
+  "frostpunk2": {
+   "name": "Frostpunk 2",
+   "modPath": "Frostpunk2\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 1601580,
+   "executable": "gamelaunchhelper.exe",
+   "source": "960-7806",
+   "modTypes": [
+    {
+     "id": "frostpunk2-ue5-sortable-modtype",
+     "path": "Frostpunk2\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Frostpunk2\\Content\\Paks\\~mods"
+    }
+   ]
   },
   "galacticcivilizations3": {
    "name": "Galactic Civilizations III",
@@ -223,6 +1837,142 @@
    "executable": "GardenPaws.exe",
    "source": "game-gardenpaws"
   },
+  "ghostoftsushima": {
+   "name": "Ghost of Tsushima",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2215430",
+   "executable": "GhostOfTsushima.exe",
+   "source": "879-5982"
+  },
+  "ghostreconbreakpoint": {
+   "name": "Ghost Recon Breakpoint",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2231380,
+   "executable": "GRB.exe",
+   "source": "972-8941"
+  },
+  "ghostrunner": {
+   "name": "Ghostrunner",
+   "modPath": "Ghostrunner\\Content",
+   "mergeMods": true,
+   "steamAppId": "1139900",
+   "executable": "Ghostrunner.exe",
+   "source": "333-2695"
+  },
+  "godofwar": {
+   "name": "God of War (2018)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1593500,
+   "executable": "GoW.exe",
+   "source": "340-8959"
+  },
+  "godofwarragnarok": {
+   "name": "God of War: Ragnarok",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2322010,
+   "executable": "GoWR.exe",
+   "source": "959-9373"
+  },
+  "goingmedieval": {
+   "name": "Going Medieval",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 1029780,
+   "executable": "Going Medieval.exe",
+   "source": "253-1078"
+  },
+  "goldminingsimulator": {
+   "name": "Gold Mining Simulator",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 451340,
+   "executable": "GoldMiningSimulator.exe",
+   "source": "2134-8695"
+  },
+  "gothamknights": {
+   "name": "Gotham Knights",
+   "modPath": "Mercury/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1496790",
+   "executable": "GothamKnights.exe",
+   "source": "481-1799"
+  },
+  "gothic1remake": {
+   "name": "Gothic 1 Remake",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1297900,
+   "executable": "G1R-Win64-Shipping.exe",
+   "source": "1943-8972",
+   "modTypes": [
+    {
+     "id": "gothic1remake-pak",
+     "path": "/G1R/Content/Paks/~mods"
+    },
+    {
+     "id": "gothic1remake-nativemod",
+     "path": "/G1R/Mods"
+    },
+    {
+     "id": "gothic1remake-ue4ss",
+     "path": "/G1R/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "gothic1remake-ue4ss-injector",
+     "path": "/G1R/Binaries/Win64"
+    },
+    {
+     "id": "gothic1remake-contentfolder",
+     "path": "/G1R"
+    },
+    {
+     "id": "gothic1remake-binaries",
+     "path": "/G1R/Binaries/Win64"
+    },
+    {
+     "id": "gothic1remake-config",
+     "path": "/G1R/Saved/Config/Windows"
+    }
+   ]
+  },
+  "gothic3": {
+   "name": "Gothic 3",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Gothic3.exe",
+   "source": "503-1885"
+  },
+  "grandtheftautothetrilogy": {
+   "name": "Grand Theft Auto San Andreas - The Definitive Edition",
+   "modPath": "Gameface/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1547000",
+   "executable": "PlayGTASanAndreas.exe",
+   "source": "775-4325"
+  },
+  "graveyardkeeper": {
+   "name": "Graveyard Keeper",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "599140",
+   "executable": "Graveyard Keeper.exe",
+   "source": "571-7696",
+   "modTypes": [
+    {
+     "id": "bepinex-patcher-gyk",
+     "path": "BepInEx\\patchers"
+    },
+    {
+     "id": "bepinex-plugin-gyk",
+     "path": "BepInEx\\plugins"
+    }
+   ]
+  },
   "greedfall": {
    "name": "GreedFall",
    "modPath": "datalocal",
@@ -230,6 +1980,14 @@
    "steamAppId": 606880,
    "executable": "GreedFall.exe",
    "source": "game-greedfall"
+  },
+  "greenhell": {
+   "name": "Green Hell",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "GH.exe",
+   "source": "1753-7874"
   },
   "grimdawn": {
    "name": "Grim Dawn",
@@ -247,6 +2005,374 @@
    "executable": "grimrock.exe",
    "source": "game-grimrock"
   },
+  "grimshire": {
+   "name": "Grimshire",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2238470,
+   "executable": "Grimshire.exe",
+   "source": "1797-7492"
+  },
+  "groundbranch": {
+   "name": "GROUND BRANCH",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "16900",
+   "executable": "GroundBranch.exe",
+   "source": "412-2092"
+  },
+  "grounded": {
+   "name": "Grounded",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "962130",
+   "executable": "Grounded.exe",
+   "source": "880-4390"
+  },
+  "grounded2": {
+   "name": "Grounded 2",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": 2661300,
+   "executable": "Augusta\\Binaries\\Win64\\Grounded2Steam-Win64-Shipping.exe",
+   "source": "1398-8052"
+  },
+  "hacknet": {
+   "name": "Hacknet",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": 365450,
+   "executable": "Hacknet.exe",
+   "source": "124-2499"
+  },
+  "hades": {
+   "name": "Hades",
+   "modPath": "Content\\Mods",
+   "mergeMods": true,
+   "steamAppId": "1145360",
+   "executable": "gamelaunchhelper.exe",
+   "source": "1137-5980"
+  },
+  "hades2": {
+   "name": "Hades II",
+   "modPath": "Content\\Mods",
+   "mergeMods": true,
+   "steamAppId": 1145350,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1138-9270"
+  },
+  "half-life2": {
+   "name": "Half-Life 2",
+   "modPath": "hl2\\custom",
+   "mergeMods": true,
+   "steamAppId": 220,
+   "executable": "hl2.exe",
+   "source": "80-516"
+  },
+  "half-life2update": {
+   "name": "Half-Life 2: Update",
+   "modPath": "hl2\\custom",
+   "mergeMods": true,
+   "steamAppId": 290930,
+   "executable": "hl2.exe",
+   "source": "128-537"
+  },
+  "halflife2": {
+   "name": "Half-Life 2 Deathmatch",
+   "modPath": "hl2mp\\custom",
+   "mergeMods": true,
+   "steamAppId": 320,
+   "executable": "hl2.exe",
+   "source": "136-560"
+  },
+  "halocampaignevolved": {
+   "name": "Halo: Campaign Evolved",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2806050,
+   "executable": "Meteorite/Binaries/Win64/HaloCampaignEvolved.exe",
+   "source": "2130-8947",
+   "modTypes": [
+    {
+     "id": "hce-pak",
+     "path": "/Meteorite/Content/Paks/~mods"
+    },
+    {
+     "id": "hce-logicmods",
+     "path": "/Meteorite/Content/Paks"
+    },
+    {
+     "id": "hce-ue4ss",
+     "path": "/Meteorite/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "hce-ue4ss-injector",
+     "path": "/Meteorite/Binaries/Win64"
+    },
+    {
+     "id": "hce-binaries",
+     "path": "/Meteorite/Binaries/Win64"
+    },
+    {
+     "id": "hce-contentfolder",
+     "path": "/Meteorite"
+    },
+    {
+     "id": "hce-pakalt",
+     "path": "/Meteorite/Content"
+    },
+    {
+     "id": "hce-config",
+     "path": "/Meteorite/Saved/Config/Windows"
+    },
+    {
+     "id": "hce-menumovie",
+     "path": "/Meteorite/Content/Movies/MainMenu_Background"
+    }
+   ]
+  },
+  "hardspaceshipbreaker": {
+   "name": "Hardspace: Shipbreaker",
+   "modPath": "BepInEx/plugins",
+   "mergeMods": true,
+   "steamAppId": "1161580",
+   "executable": "Shipbreaker.exe",
+   "source": "290-1220"
+  },
+  "helldivers2": {
+   "name": "Helldivers 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 553850,
+   "executable": "bin\\helldivers2.exe",
+   "source": "845-9478"
+  },
+  "hellisus": {
+   "name": "Hell is Us",
+   "modPath": "HellIsUs\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1620730,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1417-9462"
+  },
+  "highonlife": {
+   "name": "High On Life",
+   "modPath": "Oregon\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1583230,
+   "executable": "gamelaunchhelper.exe",
+   "source": "509-6746",
+   "modTypes": [
+    {
+     "id": "highonlife-uesortablepak",
+     "path": "Oregon\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "highonlife2": {
+   "name": "High On Life 2",
+   "modPath": "HighOnLife2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2069250,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1648-6972",
+   "modTypes": [
+    {
+     "id": "highonlife2-uesortablepak",
+     "path": "HighOnLife2\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "hogwartslegacy": {
+   "name": "Hogwarts Legacy",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "HogwartsLegacy.exe",
+   "source": "520-2114",
+   "modTypes": [
+    {
+     "id": "hogwarts-modtype-movies",
+     "path": "Phoenix\\Content"
+    },
+    {
+     "id": "hogwarts-PAK-modtype",
+     "path": "Phoenix\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "hollowknight": {
+   "name": "Hollow Knight",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 367520,
+   "executable": "gamelaunchhelper.exe",
+   "source": "376-7365"
+  },
+  "hollowknightsilksong": {
+   "name": "Hollow Knight: Silksong",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1030300,
+   "executable": "Hollow Knight Silksong.exe",
+   "source": "1420-7364"
+  },
+  "horizonforbiddenwest": {
+   "name": "Horizon Forbidden West",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2420110,
+   "executable": "HorizonForbiddenWest.exe",
+   "source": "844-9352"
+  },
+  "horizonzerodawnremastered": {
+   "name": "Horizon Zero Dawn Remastered",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2561580",
+   "executable": "HorizonZeroDawnRemastered.exe",
+   "source": "1077-4257"
+  },
+  "humanitz": {
+   "name": "HumanitZ",
+   "modPath": "Humanitz\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1766060,
+   "executable": "Humanitz_Demo.exe",
+   "source": "691-7052",
+   "modTypes": [
+    {
+     "id": "humanitz-uesortablepak",
+     "path": "Humanitz\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "iamfuture": {
+   "name": "I am Future",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1658040",
+   "executable": "I Am Future.exe",
+   "source": "1006-3831"
+  },
+  "icarus": {
+   "name": "Icarus",
+   "modPath": "Icarus/Content/Paks/mods",
+   "mergeMods": true,
+   "steamAppId": "1149460",
+   "executable": "Icarus.exe",
+   "source": "1841-7846"
+  },
+  "indianajonesandthegreatcircle": {
+   "name": "Indiana Jones and the Great Circle",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2677660,
+   "executable": "TheGreatCircle.exe",
+   "source": "1123-6467"
+  },
+  "intothebreach": {
+   "name": "Into the Breach",
+   "modPath": "mods",
+   "mergeMods": null,
+   "steamAppId": null,
+   "executable": "Breach.exe",
+   "source": "176-787"
+  },
+  "intothedeadourdarkestdays": {
+   "name": "Into the Dead: Our Darkest Days",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2239710",
+   "executable": "IntoTheDeadOurDarkestDays.exe",
+   "source": "1966-8096"
+  },
+  "intotheradius2": {
+   "name": "Into the Radius 2",
+   "modPath": "./",
+   "mergeMods": true,
+   "steamAppId": "2307350",
+   "executable": "IntoTheRadius2.exe",
+   "source": "994-8331"
+  },
+  "intotheradiusvr": {
+   "name": "Into the Radius VR",
+   "modPath": "./",
+   "mergeMods": true,
+   "steamAppId": "1012790",
+   "executable": "IntoTheRadius.exe",
+   "source": "348-8330"
+  },
+  "jaggedalliance3": {
+   "name": "Jagged Alliance 3",
+   "modPath": "Jagged Alliance 3\\mods",
+   "mergeMods": true,
+   "steamAppId": "1084160",
+   "executable": "JA3.exe",
+   "source": "668-2380"
+  },
+  "jojosbizarreadventureallstarbattler": {
+   "name": "JoJo's Bizarre Adventure: All-Star Battle R",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": 1372110,
+   "executable": "ASBR.exe",
+   "source": "1027-3895"
+  },
+  "jurassicworldevolution": {
+   "name": "Jurassic World Evolution",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 648350,
+   "executable": "JWE.exe",
+   "source": "206-1145"
+  },
+  "jurassicworldevolution2": {
+   "name": "Jurassic World Evolution 2",
+   "modPath": "Win64\\ovldata",
+   "mergeMods": true,
+   "steamAppId": "1244460",
+   "executable": "JWE2.exe",
+   "source": "301-1562"
+  },
+  "jurassicworldevolution3": {
+   "name": "Jurassic World Evolution 3",
+   "modPath": "Win64\\ovldata",
+   "mergeMods": true,
+   "steamAppId": 2958130,
+   "executable": "JWE3.exe",
+   "source": "1503-8086"
+  },
+  "kabus22": {
+   "name": "Kabus 22",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "K22.exe",
+   "source": "453-1690"
+  },
+  "karrynsprison": {
+   "name": "Karryn's Prison",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1619750,
+   "executable": "nw.exe",
+   "source": "566-8280"
+  },
+  "keeper": {
+   "name": "Keeper",
+   "modPath": "PaganIdol\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": "3043580",
+   "executable": "gamelaunchhelper.exe",
+   "source": "1504-6102",
+   "modTypes": [
+    {
+     "id": "keeper-uesortablepak",
+     "path": "PaganIdol\\Content\\Paks\\~mods"
+    }
+   ]
+  },
   "kenshi": {
    "name": "Kenshi",
    "modPath": "mods",
@@ -262,6 +2388,38 @@
    "steamAppId": 220200,
    "executable": "KSP_x64.exe",
    "source": "game-kerbalspaceprogram"
+  },
+  "kingdomcomedeliverance2": {
+   "name": "Kingdom Come: Deliverance II",
+   "modPath": "kingdomcome_mods",
+   "mergeMods": true,
+   "steamAppId": 1771300,
+   "executable": "Bin\\Win64MasterMasterSteamPGO\\KingdomCome.exe",
+   "source": "1146-9471"
+  },
+  "kingdomhears02birthbysleepafragmentarypassage": {
+   "name": "Kingdom Hearts 0.2 Birth By Sleep -A Fragmentary Passage-",
+   "modPath": "KINGDOM HEARTS 0.2 Birth by Sleep/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "KINGDOM HEARTS 0.2 Birth by Sleep/Binaries/Win64/KINGDOM HEARTS 0.2 Birth by Sleep.exe",
+   "source": "252-1075"
+  },
+  "kingdomhearts3": {
+   "name": "Kingdom Hearts III",
+   "modPath": "KINGDOM HEARTS III\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": "2552450",
+   "executable": "KINGDOM HEARTS III\\Binaries\\Win64\\KINGDOM HEARTS III.exe",
+   "source": "226-6865"
+  },
+  "kingdomtwocrowns": {
+   "name": "Kingdom Two Crowns",
+   "modPath": "KingdomTwoCrowns_Data/Plugins",
+   "mergeMods": false,
+   "steamAppId": "701160",
+   "executable": "KingdomTwoCrowns.exe",
+   "source": "611-2226"
   },
   "kotor": {
    "name": "Star Wars: KOTOR",
@@ -279,6 +2437,214 @@
    "executable": "swkotor2.exe",
    "source": "game-sw-kotor"
   },
+  "left4dead2": {
+   "name": "Left 4 Dead 2",
+   "modPath": "left4dead2\\addons",
+   "mergeMods": true,
+   "steamAppId": 550,
+   "executable": "left4dead2.exe",
+   "source": "131-563"
+  },
+  "legacyofkainsoulreaver1and2remastered": {
+   "name": "Legacy of Kain\u2122 Soul Reaver 1&2 Remastered",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2521380",
+   "executable": "SRX.exe",
+   "source": "1134-4491"
+  },
+  "legobatmanlegacyofthedarkknight": {
+   "name": "LEGO Batman: Legacy of the Dark Knight",
+   "modPath": "LEGOBatmanLotDK\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2215200,
+   "executable": "LEGOBatmanLotDK.exe",
+   "source": "1935-9463"
+  },
+  "lethalcompany": {
+   "name": "Lethal Company",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1966720",
+   "executable": "Lethal Company.exe",
+   "source": "703-2739"
+  },
+  "liarsbar": {
+   "name": "Liar's Bar",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "3097560",
+   "executable": "Liar's Bar.exe",
+   "source": "1084-4321"
+  },
+  "liesofp": {
+   "name": "Lies of P",
+   "modPath": "LiesofP\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 1627720,
+   "executable": "gamelaunchhelper.exe",
+   "source": "852-8942"
+  },
+  "likeadragoninfinitewealth": {
+   "name": "Like a Dragon: Infinite Wealth",
+   "modPath": "runtime\\media\\mods",
+   "mergeMods": true,
+   "steamAppId": 2072450,
+   "executable": "runtime\\media\\startup.exe",
+   "source": "760-3215"
+  },
+  "likeadragonpirateyakuzainhawaii": {
+   "name": "Like a Dragon: Pirate Yakuza in Hawaii",
+   "modPath": "runtime\\media\\mods",
+   "mergeMods": true,
+   "steamAppId": 3061810,
+   "executable": "runtime\\media\\startup.exe",
+   "source": "1191-7578"
+  },
+  "lockdownprotocol": {
+   "name": "Lockdown Protocol",
+   "modPath": "LockdownProtocol/Content/Paks/LogicMods",
+   "mergeMods": false,
+   "steamAppId": "2780980",
+   "executable": "LockdownProtocol.exe",
+   "source": "1010-3963"
+  },
+  "lookoutside": {
+   "name": "Look Outside",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3373660,
+   "executable": "Game.exe",
+   "source": "1449-8960"
+  },
+  "lordsofthefallen2023": {
+   "name": "Lords of the Fallen (2023)",
+   "modPath": "LOTF2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1501750,
+   "executable": "LOTF2\\Binaries\\WinGDK\\LOTF2-WinGDK-Shipping.exe",
+   "source": "1276-7833",
+   "modTypes": [
+    {
+     "id": "lordsofthefallen2023-ue5-sortable-modtype",
+     "path": "LOTF2\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "LOTF2\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "lostsoulaside": {
+   "name": "Lost Soul Aside",
+   "modPath": "Projectlsa\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3378960,
+   "executable": "LostSoulAside.exe",
+   "source": "1415-5710",
+   "modTypes": [
+    {
+     "id": "lostsoulaside-uesortablepak",
+     "path": "Projectlsa\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "lumaisland": {
+   "name": "Luma Island",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "2408820",
+   "executable": "Luma Island.exe",
+   "source": "1374-5527"
+  },
+  "madeinabyssbinarystarfallingintodarkness": {
+   "name": "Made in Abyss: Binary Star Falling into Darkness",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1324340",
+   "executable": "MadeInAbyss.exe",
+   "source": "771-2680"
+  },
+  "madmax": {
+   "name": "Mad Max",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 234140,
+   "executable": "MadMax.exe",
+   "source": "1844-7702"
+  },
+  "mandragorawhispersofthewitchtree": {
+   "name": "Mandragora: Whispers of the Witch Tree",
+   "modPath": "man\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1721060,
+   "executable": "man.exe",
+   "source": "1284-8961",
+   "modTypes": [
+    {
+     "id": "mandragorawhispersofthewitchtree-uesortablepak",
+     "path": "man\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "manorlords": {
+   "name": "Manor Lords",
+   "modPath": "ManorLords\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 1363080,
+   "executable": "gamelaunchhelper.exe",
+   "source": "868-6886"
+  },
+  "marvelrivals": {
+   "name": "Marvel Rivals",
+   "modPath": "MarvelGame\\Marvel\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2767030,
+   "executable": "MarvelGame\\Marvel.exe",
+   "source": "1132-9472"
+  },
+  "marvelsmidnightsuns": {
+   "name": "Marvel's Midnight Suns",
+   "modPath": "MidnightSuns/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "3682600",
+   "executable": "MidnightSuns.exe",
+   "source": "579-2118"
+  },
+  "marvelsspiderman2": {
+   "name": "Marvel's Spider-Man 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2651280,
+   "executable": "Spider-Man2.exe",
+   "source": "1166-9103"
+  },
+  "marvelsspidermanremastered": {
+   "name": "Marvel's Spider-Man Remastered",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1817070,
+   "executable": "Spider-Man.exe",
+   "source": "443-1831",
+   "modTypes": [
+    {
+     "id": "smpc-modding-tool",
+     "path": "SMPCTool"
+    },
+    {
+     "id": "smpc-mod",
+     "path": "SMPCTool\\ModManager\\SMPCMods"
+    }
+   ]
+  },
+  "masseffectandromeda": {
+   "name": "Mass Effect: Andromeda",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1238000,
+   "executable": "MassEffectAndromeda.exe",
+   "source": "877-8587"
+  },
   "mbwarband": {
    "name": "Mount & Blade:\tWarband",
    "modPath": "modules",
@@ -295,6 +2661,146 @@
    "executable": "mb_wfas.exe",
    "source": "game-mount-and-blade"
   },
+  "mechwarrior5clans": {
+   "name": "MechWarrior 5: Clans",
+   "modPath": "MW5Clans\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 2000890,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1074-8978",
+   "modTypes": [
+    {
+     "id": "mechwarrior5clans-ue5-sortable-modtype",
+     "path": "MW5Clans\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "MW5Clans\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "mechwarrior5mercenaries": {
+   "name": "MechWarrior 5: Mercenaries",
+   "modPath": "MW5Mercs\\Mods",
+   "mergeMods": true,
+   "steamAppId": 784080,
+   "executable": "MechWarrior.exe",
+   "source": "259-1092"
+  },
+  "mechwarrioronline": {
+   "name": "MechWarrior Online",
+   "modPath": "Game",
+   "mergeMods": true,
+   "steamAppId": "342200",
+   "executable": "Bin64\\MWOClient.exe",
+   "source": "417-1565"
+  },
+  "megabonk": {
+   "name": "Megabonk",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3405340,
+   "executable": "Megabonk.exe",
+   "source": "1495-7663",
+   "modTypes": [
+    {
+     "id": "megabonk-customcharacters",
+     "path": "."
+    }
+   ]
+  },
+  "menace": {
+   "name": "MENACE",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2432860,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1686-9448"
+  },
+  "metaleden": {
+   "name": "METAL EDEN",
+   "modPath": "MetalEden\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 990380,
+   "executable": "MetalEden.exe",
+   "source": "1425-5789",
+   "modTypes": [
+    {
+     "id": "metaleden-uesortablepak",
+     "path": "MetalEden\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "metalgearandmetalgear2mc": {
+   "name": "Metal Gear & Metal Gear 2: Solid Snake - Master Collection",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2131680,
+   "executable": "launcher.exe",
+   "source": "725-2522"
+  },
+  "metalgearsolid2mc": {
+   "name": "Metal Gear Solid 2: Sons of Liberty - Master Collection",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2131640,
+   "executable": "launcher.exe",
+   "source": "727-2524"
+  },
+  "metalgearsolid3mc": {
+   "name": "Metal Gear Solid 3: Snake Eater - Master Collection",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2131650,
+   "executable": "launcher.exe",
+   "source": "728-2525"
+  },
+  "metalgearsoliddeltasnakeeater": {
+   "name": "Metal Gear Solid Delta: Snake Eater",
+   "modPath": "MGSDelta\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2417610,
+   "executable": "MGSDelta.exe",
+   "source": "1411-5697",
+   "modTypes": [
+    {
+     "id": "metalgearsoliddeltasnakeeater-uesortablepak",
+     "path": "MGSDelta\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "metalgearsolidmc": {
+   "name": "Metal Gear Solid - Master Collection",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2131630,
+   "executable": "METAL GEAR SOLID.exe",
+   "source": "726-2523"
+  },
+  "metaphorrefantazio": {
+   "name": "Metaphor: ReFantazio",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2679460",
+   "executable": "METAPHOR.exe",
+   "source": "1062-6009"
+  },
+  "metroexodus": {
+   "name": "Metro Exodus",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1449560,
+   "executable": "MetroExodus.exe",
+   "source": "907-8800"
+  },
+  "mewgenics": {
+   "name": "Mewgenics",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 686060,
+   "executable": "Mewgenics.exe",
+   "source": "1691-9473"
+  },
   "microsoftflightsimulator": {
    "name": "Microsoft Flight Simulator",
    "modPath": "packages\\Microsoft.FlightSimulator_8wekyb3d8bbwe\\LocalCache\\Packages\\Community",
@@ -309,6 +2815,82 @@
     }
    ]
   },
+  "middleearthshadowofwar": {
+   "name": "Middle-earth: Shadow of War",
+   "modPath": "x64\\plugins",
+   "mergeMods": true,
+   "steamAppId": 356190,
+   "executable": "x64\\ShadowOfWar.exe",
+   "source": "375-9474"
+  },
+  "minemogul": {
+   "name": "MineMogul",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 3846120,
+   "executable": "MineMogul.exe",
+   "source": "1760-7367",
+   "modTypes": [
+    {
+     "id": "minemogul-save",
+     "path": "AppData\\LocalLow\\MineMogul\\MineMogul\\Saves"
+    }
+   ]
+  },
+  "mirthwood": {
+   "name": "Mirthwood",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2272900,
+   "executable": "Mirthwood.exe",
+   "source": "1272-8786"
+  },
+  "misery": {
+   "name": "MISERY",
+   "modPath": "MISERY\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2119830,
+   "executable": "MISERY.exe",
+   "source": "1795-9464"
+  },
+  "monbazou": {
+   "name": "Game: Mon Bazou",
+   "modPath": "BepInEx/plugins",
+   "mergeMods": true,
+   "steamAppId": "1520370",
+   "executable": "Mon Bazou.exe",
+   "source": "356-1413"
+  },
+  "monsterhunterrise": {
+   "name": "Monster Hunter Rise",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "MonsterHunterRise.exe",
+   "source": "349-1571",
+   "modTypes": [
+    {
+     "id": "mhr-lua-mod",
+     "path": "reframework"
+    }
+   ]
+  },
+  "monsterhunterstories3twistedreflection": {
+   "name": "Monster Hunter Stories 3: Twisted Reflection",
+   "modPath": "Games\\Monster Hunter Stories 3 Demo\\Mods",
+   "mergeMods": true,
+   "steamAppId": 2852190,
+   "executable": "MONSTER_HUNTER_STORIES_3_TWISTED_REFLECTION_TRIAL.exe",
+   "source": "1740-7232"
+  },
+  "monsterhunterwilds": {
+   "name": "Monster Hunter Wilds",
+   "modPath": "Games\\MonsterHunterWilds\\Mods",
+   "mergeMods": true,
+   "steamAppId": 2246340,
+   "executable": "MonsterHunterWilds.exe",
+   "source": "1149-7121"
+  },
   "monsterhunterworld": {
    "name": "Monster Hunter: World",
    "modPath": "nativePC",
@@ -316,6 +2898,98 @@
    "steamAppId": 582010,
    "executable": "MonsterHunterWorld.exe",
    "source": "game-monster-hunter-world"
+  },
+  "moonlighter": {
+   "name": "Moonlighter",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 606150,
+   "executable": "Moonlighter.exe",
+   "source": "222-997"
+  },
+  "moonlightpeaks": {
+   "name": "Moonlight Peaks",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2209900,
+   "executable": "Moonlight Peaks.exe",
+   "source": "2027-8459"
+  },
+  "mortalkombat": {
+   "name": "Mortal Kombat 1",
+   "modPath": "MK12\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 1971870,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1066-6643",
+   "modTypes": [
+    {
+     "id": "mortalkombat-ue5-sortable-modtype",
+     "path": "MK12\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "MK12\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "mortalshell2": {
+   "name": "Mortal Shell II",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2584270,
+   "executable": "MortalShell2/Binaries/Win64/MortalShell2-Win64-Shipping.exe",
+   "source": "2183-9159",
+   "modTypes": [
+    {
+     "id": "mortalshell2-ue4ss-framework",
+     "path": "/MortalShell2/Binaries/Win64"
+    },
+    {
+     "id": "mortalshell2-ue4ss-mod",
+     "path": "/MortalShell2/Binaries/Win64"
+    },
+    {
+     "id": "mortalshell2-ue4ss-tree",
+     "path": "/MortalShell2/Binaries/Win64"
+    },
+    {
+     "id": "mortalshell2-dml-framework",
+     "path": "/MortalShell2/Content/Paks"
+    },
+    {
+     "id": "mortalshell2-dml-tree",
+     "path": "/MortalShell2/Content/Paks"
+    },
+    {
+     "id": "mortalshell2-logicmods",
+     "path": "/MortalShell2/Content/Paks"
+    },
+    {
+     "id": "mortalshell2-logicmods-tree",
+     "path": "/MortalShell2/Content/Paks"
+    },
+    {
+     "id": "mortalshell2-pak",
+     "path": "/MortalShell2/Content/Paks/~mods"
+    },
+    {
+     "id": "mortalshell2-unsupported",
+     "path": "/MortalShell2/Content/Paks/~mods"
+    },
+    {
+     "id": "mortalshell2-binaries",
+     "path": "/MortalShell2/Binaries/Win64"
+    },
+    {
+     "id": "mortalshell2-reshade-preset",
+     "path": "/MortalShell2/Binaries/Win64"
+    },
+    {
+     "id": "mortalshell2-contentfolder",
+     "path": "/MortalShell2"
+    }
+   ]
   },
   "mountandblade": {
    "name": "Mount & Blade",
@@ -325,6 +2999,100 @@
    "executable": "mount&blade.exe",
    "source": "game-mount-and-blade"
   },
+  "mountandblade2bannerlord": {
+   "name": "Mount & Blade II: Bannerlord (BUTR)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 261550,
+   "executable": "bin\\Win64_Shipping_Client\\Bannerlord.exe",
+   "source": "875-6727"
+  },
+  "mousepiforhire": {
+   "name": "MOUSE: P.I. For Hire",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2416450,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1835-7664"
+  },
+  "myheroacademiaallsjustice": {
+   "name": "MY HERO ACADEMIA: All's Justice",
+   "modPath": "HeroGame\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2362050,
+   "executable": "HeroGame\\Binaries\\Win64\\AJGAME.exe",
+   "source": "1687-6946",
+   "modTypes": [
+    {
+     "id": "myheroacademiaallsjustice-uesortablepak",
+     "path": "HeroGame\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "myheroonesjustice2": {
+   "name": "My Hero Ones Justice 2",
+   "modPath": "HeroGame/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1058450",
+   "executable": "HeroGame/Binaries/Win64/MHOJ2.exe",
+   "source": "625-2271"
+  },
+  "myheroultrarumble": {
+   "name": "My Hero Ultra Rumble",
+   "modPath": "HerovsGame/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1607250",
+   "executable": "HerovsGame/Binaries/Win64/MHUR.exe",
+   "source": "1765-7390"
+  },
+  "mysummercar": {
+   "name": "My Summer Car",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "516750",
+   "executable": "mysummercar.exe",
+   "source": "294-1222"
+  },
+  "mytimeatsandrock": {
+   "name": "My Time at Sandrock",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1084600",
+   "executable": "Sandrock.exe",
+   "source": "688-2440"
+  },
+  "mywintercar": {
+   "name": "My Winter Car",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 4164420,
+   "executable": "mywintercar.exe",
+   "source": "1600-6672"
+  },
+  "needforspeedheat": {
+   "name": "Need for Speed Heat",
+   "modPath": "FrostyModManager\\Mods\\NeedForSpeedHeat",
+   "mergeMods": true,
+   "steamAppId": 1222680,
+   "executable": "NeedForSpeedHeat.exe",
+   "source": "1994-8396"
+  },
+  "needforspeedunbound": {
+   "name": "Need for Speed Unbound",
+   "modPath": "FrostyModManager\\Mods\\NeedForSpeedUnbound",
+   "mergeMods": true,
+   "steamAppId": 1846380,
+   "executable": "NeedForSpeedUnbound.exe",
+   "source": "1993-8397"
+  },
+  "needforspeedunderground2": {
+   "name": "Need for Speed: Underground 2",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "speed2.exe",
+   "source": "585-2139"
+  },
   "nehrim": {
    "name": "Nehrim: At Fate's Edge",
    "modPath": "data",
@@ -332,6 +3100,14 @@
    "steamAppId": 1014940,
    "executable": "Oblivion.exe",
    "source": "game-nehrim"
+  },
+  "neodoriforever": {
+   "name": "Neodori Forever",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1963660,
+   "executable": "NeodoriForever.exe",
+   "source": "753-2671"
   },
   "neverwinter2": {
    "name": "Neverwinter Nights 2",
@@ -346,6 +3122,106 @@
      "path": "Neverwinter Nights 2\\override"
     }
    ]
+  },
+  "nierautomata": {
+   "name": "NieR: Automata",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 524220,
+   "executable": "NieRAutomata.exe",
+   "source": "568-3476"
+  },
+  "ninjagaiden2black": {
+   "name": "NINJA GAIDEN 2 Black",
+   "modPath": "NINJAGAIDEN2BLACK\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3287520,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1159-7808",
+   "modTypes": [
+    {
+     "id": "ninjagaiden2black-ue5-sortable-modtype",
+     "path": "NINJAGAIDEN2BLACK\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "NINJAGAIDEN2BLACK\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "ninjagaiden3razorsedge": {
+   "name": "NINJA GAIDEN 3 Razor's Edge",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1369760",
+   "executable": "ninja gaiden 3 razor's edge.exe",
+   "source": "1171-6278"
+  },
+  "ninjagaidenfour": {
+   "name": "NINJA GAIDEN 4",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2627260",
+   "executable": "gamelaunchhelper.exe",
+   "source": "1501-6106"
+  },
+  "ninjagaidensigma": {
+   "name": "NINJA GAIDEN Sigma",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1580780",
+   "executable": "ninja gaiden sigma.exe",
+   "source": "1171-6278"
+  },
+  "ninjagaidensigma2": {
+   "name": "NINJA GAIDEN Sigma 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1580790",
+   "executable": "ninja gaiden sigma2.exe",
+   "source": "1171-6278"
+  },
+  "nioh2": {
+   "name": "Nioh 2",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 1325200,
+   "executable": "nioh2.exe",
+   "source": "1628-6903"
+  },
+  "nioh3": {
+   "name": "Nioh 3",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3681010,
+   "executable": "Nioh3.exe",
+   "source": "1676-7162"
+  },
+  "nobodywantstodie": {
+   "name": "Nobody Wants to Die",
+   "modPath": "detnoir\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 1939970,
+   "executable": "detnoir.exe",
+   "source": "975-8943",
+   "modTypes": [
+    {
+     "id": "nobodywantstodie-ue5-sortable-modtype",
+     "path": "detnoir\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "detnoir\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "noita": {
+   "name": "Noita",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": "881100",
+   "executable": "noita.exe",
+   "source": "200-889"
   },
   "nomanssky": {
    "name": "No Man's Sky",
@@ -365,6 +3241,20 @@
     }
    ]
   },
+  "norse": {
+   "name": "NORSE: Oath of Blood",
+   "modPath": "Norse\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3054690,
+   "executable": "Norse.exe",
+   "source": "1700-7013",
+   "modTypes": [
+    {
+     "id": "norse-uesortablepak",
+     "path": "Norse\\Content\\Paks\\~mods"
+    }
+   ]
+  },
   "nwnee": {
    "name": "Neverwinter Nights:\tEnhanced Edition",
    "modPath": "Neverwinter Nights",
@@ -381,6 +3271,120 @@
    "executable": "oblivion.exe",
    "source": "game-oblivion"
   },
+  "oblivionremastered": {
+   "name": "Oblivion Remastered",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2623190,
+   "executable": "OblivionRemastered.exe",
+   "source": "1270-5485",
+   "modTypes": [
+    {
+     "id": "oblivionremastered-blueprint-modtype",
+     "path": "OblivionRemastered\\Content\\Paks\\LogicMods"
+    },
+    {
+     "id": "oblivionremastered-pak-modtype",
+     "path": "OblivionRemastered\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "oblivionremastered-lua-modtype",
+     "path": "OblivionRemastered\\Binaries\\Win64\\ue4ss"
+    },
+    {
+     "id": "oblivionremastered-data-folder",
+     "path": "OblivionRemastered\\Content\\Dev\\ObvData\\Data"
+    },
+    {
+     "id": "oblivionremastered-binaries-modtype",
+     "path": "OblivionRemastered\\Binaries\\Win64"
+    }
+   ]
+  },
+  "occupymars": {
+   "name": "Occupy Mars: The Game",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": false,
+   "steamAppId": 758690,
+   "executable": "OccupyMars.exe",
+   "source": "577-3797"
+  },
+  "octopathtraveler": {
+   "name": "Octopath Traveler",
+   "modPath": "Octopath_Traveler/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "921570",
+   "executable": "Octopath_Traveler.exe",
+   "source": "166-744"
+  },
+  "octopathtraveler0": {
+   "name": "OCTOPATH TRAVELER 0",
+   "modPath": "Octopath_Traveler0\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3014320,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1566-6453",
+   "modTypes": [
+    {
+     "id": "octopathtraveler0-uesortablepak",
+     "path": "Octopath_Traveler0\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "octopathtraveler2": {
+   "name": "Octopath Traveler II",
+   "modPath": "Octopath_Traveler2/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1971650",
+   "executable": "Octopath_Traveler2/Binaries/Win64/Octopath_Traveler2-Win64-Shipping.exe",
+   "source": "536-7615"
+  },
+  "ofashandsteel": {
+   "name": "Of Ash and Steel",
+   "modPath": "ofAshAndSteelGame\\Content\\Paks",
+   "mergeMods": true,
+   "steamAppId": 2893820,
+   "executable": "ofAshAndSteelGame.exe",
+   "source": "1606-6641",
+   "modTypes": [
+    {
+     "id": "ofashandsteel-uesortablepak",
+     "path": "ofAshAndSteelGame\\Content\\Paks"
+    }
+   ]
+  },
+  "oldmarketsimulator": {
+   "name": "Old Market Simulator",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2878420",
+   "executable": "Old Market Simulator.exe",
+   "source": "1060-4114"
+  },
+  "onepieceodyssey": {
+   "name": "One Piece Odyssey",
+   "modPath": "odyssey/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "814000",
+   "executable": "odyssey.exe",
+   "source": "513-1908"
+  },
+  "orcmassage": {
+   "name": "Orc Massage",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1129540",
+   "executable": "OrcMassage.exe",
+   "source": "802-3303"
+  },
+  "outward": {
+   "name": "Outward",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "794260",
+   "executable": "Outward.exe",
+   "source": "191-913"
+  },
   "oxygennotincluded": {
    "name": "Oxygen Not Included",
    "modPath": "Mods",
@@ -388,6 +3392,98 @@
    "steamAppId": 457140,
    "executable": "OxygenNotIncluded.exe",
    "source": "game-oni"
+  },
+  "pacificdrive": {
+   "name": "PacificDrive",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1458140,
+   "executable": "PenDriverPro.exe",
+   "source": "1409-6660",
+   "modTypes": [
+    {
+     "id": "pacificdrive-pak-modtype",
+     "path": "PenDriverPro\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "pacificdrive-lua-modtype",
+     "path": "PenDriverPro\\Binaries\\Win64\\ue4ss\\Mods"
+    }
+   ]
+  },
+  "painkiller": {
+   "name": "Painkiller",
+   "modPath": "Painkiller\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2300120,
+   "executable": "Painkiller.exe",
+   "source": "1505-6122",
+   "modTypes": [
+    {
+     "id": "painkiller-uesortablepak",
+     "path": "Painkiller\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "painkillerblackedition": {
+   "name": "Painkiller: Black Edition",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 39530,
+   "executable": "Bin\\Painkiller.exe",
+   "source": "1506-9400"
+  },
+  "palworld": {
+   "name": "Palworld",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1623730,
+   "executable": "Palworld.exe",
+   "source": "770-8933",
+   "modTypes": [
+    {
+     "id": "palworld-blueprint-modtype",
+     "path": "Pal\\Content\\Paks\\LogicMods"
+    },
+    {
+     "id": "palworld-palschema-framework-modtype",
+     "path": "Pal\\Binaries\\Win64\\ue4ss"
+    },
+    {
+     "id": "palworld-pak-modtype",
+     "path": "Pal\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "palworld-lua-modtype-v2",
+     "path": "Pal\\Binaries\\Win64\\ue4ss"
+    },
+    {
+     "id": "palworld-lua-modtype",
+     "path": "Pal\\Binaries\\Win64\\Mods"
+    },
+    {
+     "id": "palworld-cpp-modtype",
+     "path": "Pal\\Binaries\\Win64\\ue4ss"
+    }
+   ]
+  },
+  "paralives": {
+   "name": "Paralives",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1118520,
+   "executable": "Paralives.exe",
+   "source": "1917-8641",
+   "modTypes": [
+    {
+     "id": "paralives-mod",
+     "path": "/Paralives/Paralives"
+    },
+    {
+     "id": "paralives-settings",
+     "path": "/Main.mod/Settings"
+    }
+   ]
   },
   "pathfinderkingmaker": {
    "name": "Pathfinder:\tKingmaker",
@@ -405,6 +3501,354 @@
    "executable": "Wrath.exe",
    "source": "game-pathfinderwrathoftherighteous"
   },
+  "pathologic2": {
+   "name": "Pathologic 2",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 505230,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1631-6695"
+  },
+  "pathologic3": {
+   "name": "Pathologic 3",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 3199650,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1629-6692"
+  },
+  "payday2": {
+   "name": "PAYDAY 2",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 218620,
+   "executable": "payday2_win32_release.exe",
+   "source": "239-1093"
+  },
+  "payday3": {
+   "name": "Payday 3",
+   "modPath": "PAYDAY3\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": "1272080",
+   "executable": "PAYDAY3.exe",
+   "source": "1380-7301"
+  },
+  "pcbuildingsimulator": {
+   "name": "PC Building Simulator",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 621060,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1493-7657"
+  },
+  "pcbuildingsimulator2": {
+   "name": "PC Building Simulator 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "PCBS2.exe",
+   "source": "1494-7266"
+  },
+  "peak": {
+   "name": "PEAK",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3527290,
+   "executable": "PEAK.exe",
+   "source": "1356-7659"
+  },
+  "phoenixpoint": {
+   "name": "Phoenix Point",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "PhoenixPointWin64.exe",
+   "source": "94-407"
+  },
+  "pizzatower": {
+   "name": "Pizza Tower",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2231450",
+   "executable": "PizzaTower.exe",
+   "source": "682-4068"
+  },
+  "planetcoaster2": {
+   "name": "Planet Coaster 2",
+   "modPath": "Win64\\ovldata",
+   "mergeMods": true,
+   "steamAppId": 2688950,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1103-8087"
+  },
+  "planetcrafter": {
+   "name": "Planet Crafter",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 1284190,
+   "executable": "Planet Crafter.exe",
+   "source": "547-2020"
+  },
+  "planetnomads": {
+   "name": "Planet Nomads",
+   "modPath": "BepInEx/plugins",
+   "mergeMods": false,
+   "steamAppId": "504050",
+   "executable": "PlanetNomads.exe",
+   "source": "551-2025"
+  },
+  "planetzoo": {
+   "name": "Planet Zoo",
+   "modPath": "win64/ovldata",
+   "mergeMods": true,
+   "steamAppId": "703080",
+   "executable": "PlanetZoo.exe",
+   "source": "297-1561"
+  },
+  "plantsvszombiesgoty": {
+   "name": "Plants vs. Zombies: Game of the Year",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "3590",
+   "executable": "PlantsVsZombies.exe",
+   "source": "623-2278"
+  },
+  "portal2": {
+   "name": "Portal 2",
+   "modPath": "portal2_dlc3",
+   "mergeMods": true,
+   "steamAppId": 620,
+   "executable": "portal2.exe",
+   "source": "109-526"
+  },
+  "potionpermit": {
+   "name": "Potion Permit",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1337760",
+   "executable": "Potion Permit.exe",
+   "source": "663-2372"
+  },
+  "pragmata": {
+   "name": "PRAGMATA",
+   "modPath": "Games\\PRAGMATA_Demo\\Mods",
+   "mergeMods": true,
+   "steamAppId": 3357650,
+   "executable": "PRAGMATA_SKETCHBOOK.exe",
+   "source": "1652-7667"
+  },
+  "prey2017": {
+   "name": "Prey (2017)",
+   "modPath": "GameSDK\\Precache",
+   "mergeMods": true,
+   "steamAppId": "480490",
+   "executable": "Binaries\\Danielle\\Gaming.Desktop.x64\\Release\\Prey.exe",
+   "source": "711-7838"
+  },
+  "prodeus": {
+   "name": "Prodeus",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 964800,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1794-7670"
+  },
+  "projectnomads": {
+   "name": "Project Nomads",
+   "modPath": "Run",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Run/bin/win32/nomads.exe",
+   "source": "504-1887"
+  },
+  "projectzomboid": {
+   "name": "Project Zomboid",
+   "modPath": "Zomboid\\mods",
+   "mergeMods": true,
+   "steamAppId": "108600",
+   "executable": "ProjectZomboid64.exe",
+   "source": "692-5970"
+  },
+  "pseudoregalia": {
+   "name": "Pseudoregalia",
+   "modPath": "pseudoregalia\\Content",
+   "mergeMods": true,
+   "steamAppId": "2365810",
+   "executable": "pseudoregalia.exe",
+   "source": "772-2711"
+  },
+  "quarantinezonethelastcheck": {
+   "name": "Quarantine Zone: The Last Check",
+   "modPath": "QZSim\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3419520,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1641-6739",
+   "modTypes": [
+    {
+     "id": "quarantinezonethelastcheck-uesortablepak",
+     "path": "QZSim\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "rage": {
+   "name": "RAGE",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 9200,
+   "executable": "Rage64.exe",
+   "source": "1639-6726"
+  },
+  "raidersofblackveil": {
+   "name": "Raiders of Blackveil",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3352240,
+   "executable": "RoB.exe",
+   "source": "1764-7513"
+  },
+  "readyornot": {
+   "name": "Ready Or Not",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1144200",
+   "executable": "ReadyOrNotEGS.exe",
+   "source": "342-5841"
+  },
+  "reanimal": {
+   "name": "REANIMAL",
+   "modPath": "Everholm\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2129530,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1649-6973",
+   "modTypes": [
+    {
+     "id": "reanimal-uesortablepak",
+     "path": "Everholm\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "reddeadredemption": {
+   "name": "Red Dead Redemption",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2668510,
+   "executable": "RDR.exe",
+   "source": "1079-9376"
+  },
+  "redfactionguerrillaremarstered": {
+   "name": "Red Faction Guerrilla Re-Mars-tered",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 667720,
+   "executable": "rfg.exe",
+   "source": "1145-9408"
+  },
+  "remnant2": {
+   "name": "Remnant II",
+   "modPath": "Remnant2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1282100,
+   "executable": "Remnant2.exe",
+   "source": "645-4458"
+  },
+  "repo": {
+   "name": "R.E.P.O.",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "3241660",
+   "executable": "REPO.exe",
+   "source": "1218-5000"
+  },
+  "residentevil22019": {
+   "name": "Resident Evil 2 (2019)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "re2.exe",
+   "source": "432-1642"
+  },
+  "residentevil32020": {
+   "name": "Resident Evil 3 (2020)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "re3.exe",
+   "source": "433-1641"
+  },
+  "residentevil4": {
+   "name": "Resident Evil 4 (2005)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 254700,
+   "executable": "Bin32\\bio4.exe",
+   "source": "1869-7832"
+  },
+  "residentevil42023": {
+   "name": "Resident Evil 4 (2023)",
+   "modPath": "Games\\RE4R_Demo\\Mods",
+   "mergeMods": true,
+   "steamAppId": 2050650,
+   "executable": "re4demo.exe",
+   "source": "913-7168"
+  },
+  "residentevil5goldedition": {
+   "name": "Resident Evil 5 Gold Edition",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 21690,
+   "executable": "Launcher.exe",
+   "source": "915-8308"
+  },
+  "residentevil6": {
+   "name": "Resident Evil 6",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 221040,
+   "executable": "BH6.exe",
+   "source": "2029-8305"
+  },
+  "residentevil7": {
+   "name": "Resident Evil 7",
+   "modPath": "Games\\RE7_Demo\\Mods",
+   "mergeMods": true,
+   "steamAppId": 418370,
+   "executable": "re7trial.exe",
+   "source": "914-7261"
+  },
+  "residentevilrequiem": {
+   "name": "Resident Evil Requiem",
+   "modPath": "Games\\RE9\\Mods",
+   "mergeMods": true,
+   "steamAppId": 3764200,
+   "executable": "re9.exe",
+   "source": "1653-9002"
+  },
+  "residentevilvillage": {
+   "name": "Resident Evil: Village",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "re8.exe",
+   "source": "237-1655"
+  },
+  "retrorewindvideostoresimulator": {
+   "name": "Retro Rewind - Video Store Simulator",
+   "modPath": "RetroRewind/RetroRewind/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": 3552140,
+   "executable": "RetroRewind.exe",
+   "source": "1780-7989"
+  },
+  "returntocastlewolfenstein": {
+   "name": "Return to Castle Wolfenstein",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 9010,
+   "executable": "WolfSP.exe",
+   "source": "937-9242"
+  },
   "rimworld": {
    "name": "RimWorld",
    "modPath": "Mods",
@@ -412,6 +3856,250 @@
    "steamAppId": 294100,
    "executable": "RimWorldWin64.exe",
    "source": "game-rimworld"
+  },
+  "riseofthetombraider": {
+   "name": "Rise of the Tomb Raider",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "391220",
+   "executable": "ROTTR.exe",
+   "source": "905-6184"
+  },
+  "risingconstellation": {
+   "name": "Rising Constellation",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": "1393660",
+   "executable": "Rising Constellation.exe",
+   "source": "386-1483"
+  },
+  "roadsideresearch": {
+   "name": "Roadside Research",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3643170",
+   "executable": "Roadside Research.exe",
+   "source": "1692-6992"
+  },
+  "roadtovostok": {
+   "name": "Road to Vostok",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 1963610,
+   "executable": "RTV.exe",
+   "source": "1853-9377"
+  },
+  "robocoproguecity": {
+   "name": "RoboCop: Rogue City",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1681430,
+   "executable": "gamelaunchhelper.exe",
+   "source": "892-7805",
+   "modTypes": [
+    {
+     "id": "robocoproguecity-ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "robocoproguecityunfinishedbusiness-ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "robocoproguecityunfinishedbusiness": {
+   "name": "RoboCop: Rogue City - Unfinished Business",
+   "modPath": "Game\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": "3527760",
+   "executable": "RoboCopUnfinishedBusiness.exe",
+   "source": "892-7805",
+   "modTypes": [
+    {
+     "id": "robocoproguecity-ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "robocoproguecityunfinishedbusiness-ue5-sortable-modtype",
+     "path": "Game\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "rocksmith2014editionremastered": {
+   "name": "Rocksmith 2014 Edition REMASTERED",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 221680,
+   "executable": "Rocksmith2014.exe",
+   "source": "1240-7600"
+  },
+  "romeoisadeadman": {
+   "name": "ROMEO IS A DEAD MAN",
+   "modPath": "SevGame\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3050900,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1693-6995",
+   "modTypes": [
+    {
+     "id": "romeoisadeadman-uesortablepak",
+     "path": "SevGame\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "rooftopsandalleystheparkourgame": {
+   "name": "Rooftops And Alleys: The Parkour Game",
+   "modPath": "RooftopsandAlleys/Content/Paks/",
+   "mergeMods": true,
+   "steamAppId": 2703850,
+   "executable": "RooftopsandAlleys.exe",
+   "source": "890-4274"
+  },
+  "rootsofpacha": {
+   "name": "Roots of Pacha",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1245560",
+   "executable": "Roots of Pacha.exe",
+   "source": "580-2119"
+  },
+  "routine": {
+   "name": "ROUTINE",
+   "modPath": "Routine\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 606160,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1575-6505",
+   "modTypes": [
+    {
+     "id": "routine-uesortablepak",
+     "path": "Routine\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "runefactoryguardiansofazuma": {
+   "name": "Rune Factory: Guardians of Azuma",
+   "modPath": "Game\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2864560,
+   "executable": "Game.exe",
+   "source": "1431-5797",
+   "modTypes": [
+    {
+     "id": "runefactoryguardiansofazuma-uesortablepak",
+     "path": "Game\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "runescapedragonwilds": {
+   "name": "RuneScape: Dragonwilds",
+   "modPath": "RSDragonwilds\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1374490,
+   "executable": "RSDragonwilds.exe",
+   "source": "1273-8944",
+   "modTypes": [
+    {
+     "id": "runescapedragonwilds-ue5-sortable-modtype",
+     "path": "RSDragonwilds\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "RSDragonwilds\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "rvthereyet": {
+   "name": "RV There Yet?",
+   "modPath": "Ride\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3949040,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1509-9465"
+  },
+  "sacred2remaster": {
+   "name": "Sacred 2 Remaster",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3906660,
+   "executable": "sacred2.exe",
+   "source": "1544-6370"
+  },
+  "scarletnexus": {
+   "name": "SCARLET NEXUS",
+   "modPath": "ScarletNexus/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "775500",
+   "executable": "ScarletNexus/Binaries/Win64/ScarletNexus-Win64-Shipping.exe",
+   "source": "626-2277"
+  },
+  "scavprototype": {
+   "name": "Casualties: Unknown Demo",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "CasualtiesUnknown.exe",
+   "source": "1907-8404"
+  },
+  "schedule1": {
+   "name": "Schedule 1",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "3164500",
+   "executable": "Schedule I.exe",
+   "source": "1243-9188"
+  },
+  "scum": {
+   "name": "SCUM",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 513710,
+   "executable": "SCUM\\Binaries\\Win64\\SCUM.exe",
+   "source": "2018-8262",
+   "modTypes": [
+    {
+     "id": "scum-ue4ss-injector",
+     "path": "SCUM\\Binaries\\Win64"
+    },
+    {
+     "id": "scum-ue4ss-lua-mod",
+     "path": "SCUM\\Binaries\\Win64\\ue4ss\\Mods"
+    },
+    {
+     "id": "scum-pak-mod",
+     "path": "SCUM\\Content\\Paks"
+    }
+   ]
+  },
+  "scum-dedicated-server": {
+   "name": "SCUM Dedicated Server",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3792580,
+   "executable": "SCUM\\Binaries\\Win64\\SCUMServer.exe",
+   "source": "2018-8262",
+   "modTypes": [
+    {
+     "id": "scum-ue4ss-injector",
+     "path": "SCUM\\Binaries\\Win64"
+    },
+    {
+     "id": "scum-ue4ss-lua-mod",
+     "path": "SCUM\\Binaries\\Win64\\ue4ss\\Mods"
+    },
+    {
+     "id": "scum-pak-mod",
+     "path": "SCUM\\Content\\Paks"
+    }
+   ]
   },
   "sekiro": {
    "name": "Sekiro",
@@ -421,6 +4109,40 @@
    "executable": "sekiro.exe",
    "source": "game-sekiro"
   },
+  "selaco": {
+   "name": "Selaco",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "1592280",
+   "executable": "SELACO.exe",
+   "source": "1479-6015"
+  },
+  "senuassagahellblade2": {
+   "name": "Senua's Saga: Hellblade 2",
+   "modPath": "Hellblade2\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 2461850,
+   "executable": "gamelaunchhelper.exe",
+   "source": "888-7810",
+   "modTypes": [
+    {
+     "id": "senuassagahellblade2-ue5-sortable-modtype",
+     "path": "Hellblade2\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Hellblade2\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "shadowofthetombraider": {
+   "name": "Shadow of the Tomb Raider",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "750920",
+   "executable": "SOTTR.exe",
+   "source": "906-6185"
+  },
   "shadowrunreturns": {
    "name": "Shadowrun Returns",
    "modPath": "Shadowrun_Data\\StreamingAssets\\ContentPacks",
@@ -428,6 +4150,78 @@
    "steamAppId": 234650,
    "executable": "Shadowrun.exe",
    "source": "game-shadowrunreturns"
+  },
+  "shardpunkverminfall": {
+   "name": "Shardpunk: Verminfall",
+   "modPath": "Data/~mods",
+   "mergeMods": true,
+   "steamAppId": "1183800",
+   "executable": "Shardpunk.exe",
+   "source": "570-2100"
+  },
+  "shewillpunishthem": {
+   "name": "She Will Punish Them",
+   "modPath": "C:\\GAME\\BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1213740",
+   "executable": "She Will Punish Them.exe",
+   "source": "272-1678"
+  },
+  "siegesurvivalgloriavictis": {
+   "name": "Siege Survival: Gloria Victis",
+   "modPath": "..\\LocalLow\\Black Eye Games\\Siege Survival - Gloria Victis\\Mods",
+   "mergeMods": true,
+   "steamAppId": "1167140",
+   "executable": "SiegeSurvival.exe",
+   "source": "276-1150"
+  },
+  "sifu": {
+   "name": "Sifu",
+   "modPath": "Sifu\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2138710,
+   "executable": "Sifu.exe",
+   "source": "350-2027"
+  },
+  "silenthill2": {
+   "name": "Silent Hill 2 (2024)",
+   "modPath": "SHProto\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 2124490,
+   "executable": "gamelaunchhelper.exe",
+   "source": "963-6926",
+   "modTypes": [
+    {
+     "id": "silenthill2-ue5-sortable-modtype",
+     "path": "SHProto\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "SHProto\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "silenthillf": {
+   "name": "Silent Hill f",
+   "modPath": "SHf\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2947440,
+   "executable": "SHf.exe",
+   "source": "1458-8962",
+   "modTypes": [
+    {
+     "id": "silenthillf-uesortablepak",
+     "path": "SHf\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "sinsofasolarempire": {
+   "name": "Sins of A Solar Empire",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 204880,
+   "executable": "Sins of a Solar Empire Rebellion.exe",
+   "source": "442-1664"
   },
   "skyrim": {
    "name": "Skyrim",
@@ -453,6 +4247,142 @@
    "executable": "SkyrimVR.exe",
    "source": "game-skyrimvr"
   },
+  "slaythespire2": {
+   "name": "Slay the Spire 2",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 2868840,
+   "executable": "SlayTheSpire2.exe",
+   "source": "1727-7225"
+  },
+  "slimerancher": {
+   "name": "Slime Rancher",
+   "modPath": "SRML/Mods",
+   "mergeMods": true,
+   "steamAppId": "433340",
+   "executable": "SlimeRancher.exe",
+   "source": "256-1083"
+  },
+  "smolame": {
+   "name": "Smol Ame",
+   "modPath": "SALT/Mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Smol Ame.exe",
+   "source": "344-1336"
+  },
+  "snowbreakcontainmentzone": {
+   "name": "Snowbreak: Containment Zone",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2668080",
+   "executable": "Game/Binaries/Win64/Game.exe",
+   "source": "900-3387"
+  },
+  "solarexpanse": {
+   "name": "Solar Expanse",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1369700,
+   "executable": "Solar Expanse.exe",
+   "source": "2126-8640"
+  },
+  "solarpunk": {
+   "name": "Solarpunk",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1805110,
+   "executable": "Solarpunk.exe",
+   "source": "1975-8671",
+   "modTypes": [
+    {
+     "id": "solarpunk-pak",
+     "path": "/Solarpunk/Content/Paks/~mods"
+    },
+    {
+     "id": "solarpunk-logicmods",
+     "path": "/Solarpunk/Content/Paks"
+    },
+    {
+     "id": "solarpunk-ue4ss",
+     "path": "/Solarpunk/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "solarpunk-ue4ss-injector",
+     "path": "/Solarpunk/Binaries/Win64"
+    },
+    {
+     "id": "solarpunk-binaries",
+     "path": "/Solarpunk/Binaries/Win64"
+    },
+    {
+     "id": "solarpunk-contentfolder",
+     "path": "/Solarpunk"
+    },
+    {
+     "id": "solarpunk-pakalt",
+     "path": "/Solarpunk/Content"
+    }
+   ]
+  },
+  "sonsoftheforest": {
+   "name": "Sons Of The Forest",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1326470",
+   "executable": "SonsOfTheForest.exe",
+   "source": "1038-4831"
+  },
+  "soulcaliburvi": {
+   "name": "Soul Calibur VI",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "544750",
+   "executable": "SoulcaliburVI\\Binaries\\Win64\\SoulcaliburVI.exe",
+   "source": "154-688"
+  },
+  "soulmask": {
+   "name": "Soulmask",
+   "modPath": "WS/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "2646460",
+   "executable": "WS.exe",
+   "source": "911-3380"
+  },
+  "spacerangersawarapart": {
+   "name": "Space Rangers HD: A War Apart",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "214730",
+   "executable": "Rangers.exe",
+   "source": "493-1860"
+  },
+  "spidermanmilesmorales": {
+   "name": "Marvel's Spider-Man: Miles Morales",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1817190,
+   "executable": "MilesMorales.exe",
+   "source": "443-1831",
+   "modTypes": [
+    {
+     "id": "smpc-modding-tool",
+     "path": "SMPCTool"
+    },
+    {
+     "id": "smpc-mod",
+     "path": "SMPCTool\\ModManager\\MMPCMods"
+    }
+   ]
+  },
+  "spongebobsquarepantsbattleforbikinibottomrehydrated": {
+   "name": "SpongeBob SquarePants: Battle for Bikini Bottom - Rehydrated",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "969990",
+   "executable": "SpongeBob_BFBB_R.exe",
+   "source": "337-1307"
+  },
   "spyroreignitedtrilogy": {
    "name": "Spyro Reignited Trilogy",
    "modPath": "falcon\\content\\paks\\~mods",
@@ -460,6 +4390,60 @@
    "steamAppId": 996580,
    "executable": "Spyro.exe",
    "source": "game-spyroreignitedtrilogy"
+  },
+  "stalker2heartofchornobyl": {
+   "name": "S.T.A.L.K.E.R. 2 Heart of Chornobyl",
+   "modPath": "Stalker2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1643320,
+   "executable": "gamelaunchhelper.exe",
+   "source": "958-9466",
+   "modTypes": [
+    {
+     "id": "stalker2heartofchornobyl-save",
+     "path": "Stalker2\\Saved\\STEAM\\SaveGames"
+    }
+   ]
+  },
+  "stalkeranomaly": {
+   "name": "S.T.A.L.K.E.R. Anomaly",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "AnomalyLauncher.exe",
+   "source": "489-1821"
+  },
+  "stalkercallofchernobyl": {
+   "name": "S.T.A.L.K.E.R. Call of Chernobyl",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Stalker-CoC.exe",
+   "source": "74-655"
+  },
+  "stalkercallofpripyat": {
+   "name": "S.T.A.L.K.E.R. Call of Pripyat",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "41700",
+   "executable": "bin/xrEngine.exe",
+   "source": "186-5411"
+  },
+  "stalkerclearsky": {
+   "name": "S.T.A.L.K.E.R. Clear Sky",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "20510",
+   "executable": "bin/xrEngine.exe",
+   "source": "185-4690"
+  },
+  "stalkershadowofchernobyl": {
+   "name": "S.T.A.L.K.E.R.: Shadow of Chernobyl",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "4500",
+   "executable": "bin/XR_3DA.exe",
+   "source": "78-870"
   },
   "starbound": {
    "name": "Starbound",
@@ -483,6 +4467,148 @@
     }
    ]
   },
+  "starfield": {
+   "name": "Starfield",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1716740,
+   "executable": "Starfield.exe",
+   "source": "634-8128",
+   "modTypes": [
+    {
+     "id": "starfield-data-folder",
+     "path": "Data"
+    },
+    {
+     "id": "starfield-asi-mod",
+     "path": "Plugins"
+    }
+   ]
+  },
+  "starrupture": {
+   "name": "StarRupture",
+   "modPath": "StarRupture\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1631270,
+   "executable": "StarRuptureGameSteam.exe",
+   "source": "1616-6683",
+   "modTypes": [
+    {
+     "id": "starrupture-uesortablepak",
+     "path": "StarRupture\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "starsandisland": {
+   "name": "Starsand Island",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2966320,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1701-7132"
+  },
+  "starsector": {
+   "name": "Starsector",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "starsector.exe",
+   "source": "179-1053"
+  },
+  "startradersfrontiers": {
+   "name": "Star Traders: Frontiers",
+   "modPath": "workshop\\content\\335620",
+   "mergeMods": true,
+   "steamAppId": "335620",
+   "executable": "modversion\\StarTradersFrontiersMods.exe",
+   "source": "283-1171"
+  },
+  "starwarsbattlefront22017": {
+   "name": "STAR WARS Battlefront II (2017)",
+   "modPath": "FrostyModManager\\Mods\\StarWarsBattlefrontII",
+   "mergeMods": true,
+   "steamAppId": 1237950,
+   "executable": "starwarsbattlefrontii.exe",
+   "source": "112-8398"
+  },
+  "starwarsjedifallenorder": {
+   "name": "Star Wars Jedi: Fallen Order",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1172380",
+   "executable": "SwGame\\Binaries\\Win64\\starwarsjedifallenorder.exe",
+   "source": "77-8028",
+   "modTypes": [
+    {
+     "id": "starwarsjedi-pak-modtype",
+     "path": "SwGame\\content\\paks\\~mods"
+    }
+   ]
+  },
+  "starwarsjedisurvivor": {
+   "name": "Star Wars Jedi: Survivor",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1774580",
+   "executable": "SwGame\\Binaries\\Win64\\jedisurvivor.exe",
+   "source": "559-8019",
+   "modTypes": [
+    {
+     "id": "starwarsjedi2-pak-modtype",
+     "path": "SwGame\\content\\paks\\~mods"
+    }
+   ]
+  },
+  "starwarsoutlaws": {
+   "name": "Star Wars Outlaws",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "2842040",
+   "executable": "Outlaws.exe",
+   "source": "970-5984"
+  },
+  "starwarszerocompany": {
+   "name": "Star Wars Zero Company",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2075800,
+   "executable": "SWZeroCompany.exe",
+   "source": "2174-9295",
+   "modTypes": [
+    {
+     "id": "swzc-pak",
+     "path": "/SWZeroCompany/Content/Paks/~mods"
+    },
+    {
+     "id": "swzc-logicmods",
+     "path": "/SWZeroCompany/Content/Paks"
+    },
+    {
+     "id": "swzc-ue4ss",
+     "path": "/SWZeroCompany/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "swzc-ue4ss-injector",
+     "path": "/SWZeroCompany/Binaries/Win64"
+    },
+    {
+     "id": "swzc-binaries",
+     "path": "/SWZeroCompany/Binaries/Win64"
+    },
+    {
+     "id": "swzc-contentfolder",
+     "path": "/SWZeroCompany"
+    },
+    {
+     "id": "swzc-pakalt",
+     "path": "/SWZeroCompany/Content"
+    },
+    {
+     "id": "swzc-config",
+     "path": "/SWZeroCompany/Saved/Config/Windows"
+    }
+   ]
+  },
   "stateofdecay": {
    "name": "State of Decay",
    "modPath": "game",
@@ -490,6 +4616,246 @@
    "steamAppId": 241540,
    "executable": "StateOfDecay.exe",
    "source": "game-stateofdecay"
+  },
+  "stellarblade": {
+   "name": "Stellar Blade",
+   "modPath": "SB\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3489700,
+   "executable": "SB.exe",
+   "source": "1324-9467"
+  },
+  "storyofseasonsgrandbazaar": {
+   "name": "STORY OF SEASONS: Grand Bazaar",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2508780,
+   "executable": "SOSGrandBazaar.exe",
+   "source": "1784-7483"
+  },
+  "storyofseasonspioneersofolivetown": {
+   "name": "STORY OF SEASONS Pioneers of Olive Town",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "1392960",
+   "executable": "STORY OF SEASONS Pioneers of Olive Town.exe",
+   "source": "410-1541"
+  },
+  "stray": {
+   "name": "Stray",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "1332010",
+   "executable": "Hk_project\\Binaries\\Win64\\Stray-Win64-Shipping.exe",
+   "source": "430-1602"
+  },
+  "streetfighter6": {
+   "name": "Street Fighter 6",
+   "modPath": "Games\\SF6\\Mods",
+   "mergeMods": true,
+   "steamAppId": 1364780,
+   "executable": "StreetFighter6.exe",
+   "source": "956-7262"
+  },
+  "streetsofrogue": {
+   "name": "Streets of Rogue",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 512900,
+   "executable": "StreetsOfRogue.exe",
+   "source": "250-1073"
+  },
+  "styxbladesofgreed": {
+   "name": "Styx: Blades of Greed",
+   "modPath": "Styx3\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 3290690,
+   "executable": "Styx3.exe",
+   "source": "1650-8963",
+   "modTypes": [
+    {
+     "id": "styxbladesofgreed-uesortablepak",
+     "path": "Styx3\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "subnautica": {
+   "name": "Subnautica",
+   "modPath": "C:\\GAME\\BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 264710,
+   "executable": "Subnautica.exe",
+   "source": "202-2812",
+   "modTypes": [
+    {
+     "id": "qmodmanager-4",
+     "path": "BepInEx"
+    },
+    {
+     "id": "bepinex-plugin",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "bepinex-patcher",
+     "path": "BepInEx"
+    },
+    {
+     "id": "bepinex-mixed",
+     "path": "BepInEx"
+    },
+    {
+     "id": "qmodmanager-mod",
+     "path": "QMods"
+    },
+    {
+     "id": "customhullplates-pack",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "customposters-pack",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "customcraft2-plugin",
+     "path": "BepInEx\\plugins"
+    }
+   ]
+  },
+  "subnautica2": {
+   "name": "Subnautica 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1962700,
+   "executable": "Subnautica2.exe",
+   "source": "1891-8973",
+   "modTypes": [
+    {
+     "id": "subnautica2-pak",
+     "path": "/Subnautica2/Content/Paks"
+    },
+    {
+     "id": "subnautica2-logicmods",
+     "path": "/Subnautica2/Content/Paks"
+    },
+    {
+     "id": "subnautica2-ue4ss",
+     "path": "/Subnautica2/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "subnautica2-ue4ss-injector",
+     "path": "/Subnautica2/Binaries/Win64"
+    },
+    {
+     "id": "subnautica2-contentfolder",
+     "path": "/Subnautica2"
+    }
+   ]
+  },
+  "subnauticabelowzero": {
+   "name": "Subnautica: Below Zero",
+   "modPath": "C:\\GAME\\BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 848450,
+   "executable": "SubnauticaZero.exe",
+   "source": "203-2814",
+   "modTypes": [
+    {
+     "id": "qmodmanager-4",
+     "path": "BepInEx"
+    },
+    {
+     "id": "bepinex-plugin",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "bepinex-patcher",
+     "path": "BepInEx"
+    },
+    {
+     "id": "bepinex-mixed",
+     "path": "BepInEx"
+    },
+    {
+     "id": "qmodmanager-mod",
+     "path": "QMods"
+    },
+    {
+     "id": "customhullplates-pack",
+     "path": "QMods"
+    },
+    {
+     "id": "customposters-pack",
+     "path": "QMods"
+    }
+   ]
+  },
+  "subside": {
+   "name": "Subside",
+   "modPath": "Subside/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": 2550040,
+   "executable": "Subside.exe",
+   "source": "2019-8246",
+   "modTypes": [
+    {
+     "id": "subside-save",
+     "path": "AppData\\Local\\Subside\\Saved\\SaveGames"
+    }
+   ]
+  },
+  "sunhaven": {
+   "name": "Sun Haven",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": false,
+   "steamAppId": 1432860,
+   "executable": "Sun Haven.exe",
+   "source": "556-2111"
+  },
+  "sunlesssea": {
+   "name": "Sunless Sea",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "304650",
+   "executable": "Sunless Sea.exe",
+   "source": "873-3649"
+  },
+  "superherosquadonlineforever": {
+   "name": "Super Hero Squad Underground",
+   "modPath": "./shso_Data/AssetBundles",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "shso.exe",
+   "source": "472-6574"
+  },
+  "supermarketsimulator": {
+   "name": "Supermarket Simulator",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2670630",
+   "executable": "Supermarket Simulator.exe",
+   "source": "942-6219"
+  },
+  "supermarkettogether": {
+   "name": "Supermarket Together",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Supermarket Together.exe",
+   "source": "1946-8411"
+  },
+  "surroundead": {
+   "name": "SurrounDead",
+   "modPath": "SurrounDead\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1645820,
+   "executable": "SurrounDead.exe",
+   "source": "1637-6719",
+   "modTypes": [
+    {
+     "id": "surroundead-uesortablepak",
+     "path": "SurrounDead\\Content\\Paks\\~mods"
+    }
+   ]
   },
   "survivingmars": {
    "name": "Surviving Mars",
@@ -499,6 +4865,78 @@
    "executable": "MarsSteam.exe",
    "source": "game-survivingmars"
   },
+  "synergy": {
+   "name": "Synergy",
+   "modPath": "synergy\\custom",
+   "mergeMods": true,
+   "steamAppId": 17520,
+   "executable": "synergy.exe",
+   "source": "127-530"
+  },
+  "systemshock2": {
+   "name": "System Shock 2 (1999)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "238210",
+   "executable": "SS2.exe",
+   "source": "1359-9409"
+  },
+  "systemshock2023": {
+   "name": "System Shock (2023)",
+   "modPath": "SystemShock\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": "482400",
+   "executable": "SystemShock.exe",
+   "source": "923-4517"
+  },
+  "systemshock225thanniversaryremaster": {
+   "name": "System Shock 2: 25th Anniversary Remaster",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 866570,
+   "executable": "hathor_Shipping_Playfab_Steam_x64.exe",
+   "source": "1359-9409"
+  },
+  "taintedgrailthefallofavalon": {
+   "name": "Tainted Grail: The Fall of Avalon",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "1466060",
+   "executable": "Fall of Avalon.exe",
+   "source": "1318-8341"
+  },
+  "talesofarise": {
+   "name": "Tales of Arise",
+   "modPath": "Arise",
+   "mergeMods": true,
+   "steamAppId": 740130,
+   "executable": "Arise\\Binaries\\Win64\\Tales of Arise.exe",
+   "source": "500-3839"
+  },
+  "talesofglory": {
+   "name": "Tales of Glory",
+   "modPath": "TalesOfGlory_Data",
+   "mergeMods": true,
+   "steamAppId": "636970",
+   "executable": "TalesOfGlory.exe",
+   "source": "797-2941"
+  },
+  "tcgcardshopsimulator": {
+   "name": "TCG Card Shop Simulator",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Card Shop Simulator.exe",
+   "source": "1058-6028"
+  },
+  "teamcomtress2": {
+   "name": "Team Comtress 2",
+   "modPath": "tc2\\custom",
+   "mergeMods": true,
+   "steamAppId": 440,
+   "executable": "tc2_win64.exe",
+   "source": "167-4773"
+  },
   "teamfortress2": {
    "name": "Team Fortress 2",
    "modPath": "tf\\custom",
@@ -507,6 +4945,38 @@
    "executable": "tf_win64.exe",
    "source": "game-teamfortress2"
   },
+  "techtonica": {
+   "name": "Techtonica",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 1457320,
+   "executable": "Techtonica.exe",
+   "source": "612-2230"
+  },
+  "tekken8": {
+   "name": "TEKKEN 8",
+   "modPath": "Polaris\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1778820,
+   "executable": "TEKKEN 8.exe",
+   "source": "1833-9468"
+  },
+  "terraria": {
+   "name": "Terraria ModLoader",
+   "modPath": "Documents\\My Games\\Terraria\\tModLoader",
+   "mergeMods": true,
+   "steamAppId": "1281930",
+   "executable": "start-tModLoader.bat",
+   "source": "857-3386"
+  },
+  "tesarena": {
+   "name": "The Elder Scrolls: Arena",
+   "modPath": "ARENA",
+   "mergeMods": true,
+   "steamAppId": 1812290,
+   "executable": "Arena (Full Screen).bat",
+   "source": "420-1575"
+  },
   "teso": {
    "name": "The Elder Scrolls Online",
    "modPath": "Elder Scrolls Online\\live\\Addons",
@@ -514,6 +4984,232 @@
    "steamAppId": 306130,
    "executable": "Bethesda.net_Launcher.exe",
    "source": "game-teso"
+  },
+  "thebindingofisaacrebirth": {
+   "name": "The Binding of Isaac: Rebirth",
+   "modPath": "mods",
+   "mergeMods": false,
+   "steamAppId": null,
+   "executable": "isaac-ng.exe",
+   "source": "516-4127"
+  },
+  "thebloodofdawnwalker": {
+   "name": "The Blood of Dawnwalker",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3751260,
+   "executable": "Dawnwalker/Binaries/Win64/Dawnwalker.exe",
+   "source": "2248-9535",
+   "modTypes": [
+    {
+     "id": "dawnwalker-pak",
+     "path": "/Dawnwalker/Content/Paks/~mods"
+    },
+    {
+     "id": "dawnwalker-logicmods",
+     "path": "/Dawnwalker/Content/Paks"
+    },
+    {
+     "id": "dawnwalker-ue4ss",
+     "path": "/Dawnwalker/Binaries/Win64/ue4ss/Mods"
+    },
+    {
+     "id": "dawnwalker-ue4ss-injector",
+     "path": "/Dawnwalker/Binaries/Win64"
+    },
+    {
+     "id": "dawnwalker-binaries",
+     "path": "/Dawnwalker/Binaries/Win64"
+    },
+    {
+     "id": "dawnwalker-contentfolder",
+     "path": "/Dawnwalker"
+    },
+    {
+     "id": "dawnwalker-pakalt",
+     "path": "/Dawnwalker/Content"
+    },
+    {
+     "id": "dawnwalker-config",
+     "path": "/Dawnwalker/Saved/Config/Windows"
+    }
+   ]
+  },
+  "thecaligulaeffect2": {
+   "name": "The Caligula Effect 2",
+   "modPath": "TheCaligulaEffect2/Content/Paks",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "TheCaligulaEffect2.exe",
+   "source": "437-1620"
+  },
+  "thedarkpicturesanthologyhouseofashes": {
+   "name": "The Dark Pictures Anthology: House of Ashes",
+   "modPath": "SMG025/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1281590",
+   "executable": "HouseOfAshes.exe",
+   "source": "367-1422"
+  },
+  "thedarkpicturesanthologylittlehope": {
+   "name": "The Dark Pictures Anthology: Little Hope",
+   "modPath": "SMG024/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1194630",
+   "executable": "LittleHope.exe",
+   "source": "368-1423"
+  },
+  "thedarkpicturesanthologymanofmedan": {
+   "name": "The Dark Pictures Anthology: Man of Medan",
+   "modPath": "SMG019/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "939850",
+   "executable": "ManOfMedan.exe",
+   "source": "369-1424"
+  },
+  "thedarkpicturesanthologythedevilinme": {
+   "name": "The Dark Pictures Anthology: The Devil In Me",
+   "modPath": "SMG028/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1567020",
+   "executable": "TheDevilInMe.exe",
+   "source": "487-1820"
+  },
+  "thefirstberserkerkhazan": {
+   "name": "The First Berzerker: Khazan",
+   "modPath": "BBQ",
+   "mergeMods": true,
+   "steamAppId": "2680010",
+   "executable": "KZ.exe",
+   "source": "1542-6444"
+  },
+  "thehuntercallofthewild": {
+   "name": "theHunter: Call of the Wild",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 518790,
+   "executable": "theHunterCotW_F.exe",
+   "source": "1432-8326",
+   "modTypes": [
+    {
+     "id": "thehuntercallofthewild-save",
+     "path": "Avalanche Studios\\Microsoft Store\\COTW\\Saves"
+    }
+   ]
+  },
+  "thekillingantidote": {
+   "name": "The Killing Antidote",
+   "modPath": "TheKillingAntidote/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "2254890",
+   "executable": "TheKillingAntidote.exe",
+   "source": "1073-4162"
+  },
+  "thelastcaretaker": {
+   "name": "The Last Caretaker",
+   "modPath": "Voyage\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1783560,
+   "executable": "Voyage.exe",
+   "source": "1624-6684",
+   "modTypes": [
+    {
+     "id": "thelastcaretaker-uesortablepak",
+     "path": "Voyage\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "thelastofuspart1": {
+   "name": "The Last of Us Part I",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1888930,
+   "executable": "launcher.exe",
+   "source": "839-9379"
+  },
+  "thelastofuspart2": {
+   "name": "The Last of Us Part II Remastered",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 2531310,
+   "executable": "launcher.exe",
+   "source": "1250-9475"
+  },
+  "thelastspell": {
+   "name": "The Last Spell",
+   "modPath": "BepInEx/plugins",
+   "mergeMods": true,
+   "steamAppId": "1105670",
+   "executable": "The Last Spell.exe",
+   "source": "1455-5879"
+  },
+  "thelegendofheorestrailsthroughdaybreak": {
+   "name": "The Legend of Heroes: Trails Through Daybreak",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": "2138610",
+   "executable": "kuro.exe",
+   "source": "954-3525"
+  },
+  "thelordoftheringsreturntomoria": {
+   "name": "The Lord of the Rings: Return to Moria",
+   "modPath": "Moria\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2933130,
+   "executable": "Moria.exe",
+   "source": "1635-6711",
+   "modTypes": [
+    {
+     "id": "thelordoftheringsreturntomoria-uesortablepak",
+     "path": "Moria\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "theouterworlds": {
+   "name": "The Outer Worlds",
+   "modPath": "Indiana\\Binaries\\WinGDK",
+   "mergeMods": true,
+   "steamAppId": 578650,
+   "executable": "gamelaunchhelper.exe",
+   "source": "964-8017"
+  },
+  "theouterworlds2": {
+   "name": "The Outer Worlds 2",
+   "modPath": "Arkansas\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": "1449110",
+   "executable": "gamelaunchhelper.exe",
+   "source": "1498-6151",
+   "modTypes": [
+    {
+     "id": "theouterworlds2-ue5-sortable-modtype",
+     "path": "Arkansas\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "thequarry": {
+   "name": "The Quarry",
+   "modPath": "SMG026/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1577120",
+   "executable": "TheQuarry.exe",
+   "source": "526-1959"
+  },
+  "theriftbreaker": {
+   "name": "The Riftbreaker",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": "780310",
+   "executable": "bin/riftbreaker_win_release.exe",
+   "source": "300-1320"
+  },
+  "thesimpsonshitandrun": {
+   "name": "The Simpsons: Hit & Run",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Simpsons.exe",
+   "source": "360-1400"
   },
   "thesims3": {
    "name": "The Sims 3",
@@ -537,6 +5233,74 @@
     }
    ]
   },
+  "theuniversim": {
+   "name": "The Universim",
+   "modPath": "C:\\GAME\\BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": 352720,
+   "executable": "The Universim.exe",
+   "source": "751-2678",
+   "modTypes": [
+    {
+     "id": "bepinex-plugin",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "bepinex-patcher",
+     "path": "BepInEx"
+    },
+    {
+     "id": "bepinex-mixed",
+     "path": "BepInEx"
+    }
+   ]
+  },
+  "thiefsimulator": {
+   "name": "Thief Simulator",
+   "modPath": "BepInEx/plugins",
+   "mergeMods": true,
+   "steamAppId": "704850",
+   "executable": "thief.exe",
+   "source": "1377-5543"
+  },
+  "titanquest2": {
+   "name": "Titan Quest 2",
+   "modPath": "TQ2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1154030,
+   "executable": "TQ2.exe",
+   "source": "1430-5796",
+   "modTypes": [
+    {
+     "id": "titanquest2-uesortablepak",
+     "path": "TQ2\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "tombraider2013": {
+   "name": "Tomb Raider (2013)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "203160",
+   "executable": "TombRaider.exe",
+   "source": "893-6183"
+  },
+  "tombraidertrilogy2remastered": {
+   "name": "Tomb Raider VI-IV Remastered",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2525380",
+   "executable": "tomb456.exe",
+   "source": "1190-4745"
+  },
+  "tombraidertrilogyremastered": {
+   "name": "Tomb Raider I-III Remastered",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "2478970",
+   "executable": "tomb123.exe",
+   "source": "796-2788"
+  },
   "torchlight2": {
    "name": "Torchlight II",
    "modPath": "My Games\\runic games\\torchlight 2\\mods",
@@ -544,6 +5308,14 @@
    "steamAppId": 200710,
    "executable": "ModLauncher.exe",
    "source": "game-torchlight2"
+  },
+  "totalwarsagatroy": {
+   "name": "A Total War Saga: TROY",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": 1099410,
+   "executable": "Troy.exe",
+   "source": "157-695"
   },
   "totalwarthreekingdoms": {
    "name": "Total War: Three Kingdoms",
@@ -553,6 +5325,102 @@
    "executable": "Launcher.exe",
    "source": "game-totalwarthreekingdoms"
   },
+  "totalwarwarhammer3": {
+   "name": "Total War: Warhammer III",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": 1142710,
+   "executable": "Warhammer3.exe",
+   "source": "583-2133"
+  },
+  "toweroffantasy": {
+   "name": "Tower of Fantasy",
+   "modPath": "Client/WindowsNoEditor/Hotta/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "2064650",
+   "executable": "WmGpLaunch/WmgpLauncher.exe",
+   "source": "793-4843"
+  },
+  "trailsintheskyfirstchapter": {
+   "name": "Trails in the Sky 1st Chapter",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 3375780,
+   "executable": "sora_1st.exe",
+   "source": "1530-6734"
+  },
+  "travellersrest": {
+   "name": "Travellers Rest",
+   "modPath": "Windows\\BepInEx\\plugins",
+   "mergeMods": false,
+   "steamAppId": "1139980",
+   "executable": "Windows/TravellersRest.exe",
+   "source": "1133-4521"
+  },
+  "trepang2": {
+   "name": "Trepang2",
+   "modPath": "CPPFPS\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1164940,
+   "executable": "gamelaunchhelper.exe",
+   "source": "981-9469"
+  },
+  "trialsofmana": {
+   "name": "Trials of Mana",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "924980",
+   "executable": "Trials of Mana/Trials of Mana/Binaries/Win64/Trials of Mana-Win64-Shipping.exe",
+   "source": "146-671",
+   "modTypes": [
+    {
+     "id": "trialsofmana-pak-modtype",
+     "path": "Trials of Mana\\Trials of Mana\\Content\\Paks\\~mod"
+    }
+   ]
+  },
+  "unchartedlegacyofthievescollection": {
+   "name": "Uncharted: Legacy of Thieves Collection",
+   "modPath": "Games\\UC4\\Mods",
+   "mergeMods": true,
+   "steamAppId": 1659420,
+   "executable": "u4-l.exe",
+   "source": "1048-8964"
+  },
+  "undertale": {
+   "name": "UNDERTALE",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "391540",
+   "executable": "UNDERTALE.exe",
+   "source": "706-2564"
+  },
+  "unrealtournament2004": {
+   "name": "Unreal Tournament 2004",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "System\\UT2004.exe",
+   "source": "1703-9399"
+  },
+  "untildawn": {
+   "name": "Until Dawn",
+   "modPath": "Windows\\Bates\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 2172010,
+   "executable": "Windows\\Bates.exe",
+   "source": "1049-7811",
+   "modTypes": [
+    {
+     "id": "untildawn-ue5-sortable-modtype",
+     "path": "Windows\\Bates\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "ue5-sortable-modtype",
+     "path": "Windows\\Bates\\Content\\Paks\\~mods"
+    }
+   ]
+  },
   "untitledgoosegame": {
    "name": "Untitled Goose Game",
    "modPath": "BepInEx\\plugins",
@@ -560,6 +5428,32 @@
    "steamAppId": null,
    "executable": "Untitled.exe",
    "source": "game-untitledgoose"
+  },
+  "valheim": {
+   "name": "Valheim",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": "892970",
+   "executable": "valheim.exe",
+   "source": "210-6460",
+   "modTypes": [
+    {
+     "id": "bepinex-dll-modtype",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "bepinex-config-modtype",
+     "path": "BepInEx\\config"
+    }
+   ]
+  },
+  "valkyrieelysium": {
+   "name": "VALKYRIE ELYSIUM",
+   "modPath": "VALKYRIE_ELYSIUM/Content/Paks/~mods",
+   "mergeMods": true,
+   "steamAppId": "1963210",
+   "executable": "VALKYRIE_ELYSIUM/Binaries/Win64/VALKYRIE_ELYSIUM.exe",
+   "source": "627-2270"
   },
   "vampirebloodlines": {
    "name": "Vampire the Masquerade\tBloodlines",
@@ -575,6 +5469,166 @@
     }
    ]
   },
+  "vampiresurvivors": {
+   "name": "Vampire Survivors",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1794680",
+   "executable": "VampireSurvivors.exe",
+   "source": "593-3361"
+  },
+  "vein": {
+   "name": "VEIN",
+   "modPath": "Vein\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1857950,
+   "executable": "Vein.exe",
+   "source": "1625-6681",
+   "modTypes": [
+    {
+     "id": "vein-uesortablepak",
+     "path": "Vein\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "vendettaonline": {
+   "name": "Vendetta Online",
+   "modPath": "plugins",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "vendetta.exe",
+   "source": "554-2054"
+  },
+  "vermintide2": {
+   "name": "Warhammer - Vermintide 2",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 552500,
+   "executable": "launcher\\Launcher.exe",
+   "source": "838-8785"
+  },
+  "voidtrain": {
+   "name": "Voidtrain",
+   "modPath": "VoidTrain\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 1159690,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1540-6335",
+   "modTypes": [
+    {
+     "id": "voidtrain-uesortablepak",
+     "path": "VoidTrain\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "vrising": {
+   "name": "V Rising",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1604030,
+   "executable": "VRising.exe",
+   "source": "405-6569",
+   "modTypes": [
+    {
+     "id": "vrising-bix-root",
+     "path": "BepInEx"
+    },
+    {
+     "id": "vrising-bix-plugin",
+     "path": "BepInEx\\plugins"
+    },
+    {
+     "id": "vrising-bix-patcher",
+     "path": "BepInEx\\patchers"
+    }
+   ]
+  },
+  "vtmbloodlines2": {
+   "name": "Vampire: The Masquerade - Bloodlines 2",
+   "modPath": "Bloodlines2\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 532790,
+   "executable": "Bloodlines2.exe",
+   "source": "1500-6137",
+   "modTypes": [
+    {
+     "id": "vtmbloodlines2-uesortablepak",
+     "path": "Bloodlines2\\Content\\Paks\\~mods"
+    },
+    {
+     "id": "vtmbloodlines2-config",
+     "path": "Bloodlines2"
+    },
+    {
+     "id": "vtmbloodlines2-save",
+     "path": "Bloodlines2"
+    }
+   ]
+  },
+  "warhammer40000boltgun": {
+   "name": "Warhammer 40,000: Boltgun",
+   "modPath": "Boltgun\\Content\\Paks",
+   "mergeMods": true,
+   "steamAppId": 2005010,
+   "executable": "Boltgun\\Binaries\\WinGDK\\Boltgun-WinGDK-Shipping.exe",
+   "source": "679-7469"
+  },
+  "warhammer40000gladiusrelicsofwar": {
+   "name": "Warhammer 40000 Gladius - Relics of War",
+   "modPath": "Proxy Studios\\Gladius\\Mods",
+   "mergeMods": false,
+   "steamAppId": 489630,
+   "executable": "Gladius.exe",
+   "source": "106-8187"
+  },
+  "warhammer40000spacemarine": {
+   "name": "Warhammer 40,000: Space Marine",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 55150,
+   "executable": "SpaceMarine.exe",
+   "source": "894-8788"
+  },
+  "warhammer40000spacemarine2": {
+   "name": "Warhammer 40,000: Space Marine 2",
+   "modPath": "client_pc\\root\\mods",
+   "mergeMods": true,
+   "steamAppId": 2183900,
+   "executable": "gamelaunchhelper.exe",
+   "source": "961-9476"
+  },
+  "warhammer40kbattlesector": {
+   "name": "Warhammer 40,000: Battlesector",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 1295500,
+   "executable": "Warhammer 40K Battlesector.exe",
+   "source": "2079-8649"
+  },
+  "warhammer40kdarktide": {
+   "name": "Warhammer 40,000: Darktide",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1361210",
+   "executable": "binaries/Darktide.exe",
+   "source": "684-4275"
+  },
+  "warhammer40kdawnofwar": {
+   "name": "Warhammer 40,000: Dawn of War - Definitive Edition",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": "3556750",
+   "executable": "W40k.exe",
+   "source": "1934-8999"
+  },
+  "warhammer40kroguetrader": {
+   "name": "Warhammer 40,000: Rogue Trader",
+   "modPath": "AppData\\LocalLow\\Owlcat Games\\Warhammer 40000 Rogue Trader",
+   "mergeMods": true,
+   "steamAppId": 2186680,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1627-9477"
+  },
   "warthunder": {
    "name": "War Thunder",
    "modPath": "UserSkins",
@@ -588,6 +5642,52 @@
      "path": "sound\\mod"
     }
    ]
+  },
+  "watchdogs": {
+   "name": "Watch_Dogs",
+   "modPath": "data_win64\\mods",
+   "mergeMods": true,
+   "steamAppId": 243470,
+   "executable": "bin\\Watch_Dogs.exe",
+   "source": "1995-8197"
+  },
+  "whiskerwood": {
+   "name": "Whiskerwood",
+   "modPath": "Whiskerwood\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2489330,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1534-6730",
+   "modTypes": [
+    {
+     "id": "whiskerwood-uesortablepak",
+     "path": "Whiskerwood\\Content\\Paks\\~mods"
+    }
+   ]
+  },
+  "wildermyth": {
+   "name": "Wildermyth",
+   "modPath": "mods/user",
+   "mergeMods": false,
+   "steamAppId": "763890",
+   "executable": "wildermyth",
+   "source": "440-1643"
+  },
+  "windrose": {
+   "name": "Windrose",
+   "modPath": "R5",
+   "mergeMods": true,
+   "steamAppId": 3041230,
+   "executable": "Windrose.exe",
+   "source": "1752-9470"
+  },
+  "windrose-server": {
+   "name": "Windrose Dedicated Server",
+   "modPath": "R5",
+   "mergeMods": true,
+   "steamAppId": 4129620,
+   "executable": "WindroseServer.exe",
+   "source": "1752-9470"
   },
   "witcher": {
    "name": "The Witcher",
@@ -617,6 +5717,14 @@
     }
    ]
   },
+  "witchfire": {
+   "name": "Witchfire",
+   "modPath": "Witchfire\\Binaries\\Win64",
+   "mergeMods": true,
+   "steamAppId": 3156770,
+   "executable": "Witchfire.exe",
+   "source": "662-8593"
+  },
   "wolcenlordsofmayhem": {
    "name": "Wolcen:\tLords Of Mayhem",
    "modPath": "Game",
@@ -625,6 +5733,14 @@
    "executable": "win_x64\\Wolcen.exe",
    "source": "game-wolcen"
   },
+  "wolfenstein2009": {
+   "name": "Wolfenstein (2009)",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 10170,
+   "executable": "SP\\Wolf2.exe",
+   "source": "985-9401"
+  },
   "worldoftanks": {
    "name": "World Of Tanks",
    "modPath": "C:\\GAME\\res_mods",
@@ -632,6 +5748,44 @@
    "steamAppId": null,
    "executable": "WorldOfTanks.exe",
    "source": "game-worldoftanks"
+  },
+  "worldofwarcraft": {
+   "name": "World of Warcraft",
+   "modPath": "_retail_\\Interface\\AddOns",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "_retail_\\wow.exe",
+   "source": "91-639"
+  },
+  "worldofwarcraftclassic": {
+   "name": "World of Warcraft Classic",
+   "modPath": "_classic_\\Interface\\AddOns",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "_classic_\\WowClassic.exe",
+   "source": "91-639"
+  },
+  "wreckfest2": {
+   "name": "Wreckfest 2",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": 1203190,
+   "executable": "Wreckfest2.exe",
+   "source": "1311-6236"
+  },
+  "wuchangfallenfeathers": {
+   "name": "WUCHANG: Fallen Feathers",
+   "modPath": "Project_Plague\\Content\\Paks\\~mods",
+   "mergeMods": true,
+   "steamAppId": 2277560,
+   "executable": "gamelaunchhelper.exe",
+   "source": "1385-7800",
+   "modTypes": [
+    {
+     "id": "wuchangfallenfeathers-ue5-sortable-modtype",
+     "path": "Project_Plague\\Content\\Paks\\~mods"
+    }
+   ]
   },
   "x4foundations": {
    "name": "X4: Foundations",
@@ -670,6 +5824,22 @@
    "steamAppId": 2870,
    "executable": "XRebirth.exe",
    "source": "game-xrebirth"
+  },
+  "yakuzakiwami3": {
+   "name": "Yakuza Kiwami 3 & Dark Ties",
+   "modPath": "runtime\\media\\mods",
+   "mergeMods": true,
+   "steamAppId": 3937550,
+   "executable": "runtime\\media\\startup.exe",
+   "source": "1815-7575"
+  },
+  "zerosievert": {
+   "name": "Zero Sievert",
+   "modPath": "",
+   "mergeMods": true,
+   "steamAppId": "1782120",
+   "executable": "ZERO Sievert.exe",
+   "source": "618-5390"
   }
  }
 }

@@ -994,7 +994,14 @@ def apply_vortex_rule(game: dict, rule: dict, root_entries: set) -> bool:
     if not rule or game.get("toolApply") or game.get("installMode") == "dataDir":
         return False
     mod_dir = vortex_mod_dir(rule, root_entries)
-    if not mod_dir:
+    low = mod_dir.lower()
+    # Only where Vortex knows something our own inspection does not: the
+    # game folder itself is already handled file by file, Unreal pak games
+    # already route to Content/Paks/~mods, and a Binaries folder is where
+    # an extension keeps loaders while its paks go elsewhere (Sparking
+    # Zero's rule points there - following it would break every pak mod).
+    if (not mod_dir or mod_dir == "." or "/content/paks" in "/" + low
+            or low.split("/")[-1] in ("win64", "win32") or "/binaries" in "/" + low):
         return False
     if mod_dir != ".":
         game["modsSubdir"] = mod_dir

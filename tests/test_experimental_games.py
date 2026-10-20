@@ -430,3 +430,7 @@ class VortexRuleTests(unittest.TestCase):
         self.assertEqual(classify_mod(["MyMod/ModInfo.xml", "MyMod/Config/x.xml"], g, {"Mods", "Data"}, {}),
                          "mods_folder")
         self.assertFalse(apply_vortex_rule({"toolApply": "overstrike"}, {"modPath": "Mods"}, {"Mods"}))
+        # Not where our own handling is already right, or a loader folder.
+        for path in (".", "SparkingZERO\\Binaries\\Win64", "Game\\Content\\Paks\\~mods"):
+            g2 = {"modsSubdir": "x"}
+            self.assertFalse(apply_vortex_rule(g2, {"modPath": path}, {"SparkingZERO", "Game"}), path)
