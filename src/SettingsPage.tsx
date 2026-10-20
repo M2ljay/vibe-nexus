@@ -14,6 +14,7 @@ import { UserPrefs, getUserPrefs, setUserPrefs } from "./api";
 import { NEXUS_ORANGE, PAGE_SCROLLER } from "./theme";
 import { TabBar, exitTabsToQam, handleTabButtons } from "./Tabs";
 import { ExperimentalToggle } from "./ExperimentalSetup";
+import { LibraryScan } from "./LibraryScan";
 
 const Scroller: any = ScrollPanelGroup;
 
@@ -281,6 +282,10 @@ export function SettingsPage() {
 
             <Section title="Experimental" blurb="for games without built-in support">
               <ExperimentalToggle />
+            </Section>
+
+            <Section title="Your Steam library" blurb="which of your games mods should work for">
+              <LibraryScan />
             </Section>
 
             <div style={{ fontSize: "12px", opacity: 0.55, lineHeight: 1.5 }}>

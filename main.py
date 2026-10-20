@@ -32165,6 +32165,186 @@ query CollectionInstructions($slug: String!) {
         decky.logger.info(f"{result.get('tool')} apply for {game['nexusDomain']} (manual): {result}")
         return result
 
+    async def _coverage_rows(self, game: dict, app_id: int, count: int):
+        """(rows, roots, index, file_index, fw_id, paths by mod id) for the
+        game's top `count` mods, judged from Nexus's file listings."""
+        domain = game["nexusDomain"]
+        top = await self.get_mods(domain, "endorsements", int(count), 0, "", int(app_id))
+        if not top.get("ok"):
+            raise RuntimeError(top.get("error") or "Could not list mods")
+        install_path = _game_dir(game.get("installDirName") or "")
+
+        def local():
+            try:
+                roots = set(os.listdir(install_path))
+            except OSError:
+                roots = set()
+            return (roots, experimental_games.index_game_dirs(install_path),
+                    experimental_games.index_game_files(
+                        install_path, game.get("modsSubdir") or ""))
+
+        roots, index, file_index = await asyncio.to_thread(local)
+        game_id = await _resolve_game_id(domain, _load_settings().get("api_key"))
+        fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
+        sem = asyncio.Semaphore(4)
+        paths_by_mod: dict = {}
+
+        async def one(m):
+            mid = int(m.get("modId") or 0)
+            async with sem:
+                files = await self.get_mod_files(domain, mid)
+                main_file = _pick_main_file(
+                    (files.get("files") or []) if files.get("ok") else [])
+                paths = None
+                if main_file:
+                    link = main_file.get("content_preview_link") or (
+                        # Newer uploads come back without the link; the
+                        # listing often exists at the usual address.
+                        "https://file-metadata.nexusmods.com/file/"
+                        f"nexus-files-s3-meta/{game_id}/{mid}/"
+                        f"{main_file.get('file_name')}.json")
+                    paths = await _preview_paths(link)
+            verdict = experimental_games.classify_mod(
+                paths, game, roots, index, is_framework=(mid == fw_id),
+                file_index=file_index)
+            paths_by_mod[mid] = paths
+            return {"modId": mid, "name": m.get("name") or str(mid),
+                    "verdict": verdict,
+                    "file": (main_file or {}).get("file_name") or "",
+                    "fileId": int((main_file or {}).get("file_id") or 0),
+                    "sizeKb": int((main_file or {}).get("size_kb") or 0),
+                    "sample": (paths or [])[:6]}
+
+        rows = await asyncio.gather(*(one(m) for m in top.get("mods") or []))
+        return list(rows), roots, index, file_index, fw_id, paths_by_mod
+
+    # ---- Whole-library scan ------------------------------------------------
+
+    async def scan_steam_library(self, known_app_ids: list = None) -> dict:
+        """Every installed Steam game, matched to its Nexus Mods page.
+        known_app_ids: games the panel already supports (curated)."""
+        try:
+            known = {int(a) for a in known_app_ids or []}
+            installed = await asyncio.to_thread(
+                experimental_games.installed_games, _steam_libraries())
+            nexus = await self._nexus_games_list()
+            exp = _load_settings().get("experimental_games") or {}
+            rows = []
+            for g in installed:
+                match = experimental_games.match_games(nexus, g["name"]) if nexus else {
+                    "exact": None, "candidates": []}
+                exact = match.get("exact")
+                status = ("supported" if g["appId"] in known
+                          else "added" if str(g["appId"]) in exp else "")
+                rows.append({
+                    **g,
+                    "domain": (exact or {}).get("domain") or "",
+                    "nexusName": (exact or {}).get("name") or "",
+                    "mods": int((exact or {}).get("mods") or 0),
+                    "candidates": [] if exact else (match.get("candidates") or [])[:5],
+                    "status": status,
+                })
+            settings = _load_settings()
+            scan = settings.setdefault("library_scan", {})
+            scan["at"] = int(time.time())
+            scan["games"] = rows
+            _save_settings(settings)
+            decky.logger.info(
+                f"library scan: {len(rows)} games, {sum(1 for r in rows if r['domain'])} "
+                f"matched on Nexus, {sum(1 for r in rows if r['status'])} already set up")
+            return {"ok": True, "games": rows, "results": scan.get("results") or {}}
+        except Exception as e:  # noqa: BLE001
+            decky.logger.exception("scan_steam_library crashed")
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def get_library_scan(self) -> dict:
+        scan = _load_settings().get("library_scan") or {}
+        task = getattr(self, "_library_task", None)
+        return {"ok": True, "games": scan.get("games") or [],
+                "results": scan.get("results") or {}, "at": scan.get("at") or 0,
+                "running": bool(task and not task.done())}
+
+    async def start_library_check(self, app_ids: list, count: int = 20) -> dict:
+        """Check, one game at a time in the background, how many of each
+        game's top mods would install where the game loads them."""
+        task = getattr(self, "_library_task", None)
+        if task and not task.done():
+            return {"ok": True, "running": True}
+        ids = [int(a) for a in app_ids or []]
+        self._library_cancel = False
+        self._library_task = asyncio.get_running_loop().create_task(
+            self._library_check(ids, int(count)))
+        return {"ok": True, "running": True, "queued": len(ids)}
+
+    async def cancel_library_check(self) -> dict:
+        self._library_cancel = True
+        return {"ok": True}
+
+    async def _library_check(self, app_ids: list, count: int) -> None:
+        scan = _load_settings().get("library_scan") or {}
+        by_id = {int(g["appId"]): g for g in scan.get("games") or []}
+        todo = [by_id[a] for a in app_ids if a in by_id and by_id[a].get("domain")]
+        failures = 0
+        for i, row in enumerate(todo):
+            if getattr(self, "_library_cancel", False):
+                break
+            app_id = int(row["appId"])
+            await decky.emit("library_check_progress", i, len(todo), app_id, None)
+            try:
+                result = await self._library_check_one(row, count)
+                failures = 0
+            except Exception as e:  # noqa: BLE001 - one game must not stop the rest
+                decky.logger.info(f"library check {row.get('domain')}: {e!r}")
+                result = {"error": f"{type(e).__name__}: {e}"[:160]}
+                failures += 1
+            result["at"] = int(time.time())
+            settings = _load_settings()
+            settings.setdefault("library_scan", {}).setdefault("results", {})[str(app_id)] = result
+            _save_settings(settings)
+            await decky.emit("library_check_progress", i + 1, len(todo), app_id, result)
+            if failures >= 3:
+                # Three in a row is Nexus refusing (rate limit or outage),
+                # not three bad games: stop rather than burn the allowance.
+                decky.logger.warning("library check: stopping after 3 failures in a row")
+                await decky.emit("library_check_progress", -1, len(todo), app_id,
+                                 {"error": "Stopped: Nexus Mods stopped answering. Try again later."})
+                break
+            await asyncio.sleep(1.0)
+        await decky.emit("library_check_progress", len(todo), len(todo), 0, {"done": True})
+
+    async def _library_check_one(self, row: dict, count: int) -> dict:
+        exp = (_load_settings().get("experimental_games") or {}).get(str(int(row["appId"])))
+        if exp:
+            game = exp
+        else:
+            path = _game_dir(row["installDir"])
+            inspection = await asyncio.to_thread(experimental_games.inspect_install, path)
+            if inspection.get("engine") == "missing":
+                return {"error": "Not installed on this PC"}
+            game = experimental_games.build_game(
+                int(row["appId"]), row["name"], row["installDir"], row["domain"],
+                row.get("nexusName") or row["name"], inspection)
+            rule = _vortex_rules().get(row["domain"])
+            if rule:
+                try:
+                    roots = set(os.listdir(path))
+                except OSError:
+                    roots = set()
+                experimental_games.apply_vortex_rule(game, rule, roots)
+        rows, *_rest, paths_by_mod = await self._coverage_rows(game, int(row["appId"]), count)
+        summary = experimental_games.summarize(rows)
+        root = _game_dir(game.get("installDirName") or "")
+        loader = generic_loaders.suggest_loader(
+            game.get("engine") or "", os.path.isfile(os.path.join(root, "GameAssembly.dll")),
+            list(paths_by_mod.values()), [])
+        out = {"working": summary.get("working", 0), "checked": summary.get("checked", 0),
+               "total": summary.get("total", 0), "engine": game.get("engine") or "",
+               "counts": summary.get("counts") or {}}
+        if loader and not (game.get("framework") or {}):
+            out["loader"] = generic_loaders.LOADERS[loader]["name"]
+        decky.logger.info(f"library check {row['domain']}: {out}")
+        return out
+
     async def check_experimental_coverage(self, app_id: int, count: int = 50,
                                           deep: bool = False) -> dict:
         """Predict, for the game's most-endorsed mods, whether each would
@@ -32175,51 +32355,8 @@ query CollectionInstructions($slug: String!) {
             if not game:
                 return {"ok": False, "error": "Set the game up first"}
             domain = game["nexusDomain"]
-            top = await self.get_mods(domain, "endorsements", int(count), 0, "", int(app_id))
-            if not top.get("ok"):
-                return {"ok": False, "error": top.get("error") or "Could not list mods"}
-            install_path = _game_dir(game.get("installDirName") or "")
-
-            def local():
-                try:
-                    roots = set(os.listdir(install_path))
-                except OSError:
-                    roots = set()
-                return (roots, experimental_games.index_game_dirs(install_path),
-                        experimental_games.index_game_files(
-                            install_path, game.get("modsSubdir") or ""))
-
-            roots, index, file_index = await asyncio.to_thread(local)
-            game_id = await _resolve_game_id(domain, _load_settings().get("api_key"))
-            fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
-            sem = asyncio.Semaphore(4)
-
-            async def one(m):
-                mid = int(m.get("modId") or 0)
-                async with sem:
-                    files = await self.get_mod_files(domain, mid)
-                    main_file = _pick_main_file(
-                        (files.get("files") or []) if files.get("ok") else [])
-                    paths = None
-                    if main_file:
-                        link = main_file.get("content_preview_link") or (
-                            # Newer uploads come back without the link; the
-                            # listing often exists at the usual address.
-                            "https://file-metadata.nexusmods.com/file/"
-                            f"nexus-files-s3-meta/{game_id}/{mid}/"
-                            f"{main_file.get('file_name')}.json")
-                        paths = await _preview_paths(link)
-                verdict = experimental_games.classify_mod(
-                    paths, game, roots, index, is_framework=(mid == fw_id),
-                    file_index=file_index)
-                return {"modId": mid, "name": m.get("name") or str(mid),
-                        "verdict": verdict,
-                        "file": (main_file or {}).get("file_name") or "",
-                        "fileId": int((main_file or {}).get("file_id") or 0),
-                        "sizeKb": int((main_file or {}).get("size_kb") or 0),
-                        "sample": (paths or [])[:6]}
-
-            rows = await asyncio.gather(*(one(m) for m in top.get("mods") or []))
+            rows, roots, index, file_index, fw_id, _paths = await self._coverage_rows(
+                game, int(app_id), int(count))
             if deep:
                 await self._deep_check(domain, game, rows, roots, index, file_index, fw_id)
             summary = experimental_games.summarize(rows)

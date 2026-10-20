@@ -2387,3 +2387,41 @@ export const setExperimentalFramework = callable<
   [app_id: number, mode: "none" | "redetect"],
   { ok: boolean; error?: string; game?: SupportedGame }
 >("set_experimental_framework");
+
+export interface LibraryGame {
+  appId: number;
+  name: string;
+  installDir: string;
+  domain: string;
+  nexusName: string;
+  mods: number;
+  candidates: { domain: string; name: string; mods: number }[];
+  status: "" | "supported" | "added";
+}
+
+export interface LibraryResult {
+  working?: number;
+  checked?: number;
+  total?: number;
+  engine?: string;
+  loader?: string;
+  error?: string;
+  at?: number;
+}
+
+export const scanSteamLibrary = callable<
+  [known_app_ids: number[]],
+  { ok: boolean; games?: LibraryGame[]; results?: Record<string, LibraryResult>; error?: string }
+>("scan_steam_library");
+
+export const getLibraryScan = callable<
+  [],
+  { ok: boolean; games: LibraryGame[]; results: Record<string, LibraryResult>; at: number; running: boolean }
+>("get_library_scan");
+
+export const startLibraryCheck = callable<
+  [app_ids: number[], count: number],
+  { ok: boolean; running?: boolean; queued?: number; error?: string }
+>("start_library_check");
+
+export const cancelLibraryCheck = callable<[], { ok: boolean }>("cancel_library_check");

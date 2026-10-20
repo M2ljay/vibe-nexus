@@ -1050,3 +1050,39 @@ def plan_merge(rel_files: list, merge_rel: str, merge_entries: set) -> list:
         dst = rest if merge_rel in ("", ".") else merge_rel + "/" + rest
         out.append((f, dst))
     return out
+
+
+# ---- Steam library scan ---------------------------------------------------------
+
+_NOT_GAMES = re.compile(
+    r"proton|steam linux runtime|steamworks common|steamvr|redistributable|"
+    r"dedicated server|\bsdk\b|soundtrack|playtest|benchmark|wallpaper engine|"
+    r"lossless scaling|steam audio",
+    re.I)
+_TOOL_APP_IDS = {228980, 1070560, 1391110, 1628350, 1493710, 250820, 1826330, 2180100}
+
+
+def installed_games(steamapps_dirs: list) -> list:
+    """[{appId, name, installDir}] for every installed Steam game in the
+    given steamapps folders, tools and runtimes left out."""
+    out, seen = [], set()
+    for lib in steamapps_dirs:
+        try:
+            names = os.listdir(lib)
+        except OSError:
+            continue
+        for n in names:
+            m = re.fullmatch(r"appmanifest_(\d+)\.acf", n)
+            if not m:
+                continue
+            app_id = int(m.group(1))
+            if app_id in seen or app_id in _TOOL_APP_IDS:
+                continue
+            info = read_appmanifest(os.path.join(lib, n))
+            name = info.get("name") or ""
+            if not name or not info.get("installdir") or _NOT_GAMES.search(name):
+                continue
+            seen.add(app_id)
+            out.append({"appId": app_id, "name": name, "installDir": info["installdir"]})
+    out.sort(key=lambda g: g["name"].lower())
+    return out
