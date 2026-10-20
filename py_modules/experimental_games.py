@@ -663,7 +663,7 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
 # has a command line (create-profile, install-mods), so the plugin keeps a
 # profile in step with what is installed and runs it - one press, no desktop.
 
-PROFILE_VERSION = 2
+PROFILE_VERSION = 3
 
 OVERSTRIKE_EXTS = [".smpcmod", ".suit", ".stage", ".modular", ".script"]
 OVERSTRIKE_DIR = "Overstrike"
@@ -859,6 +859,9 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
                            or "reshade-shaders/" in f for f in payload_low) \
             and not any(f.split("/")[-1] in PROXY_DLLS for f in low):
         return "reshade_preset"
+    if game.get("toolApply") == "reloaded" and any(
+            f.split("/")[-1] == "modconfig.json" for f in low):
+        return "tool_managed"
     exts = tuple(game.get("flatModExtensions") or [])
     if game.get("toolApply") or exts:
         if exts and any(f.endswith(exts) for f in low):

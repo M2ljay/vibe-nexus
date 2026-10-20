@@ -26,6 +26,7 @@ import decky
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "py_modules"))
 import experimental_games  # noqa: E402 - needs the py_modules path above
+import reloaded_ii  # noqa: E402
 
 
 def _steam_root() -> str:
@@ -7374,6 +7375,13 @@ def _remove_files_record(
     return True
 
 
+def _root_loader_off(install_path: str, name: str) -> bool:
+    """A root-level experimental loader (Reloaded-II's .asi) switched off:
+    only its .nexusoff copy is there."""
+    return ("." in name and not os.path.exists(os.path.join(install_path, name))
+            and os.path.exists(os.path.join(install_path, name + ".nexusoff")))
+
+
 def _experimental_game_for(game_domain: str):
     """The experimental (any-game) entry for a Nexus domain, or None.
     Curated games never match: their domains have no entry here."""
@@ -7394,6 +7402,10 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         for n in names:
             rel_files.append(
                 os.path.relpath(os.path.join(root, n), scratch).replace(os.sep, "/"))
+    if reloaded_ii.is_reloaded_game(game):
+        key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
+        if key:
+            return key
     try:
         root_entries = set(os.listdir(install_path))
     except OSError:
@@ -7663,6 +7675,395 @@ async def _overstrike_apply(game: dict) -> dict:
     return {"ok": True, "count": count}
 
 
+# --- Reloaded-II (Persona, Metaphor, Sonic) --------------------------------
+
+RELOADED_WORK = os.path.join(DOWNLOADS_DIR, "reloaded")
+
+
+def _reloaded_config_path() -> str:
+    return os.path.join(reloaded_ii.config_folder(os.environ.get("APPDATA", "")),
+                        "ReloadedII.json")
+
+
+def _reloaded_loader_config() -> dict:
+    try:
+        with open(_reloaded_config_path(), encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _reloaded_launcher_dir() -> str:
+    """Where Reloaded-II is installed: what its own config says if that
+    still exists, else our default install folder ("" if neither)."""
+    launcher = _reloaded_loader_config().get("LauncherPath") or ""
+    if launcher and os.path.isfile(launcher):
+        return os.path.dirname(launcher)
+    default = os.path.join(os.environ.get("LOCALAPPDATA", ""), reloaded_ii.RELOADED_DIR_NAME)
+    if os.path.isfile(os.path.join(default, "Reloaded-II.exe")):
+        return default
+    return ""
+
+
+def _reloaded_mods_dir() -> str:
+    cfg = _reloaded_loader_config()
+    if cfg.get("ModConfigDirectory"):
+        return cfg["ModConfigDirectory"]
+    base = _reloaded_launcher_dir() or os.path.join(
+        os.environ.get("LOCALAPPDATA", ""), reloaded_ii.RELOADED_DIR_NAME)
+    return os.path.join(base, "Mods")
+
+
+def _reloaded_app_config_path(game: dict) -> str:
+    cfg = _reloaded_loader_config()
+    apps = cfg.get("ApplicationConfigDirectory") or os.path.join(
+        _reloaded_launcher_dir() or "", "Apps")
+    exe = os.path.basename(game.get("processName") or "").lower()
+    return os.path.join(apps, exe, "AppConfig.json")
+
+
+def _write_json(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+
+async def _fetch_bytes(url: str, timeout: int = 300) -> bytes:
+    async with aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=timeout, sock_connect=30)
+    ) as session:
+        async with session.get(url, ssl=SSL_CONTEXT) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status} from {url}")
+            return await resp.read()
+
+
+async def _reloaded_install_launcher() -> str:
+    """Install Reloaded-II with its own Setup.exe (silent), returning the
+    folder. Reuses an existing install."""
+    have = _reloaded_launcher_dir()
+    if have:
+        return have
+    target = os.path.join(os.environ.get("LOCALAPPDATA", ""), reloaded_ii.RELOADED_DIR_NAME)
+    os.makedirs(RELOADED_WORK, exist_ok=True)
+    setup = os.path.join(RELOADED_WORK, "Reloaded-II-Setup.exe")
+    blob = await _fetch_bytes(reloaded_ii.SETUP_URL, 300)
+    if blob[:2] != b"MZ":
+        raise RuntimeError("the Reloaded-II download was not a program")
+    with open(setup, "wb") as f:
+        f.write(blob)
+    proc = await asyncio.create_subprocess_exec(
+        setup, *reloaded_ii.SETUP_ARGS, "--installdir", target,
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        env=_host_env())
+    try:
+        code = await asyncio.wait_for(proc.wait(), 1200)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RuntimeError("Reloaded-II's installer took over 20 minutes and was stopped")
+    if not os.path.isfile(os.path.join(target, "Reloaded-II.exe")):
+        raise RuntimeError(
+            f"Reloaded-II's installer finished (code {code}) but Reloaded-II.exe "
+            "isn't there. If Windows asked about .NET, allow it and try again.")
+    return target
+
+
+async def _reloaded_asi_loader(launcher_dir: str, is64: bool) -> bytes:
+    archive = os.path.join(launcher_dir, "Loader", "Asi", "UltimateAsiLoader.7z")
+    if not os.path.isfile(archive):
+        raise RuntimeError("Reloaded-II's ASI loader archive is missing")
+    dest = os.path.join(RELOADED_WORK, "asi")
+    _force_rmtree(dest)
+    os.makedirs(dest, exist_ok=True)
+    err = await _extract_archive(archive, dest)
+    want = "asiloader64.dll" if is64 else "asiloader32.dll"
+    for root, _d, names in os.walk(dest):
+        for n in names:
+            if n.lower() == want:
+                with open(os.path.join(root, n), "rb") as f:
+                    data = f.read()
+                _force_rmtree(dest)
+                return data
+    _force_rmtree(dest)
+    raise RuntimeError(f"Could not unpack Reloaded-II's ASI loader: {err or 'not found'}")
+
+
+async def _reloaded_setup(game_domain: str) -> dict:
+    """Step 1 for a Reloaded-II game: install Reloaded, register the game,
+    deploy the ASI loader beside its exe so a Steam launch loads mods."""
+    game = _experimental_game_for(game_domain)
+    if not game:
+        return {"ok": False, "error": "Not a Reloaded-II game"}
+    root = _game_dir(game.get("installDirName") or "")
+    rel_exe = (game.get("processName") or "").replace("\\", "/")
+    exe = os.path.join(root, *rel_exe.split("/"))
+    if not os.path.isfile(exe):
+        return {"ok": False, "error": f"The game's {os.path.basename(exe)} wasn't found"}
+    if await _process_running(os.path.basename(exe)):
+        return {"ok": False, "error": "Close the game first."}
+    try:
+        launcher = await _reloaded_install_launcher()
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as e:
+        return {"ok": False, "error": f"Could not install Reloaded-II: {e}"}
+    cfg = reloaded_ii.loader_config(launcher, _reloaded_loader_config())
+    _write_json(_reloaded_config_path(), cfg)
+    with open(exe, "rb") as f:
+        is64, imports = reloaded_ii.pe_info(f.read())
+    boot_src = cfg["Bootstrapper64Path"] if is64 else cfg["Bootstrapper32Path"]
+    if not os.path.isfile(boot_src):
+        return {"ok": False, "error": "Reloaded-II's bootstrapper is missing - reinstall Reloaded-II"}
+    exe_dir_rel = rel_exe.rsplit("/", 1)[0] if "/" in rel_exe else ""
+    exe_dir = os.path.dirname(exe)
+    # Reloaded's own rule: if the game already loads .asi plugins (from its
+    # folder or scripts/), the bootstrapper joins them and no second ASI
+    # loader goes in.
+    asi_home = None
+    for sub in ("", "scripts", "plugins"):
+        d = os.path.join(exe_dir, sub) if sub else exe_dir
+        try:
+            if any(n.lower().endswith(".asi") and not n.lower().startswith("reloaded.mod.loader")
+                   for n in os.listdir(d)):
+                asi_home = sub
+                break
+        except OSError:
+            pass
+    files, backups = [], []
+
+    def rel(*parts):
+        return "/".join(p for p in (exe_dir_rel, *parts) if p)
+
+    boot_rel = rel(asi_home or "", reloaded_ii.BOOTSTRAPPER.replace(".dll", ".asi"))
+    boot_dst = os.path.join(root, *boot_rel.split("/"))
+    _makedirs_for(boot_dst)
+    shutil.copyfile(boot_src, boot_dst)
+    files.append(boot_rel)
+    if asi_home is None:
+        name = reloaded_ii.pick_asi_name(is64, imports)
+        if not name:
+            os.remove(boot_dst)
+            return {"ok": False, "error": (
+                "This game's exe doesn't load any of the DLLs Reloaded-II's "
+                "ASI loader can stand in for, so it can't start mods from a "
+                "Steam launch.")}
+        try:
+            blob = await _reloaded_asi_loader(launcher, is64)
+        except (OSError, RuntimeError) as e:
+            os.remove(boot_dst)
+            return {"ok": False, "error": str(e)}
+        dll_rel = rel(name)
+        dll_dst = os.path.join(root, *dll_rel.split("/"))
+        if os.path.isfile(dll_dst) and not os.path.exists(dll_dst + ".nexusbak"):
+            os.replace(dll_dst, dll_dst + ".nexusbak")
+            backups.append(dll_rel)
+        with open(dll_dst, "wb") as f:
+            f.write(blob)
+        files.append(dll_rel)
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
+        "install_dir": game.get("installDirName") or "",
+        "files": files,
+        "backups": backups,
+        "tool": "reloaded",
+    }
+    _save_settings(settings)
+    app_path = _reloaded_app_config_path(game)
+    existing = {}
+    try:
+        with open(app_path, encoding="utf-8-sig") as f:
+            existing = json.load(f)
+    except (OSError, ValueError):
+        pass
+    _write_json(app_path, reloaded_ii.app_config(
+        exe, game.get("name") or game_domain, existing.get("EnabledMods") or [],
+        existing if isinstance(existing, dict) else {}))
+    decky.logger.info(
+        f"Reloaded-II set up for {game_domain}: launcher {launcher}, "
+        f"loader files {files}, kept aside {backups}")
+    return {"ok": True, "install_path": root, "files": files}
+
+
+def _reloaded_install_mods(scratch: str, rel_files: list, game: dict, game_domain: str,
+                           base_record: dict) -> str:
+    """Copy the Reloaded mods (ModConfig.json folders) in an extracted
+    archive into Reloaded's Mods directory. Returns the record key or ""."""
+    folders = reloaded_ii.find_mods(rel_files)
+    if not folders:
+        return ""
+    mods_dir = _reloaded_mods_dir()
+    os.makedirs(mods_dir, exist_ok=True)
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(base_record.get("name") or "mod")
+    prev = installed.get(key) or {}
+    if prev.get("reloadedIds"):
+        # A reinstall or update: the old copy's files go first.
+        _remove_files_record(game_domain, key, mods_dir, settings)
+    ids, files = [], []
+    # A folder inside another mod folder is that mod's own content.
+    tops = [f for f in folders if not any(
+        f != o and (o == "" or f.startswith(o + "/")) for o in folders)]
+    for folder in tops:
+        src = os.path.join(scratch, *folder.split("/")) if folder else scratch
+        cfg = reloaded_ii.read_mod_config(os.path.join(src, "ModConfig.json"))
+        mod_id = cfg.get("ModId") if isinstance(cfg.get("ModId"), str) else ""
+        name = reloaded_ii.safe_id(mod_id or folder.split("/")[-1] or key)
+        dst = os.path.join(mods_dir, name)
+        if os.path.isdir(dst):
+            aside = dst + ".nexusbak"
+            _force_rmtree(aside)
+            os.replace(dst, aside)
+            decky.logger.info(f"Reloaded: kept the existing {name} aside as {aside}")
+        shutil.copytree(src, dst)
+        for r, _d, names in os.walk(dst):
+            for n in names:
+                files.append(os.path.relpath(os.path.join(r, n), mods_dir).replace(os.sep, "/"))
+        if mod_id:
+            ids.append(mod_id)
+    _force_rmtree(scratch)
+    installed[key] = _merge_install_record(None, {
+        **base_record,
+        "mode": "files",
+        "target": ".",
+        "files": files,
+        "backups": [],
+        "base": mods_dir,
+        "reloadedIds": ids,
+    })
+    _save_settings(settings)
+    decky.logger.info(
+        f"installed {base_record.get('name')!r} into Reloaded-II: {ids} "
+        f"({len(files)} files)")
+    return key
+
+
+async def _reloaded_fetch_dependency(flat_base: str, mod_id: str, mods_dir: str) -> str:
+    """Download a mod Reloaded's NuGet feed hosts into Mods/<id>. Returns
+    the folder, "" when the feed doesn't have it."""
+    low = mod_id.lower()
+    try:
+        idx = json.loads(await _fetch_bytes(f"{flat_base}/{low}/index.json", 60))
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError):
+        return ""
+    ver = reloaded_ii.newest_version(idx.get("versions") or [])
+    if not ver:
+        return ""
+    blob = await _fetch_bytes(f"{flat_base}/{low}/{ver.lower()}/{low}.{ver.lower()}.nupkg", 600)
+    dst = os.path.join(mods_dir, reloaded_ii.safe_id(mod_id))
+
+    def unpack():
+        import io
+        _force_rmtree(dst)
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            for info in z.infolist():
+                target = reloaded_ii.nupkg_member_target(info.filename)
+                if not target:
+                    continue
+                out = os.path.join(dst, *target.split("/"))
+                _makedirs_for(out)
+                with z.open(info) as src, open(out, "wb") as f:
+                    shutil.copyfileobj(src, f)
+    await asyncio.to_thread(unpack)
+    return dst if os.path.isfile(os.path.join(dst, "ModConfig.json")) else ""
+
+
+async def _reloaded_apply(game: dict) -> dict:
+    """Make Reloaded's mod list for this game match what is installed and
+    switched on here, fetching the libraries those mods depend on."""
+    domain = game.get("nexusDomain") or ""
+    if not _reloaded_launcher_dir():
+        return {"ok": False, "tool": "Reloaded-II",
+                "error": "Reloaded-II isn't installed yet - Step 1 sets it up."}
+    mods_dir = _reloaded_mods_dir()
+    settings = _load_settings()
+    records = (settings.get("installed", {}).get(domain, {}) or {}).values()
+    ordered = sorted((r for r in records if r.get("reloadedIds")),
+                     key=lambda r: r.get("install_seq") or r.get("installed_at") or 0)
+    wanted = [i for r in ordered if r.get("enabled") is not False for i in r["reloadedIds"]]
+    managed = {i for r in ordered for i in r["reloadedIds"]}
+    # Everything this plugin ever put on the list, so an uninstalled mod
+    # comes off it while mods the player enabled in Reloaded stay.
+    managed |= set(settings.get("reloaded_deps", {}).get(domain) or [])
+    managed |= set(settings.get("reloaded_managed", {}).get(domain) or [])
+    index = await asyncio.to_thread(reloaded_ii.mod_index, mods_dir)
+    flat_base = ""
+    fetched, missing, deps = [], [], []
+    queue = list(wanted)
+    seen = {w.lower() for w in wanted}
+    while queue:
+        mid = queue.pop(0)
+        entry = index.get(mid.lower())
+        if entry is None and mid not in wanted:
+            if not flat_base:
+                try:
+                    flat_base = reloaded_ii.nuget_flat_base(
+                        json.loads(await _fetch_bytes(reloaded_ii.NUGET_INDEX, 60)))
+                except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError):
+                    flat_base = ""
+            folder = ""
+            if flat_base:
+                try:
+                    folder = await _reloaded_fetch_dependency(flat_base, mid, mods_dir)
+                except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError,
+                        OSError, zipfile.BadZipFile) as e:
+                    decky.logger.info(f"Reloaded: fetching {mid} failed: {e}")
+            if folder:
+                cfg = reloaded_ii.read_mod_config(os.path.join(folder, "ModConfig.json"))
+                entry = (cfg.get("ModId") or mid, folder)
+                index[mid.lower()] = entry
+                fetched.append(mid)
+            else:
+                missing.append(mid)
+                continue
+        if entry is None:
+            missing.append(mid)
+            continue
+        if mid not in wanted:
+            deps.append(entry[0])
+        cfg = reloaded_ii.read_mod_config(os.path.join(entry[1], "ModConfig.json"))
+        for d in reloaded_ii.dependencies_of(cfg):
+            if d.lower() not in seen:
+                seen.add(d.lower())
+                queue.append(d)
+    final = [w for w in wanted if w.lower() in index] + deps
+    app_path = _reloaded_app_config_path(game)
+    existing = {}
+    try:
+        with open(app_path, encoding="utf-8-sig") as f:
+            existing = json.load(f)
+    except (OSError, ValueError):
+        pass
+    if not isinstance(existing, dict):
+        existing = {}
+    root = _game_dir(game.get("installDirName") or "")
+    exe = os.path.join(root, *(game.get("processName") or "").replace("\\", "/").split("/"))
+    enabled = reloaded_ii.enabled_mods(existing.get("EnabledMods") or [], managed, final)
+    _write_json(app_path, reloaded_ii.app_config(
+        exe, game.get("name") or domain, enabled, existing))
+    settings = _load_settings()
+    prev_deps = set(settings.setdefault("reloaded_deps", {}).get(domain) or [])
+    settings["reloaded_deps"][domain] = sorted(prev_deps | set(deps))
+    settings.setdefault("reloaded_managed", {})[domain] = sorted(managed | set(final))
+    _save_settings(settings)
+    out = {"ok": True, "tool": "Reloaded-II", "count": len(final)}
+    if fetched:
+        out["fetched"] = fetched
+    if missing:
+        out["missing"] = missing
+    return out
+
+
+async def _tool_apply(game: dict) -> dict:
+    kind = game.get("toolApply")
+    if kind == "reloaded":
+        return await _reloaded_apply(game)
+    result = await _overstrike_apply(game)
+    result.setdefault("tool", "Overstrike")
+    return result
+
+
 def _toc_mtime(game_root: str) -> float:
     try:
         return os.path.getmtime(os.path.join(game_root, "asset_archive", "toc"))
@@ -7728,7 +8129,7 @@ def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
     """Re-apply a tool-managed game's mods shortly after the last change,
     so a collection of 40 installs runs the tool once, not 40 times."""
     game = _experimental_game_for(game_domain)
-    if not game or game.get("toolApply") != "overstrike":
+    if not game or game.get("toolApply") not in ("overstrike", "reloaded"):
         return
     old = _TOOL_APPLY_TASKS.get(game_domain)
     if old and not old.done():
@@ -7738,7 +8139,7 @@ def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
         await asyncio.sleep(delay)
         await decky.emit("experimental_tool_applying", game_domain)
         current = _experimental_game_for(game_domain) or game
-        result = await _overstrike_apply(current)
+        result = await _tool_apply(current)
         # A game started while the tool was writing read the old files:
         # 2026-10-17, Spider-Man launched 4s before Overstrike finished and
         # ran vanilla. Say so instead of looking like the mod did nothing.
@@ -7749,7 +8150,7 @@ def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
         settings.setdefault("tool_apply_last", {})[game_domain] = {
             **result, "at": int(time.time())}
         _save_settings(settings)
-        decky.logger.info(f"Overstrike apply for {game_domain}: {result}")
+        decky.logger.info(f"{result.get('tool')} apply for {game_domain}: {result}")
         await decky.emit("experimental_tool_applied", game_domain, result)
 
     try:
@@ -23351,6 +23752,9 @@ query Link($slug: String!, $domainName: String!) {
             _record_vanilla_baseline(
                 game_domain, mods_path, app_id, None, install_path
             )
+        if install_kind == "reloaded2":
+            # Reloaded-II comes from its own GitHub releases, not Nexus.
+            return await _reloaded_setup(game_domain)
         if install_kind == "masseffectBink":
             # Not a Nexus download at all: the compiled LEBinkProxy from
             # the ME3Tweaks Mod Manager repository, pinned by hash.
@@ -30956,6 +31360,8 @@ query CollectionInstructions($slug: String!) {
                     name.startswith(framework_file) or name == first
                     for name in os.listdir(install_path)
                 )
+                if status["framework_installed"] and _root_loader_off(install_path, framework_file):
+                    status["framework_enabled"] = False
         # How fresh the game's own build is. Helldivers 2 repacked its data
         # the day before testing and every visual mod on Nexus went inert
         # until its author re-released - the mods installed correctly and
@@ -31220,6 +31626,12 @@ query CollectionInstructions($slug: String!) {
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
             return
+        if reloaded_ii.apply_reloaded_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            game.pop("extraFrameworks", None)
+            decky.logger.info(f"experimental profile {domain}: Reloaded-II")
+            return
         if domain in experimental_games.TOOL_GAMES:
             ovs_id = experimental_games.TOOL_GAMES[domain]
             if not ovs_id:
@@ -31372,9 +31784,9 @@ query CollectionInstructions($slug: String!) {
     async def apply_experimental_tool(self, app_id: int) -> dict:
         """Run a tool-managed game's mod tool now (the panel's Apply button)."""
         game = (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
-        if not game or game.get("toolApply") != "overstrike":
+        if not game or game.get("toolApply") not in ("overstrike", "reloaded"):
             return {"ok": False, "error": "This game has no mod tool to run"}
-        result = await _overstrike_apply(game)
+        result = await _tool_apply(game)
         if result.get("ok") and await _process_running(
                 os.path.basename(game.get("processName") or "")):
             result["restart"] = True
@@ -31382,7 +31794,7 @@ query CollectionInstructions($slug: String!) {
         settings.setdefault("tool_apply_last", {})[game["nexusDomain"]] = {
             **result, "at": int(time.time())}
         _save_settings(settings)
-        decky.logger.info(f"Overstrike apply for {game['nexusDomain']} (manual): {result}")
+        decky.logger.info(f"{result.get('tool')} apply for {game['nexusDomain']} (manual): {result}")
         return result
 
     async def check_experimental_coverage(self, app_id: int, count: int = 50,
@@ -31651,3 +32063,22 @@ def _wrap_tool_apply(name: str) -> None:
 for _name in ("install_mod", "uninstall_mod", "uninstall_all_mods",
               "reset_game_modding", "install_framework"):
     _wrap_tool_apply(_name)
+
+
+def _wrap_toggle_apply() -> None:
+    """set_mod_enabled takes the game domain as its 6th argument; a switch
+    on a Reloaded-II or Overstrike game changes what the tool should load."""
+    original = Plugin.set_mod_enabled
+
+    @functools.wraps(original)
+    async def wrapper(self, *args, **kwargs):
+        result = await original(self, *args, **kwargs)
+        domain = kwargs.get("game_domain") or (args[5] if len(args) > 5 else "")
+        if domain and isinstance(result, dict) and result.get("ok"):
+            _schedule_tool_apply(domain)
+        return result
+
+    Plugin.set_mod_enabled = wrapper
+
+
+_wrap_toggle_apply()

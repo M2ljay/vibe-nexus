@@ -148,6 +148,7 @@ import {
   noteActiveGame,
   SupportedGame,
   UserTool,
+  isTrackedLoader,
 } from "./games";
 import {
   getAppDisplayName,
@@ -2846,7 +2847,7 @@ function InstalledModsSection() {
         )
       );
       if (game.framework) {
-        const tracked = game.framework.installKind === "copyRootTracked";
+        const tracked = isTrackedLoader(game.framework.installKind);
         getGameStatus(
           game.installDirName,
           game.modsSubdir,
@@ -2889,7 +2890,7 @@ function InstalledModsSection() {
   const onToggleFramework = async (enabled: boolean) => {
     // Experimental loaders have no launch command: switching one off
     // renames its dll/asi files so nothing loads them.
-    if (game.framework?.installKind === "copyRootTracked") {
+    if (game.framework && isTrackedLoader(game.framework.installKind)) {
       const r = await setExperimentalFrameworkEnabled(game.appId, enabled);
       if (r.ok) setFwEnabled(enabled);
       toaster.toast({
@@ -4691,7 +4692,7 @@ export default definePlugin(() => {
     () => void loadExperimentalState()
   );
   const toolListener = addEventListener<
-    [domain: string, result: { ok: boolean; count?: number; error?: string }]
+    [domain: string, result: { ok: boolean; count?: number; error?: string; tool?: string; fetched?: string[]; missing?: string[]; restart?: boolean }]
   >("experimental_tool_applied", toolAppliedToast);
   const toolStartListener = addEventListener(
     "experimental_tool_applying",

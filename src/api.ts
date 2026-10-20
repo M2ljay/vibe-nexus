@@ -719,7 +719,7 @@ export const installFramework = callable<
     game_domain: string,
     mod_id: number,
     install_dir: string,
-    install_kind: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked",
+    install_kind: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2",
     detect_file: string,
     avoid_file_keywords: string[],
     install_subdir: string,
@@ -2330,7 +2330,15 @@ export const setExperimentalFrameworkEnabled = callable<
 
 export const applyExperimentalTool = callable<
   [app_id: number],
-  { ok: boolean; count?: number; error?: string; restart?: boolean }
+  {
+    ok: boolean;
+    count?: number;
+    error?: string;
+    restart?: boolean;
+    tool?: string;
+    fetched?: string[];
+    missing?: string[];
+  }
 >("apply_experimental_tool");
 
 export interface CoverageRow {

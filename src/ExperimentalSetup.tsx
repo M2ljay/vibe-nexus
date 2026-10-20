@@ -34,35 +34,62 @@ import {
   SupportedGame,
   isExperimentalEnabled,
   isExperimentalGame,
+  isTrackedLoader,
+  managedGames,
   setExperimentalState,
+  toolName,
 } from "./games";
 import { notifyGameStateChanged } from "./state";
 
 /** Toast for the backend's automatic re-apply after an install/uninstall. */
 export function toolAppliedToast(
   _domain: string,
-  result: { ok: boolean; count?: number; error?: string; restart?: boolean }
+  result: {
+    ok: boolean;
+    count?: number;
+    error?: string;
+    restart?: boolean;
+    tool?: string;
+    fetched?: string[];
+    missing?: string[];
+  }
 ): void {
+  const tool = result.tool ?? "Overstrike";
+  const reloaded = tool === "Reloaded-II";
+  const what = reloaded ? "mod" : "mod file";
+  const extra = [
+    result.fetched?.length
+      ? `Fetched ${result.fetched.length} required librar${result.fetched.length === 1 ? "y" : "ies"}.`
+      : "",
+    result.missing?.length
+      ? `Still needed (not on Reloaded's feed - install from Nexus or GameBanana): ${result.missing.join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   toaster.toast(
     result.ok
       ? {
           title: result.restart
             ? "Mods applied - restart the game to see them"
-            : "Overstrike applied your mods",
-          body: result.restart
-            ? "The game was already running and loaded the old files."
-            : result.count
-              ? `${result.count} mod file${result.count === 1 ? "" : "s"} active - you can play now`
-              : "No mods installed - the game is back to vanilla",
+            : `${tool} ${reloaded ? "updated your mod list" : "applied your mods"}`,
+          body:
+            (result.restart
+              ? "The game was already running and loaded the old files."
+              : result.count
+                ? `${result.count} ${what}${result.count === 1 ? "" : "s"} active - you can play now`
+                : "No mods installed - the game is back to vanilla") +
+            (extra ? ` ${extra}` : ""),
         }
-      : { title: "Overstrike couldn't apply mods", body: result.error ?? "" }
+      : { title: `${tool} couldn't apply mods`, body: result.error ?? "" }
   );
 }
 
 /** Shown when the automatic re-apply starts, so nobody launches mid-way. */
-export function toolApplyingToast(): void {
+export function toolApplyingToast(domain?: string): void {
+  const game = managedGames().find((g) => g.nexusDomain === domain);
   toaster.toast({
-    title: "Applying mods with Overstrike…",
+    title: `Applying mods with ${toolName(game?.toolApply)}…`,
     body: "Wait for the next message before starting the game",
   });
 }
@@ -440,12 +467,16 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
           {busy ? "Checking…" : "Check mod compatibility"}
         </ButtonItem>
       </PanelSectionRow>
-      {game.toolApply === "overstrike" && (
+      {game.toolApply !== undefined && (
         <PanelSectionRow>
           <ButtonItem
             layout="below"
             disabled={busy}
-            description="Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
+            description={
+              game.toolApply === "reloaded"
+                ? "Updates Reloaded-II's mod list for this game from what is installed here, and fetches libraries the mods need. Happens by itself after each change; use this if that failed."
+                : "Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
+            }
             onClick={async () => {
               setBusy(true);
               try {
@@ -455,11 +486,11 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
               }
             }}
           >
-            {busy ? "Applying…" : "Apply mods with Overstrike"}
+            {busy ? "Applying…" : `Apply mods with ${toolName(game.toolApply)}`}
           </ButtonItem>
         </PanelSectionRow>
       )}
-      {game.framework?.installKind === "copyRootTracked" && (
+      {game.framework && isTrackedLoader(game.framework.installKind) && (
         <PanelSectionRow>
           <ButtonItem
             layout="below"
