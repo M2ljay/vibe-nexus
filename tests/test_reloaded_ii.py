@@ -272,6 +272,36 @@ class ReloadedBackendTests(unittest.TestCase):
         self.assertEqual(g["toolApply"], "reloaded")
         self.assertTrue(g["frameworkChecked"])
 
+    def _fresh_install(self, run):
+        shutil.rmtree(self.launcher)
+
+        async def fetch(url, timeout=300):
+            return b"MZ fake setup"
+        with unittest.mock.patch.object(main, "_fetch_bytes", fetch), \
+                unittest.mock.patch.object(main, "_run_elevated", run):
+            return self._setup()
+
+    def test_setup_runs_installer_elevated(self):
+        calls = []
+
+        def run(exe, args, timeout):
+            calls.append(args)
+            boot = os.path.join(self.launcher, "Loader", "x64", "Bootstrapper")
+            os.makedirs(boot)
+            open(os.path.join(self.launcher, "Reloaded-II.exe"), "wb").close()
+            with open(os.path.join(boot, reloaded_ii.BOOTSTRAPPER), "wb") as f:
+                f.write(b"boot")
+            return 0
+        r = self._fresh_install(run)
+        self.assertTrue(r["ok"], r)
+        self.assertIn("--nogui", calls[0])
+        self.assertEqual(calls[0][-2:], ["--installdir", self.launcher])
+
+    def test_declined_uac_says_so(self):
+        r = self._fresh_install(lambda exe, args, timeout: main._ELEVATION_DECLINED)
+        self.assertFalse(r["ok"])
+        self.assertIn("permission prompt was declined", r["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

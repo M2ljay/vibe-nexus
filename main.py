@@ -7741,6 +7741,64 @@ async def _fetch_bytes(url: str, timeout: int = 300) -> bytes:
             return await resp.read()
 
 
+_ELEVATION_DECLINED = -1223
+
+
+def _run_elevated(exe: str, args: list, timeout: float):
+    """Run a program through Windows' UAC prompt and wait for it. Returns
+    its exit code, _ELEVATION_DECLINED if the prompt was refused, or None
+    on timeout."""
+    import subprocess
+    if sys.platform != "win32":
+        return subprocess.run([exe, *args], env=_host_env(), timeout=timeout).returncode
+    import ctypes
+    from ctypes import wintypes
+
+    class SHELLEXECUTEINFOW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD), ("fMask", ctypes.c_ulong),
+            ("hwnd", wintypes.HWND), ("lpVerb", wintypes.LPCWSTR),
+            ("lpFile", wintypes.LPCWSTR), ("lpParameters", wintypes.LPCWSTR),
+            ("lpDirectory", wintypes.LPCWSTR), ("nShow", ctypes.c_int),
+            ("hInstApp", wintypes.HINSTANCE), ("lpIDList", ctypes.c_void_p),
+            ("lpClass", wintypes.LPCWSTR), ("hkeyClass", wintypes.HKEY),
+            ("dwHotKey", wintypes.DWORD), ("hIconOrMonitor", wintypes.HANDLE),
+            ("hProcess", wintypes.HANDLE),
+        ]
+
+    info = SHELLEXECUTEINFOW()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = 0x00000040  # SEE_MASK_NOCLOSEPROCESS
+    info.lpVerb = "runas"
+    info.lpFile = exe
+    info.lpParameters = subprocess.list2cmdline(args)
+    info.lpDirectory = os.path.dirname(exe)
+    info.nShow = 0  # SW_HIDE: --nogui runs as a console progress bar
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
+    shell32.ShellExecuteExW.restype = wintypes.BOOL
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    if not shell32.ShellExecuteExW(ctypes.byref(info)):
+        err = ctypes.get_last_error()
+        if err == 1223:  # ERROR_CANCELLED: the user said No
+            return _ELEVATION_DECLINED
+        raise OSError(err, f"could not start {os.path.basename(exe)} (Windows error {err})")
+    try:
+        if kernel32.WaitForSingleObject(info.hProcess, int(timeout * 1000)) != 0:
+            kernel32.TerminateProcess(info.hProcess, 1)
+            return None
+        code = wintypes.DWORD()
+        kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
+        return int(code.value)
+    finally:
+        kernel32.CloseHandle(info.hProcess)
+
+
 async def _reloaded_install_launcher() -> str:
     """Install Reloaded-II with its own Setup.exe (silent), returning the
     folder. Reuses an existing install."""
@@ -7755,14 +7813,17 @@ async def _reloaded_install_launcher() -> str:
         raise RuntimeError("the Reloaded-II download was not a program")
     with open(setup, "wb") as f:
         f.write(blob)
-    proc = await asyncio.create_subprocess_exec(
-        setup, *reloaded_ii.SETUP_ARGS, "--installdir", target,
-        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        env=_host_env())
-    try:
-        code = await asyncio.wait_for(proc.wait(), 1200)
-    except asyncio.TimeoutError:
-        proc.kill()
+    # Setup.exe's manifest says requireAdministrator (it installs the .NET
+    # and Visual C++ runtimes), so a plain spawn fails with WinError 740 -
+    # 2026-10-20, Persona 4 Golden's Step 1 died there silently. It has to
+    # go through ShellExecute "runas", which shows Windows' UAC prompt.
+    args = [*reloaded_ii.SETUP_ARGS, "--installdir", target]
+    code = await asyncio.to_thread(_run_elevated, setup, args, 1200)
+    if code == _ELEVATION_DECLINED:
+        raise RuntimeError(
+            "Windows' permission prompt was declined. Press Step 1 again and "
+            "choose Yes - Reloaded-II's installer needs it to add the .NET runtimes.")
+    if code is None:
         raise RuntimeError("Reloaded-II's installer took over 20 minutes and was stopped")
     if not os.path.isfile(os.path.join(target, "Reloaded-II.exe")):
         raise RuntimeError(
@@ -7807,6 +7868,7 @@ async def _reloaded_setup(game_domain: str) -> dict:
     try:
         launcher = await _reloaded_install_launcher()
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as e:
+        decky.logger.warning(f"Reloaded-II install failed for {game_domain}: {e!r}")
         return {"ok": False, "error": f"Could not install Reloaded-II: {e}"}
     cfg = reloaded_ii.loader_config(launcher, _reloaded_loader_config())
     _write_json(_reloaded_config_path(), cfg)
@@ -23754,7 +23816,10 @@ query Link($slug: String!, $domainName: String!) {
             )
         if install_kind == "reloaded2":
             # Reloaded-II comes from its own GitHub releases, not Nexus.
-            return await _reloaded_setup(game_domain)
+            result = await _reloaded_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"Reloaded-II Step 1 for {game_domain}: {result.get('error')}")
+            return result
         if install_kind == "masseffectBink":
             # Not a Nexus download at all: the compiled LEBinkProxy from
             # the ME3Tweaks Mod Manager repository, pinned by hash.
