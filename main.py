@@ -8176,6 +8176,62 @@ def _tool_reapply_reason(game: dict) -> str:
     return ""
 
 
+VORTEX_EXT_DIR = os.path.join(DOWNLOADS_DIR, "vortex-ext")
+VORTEX_FETCH_REQUEST = os.path.join(DOWNLOADS_DIR, "vortex-fetch.request")
+
+
+async def _fetch_vortex_extensions() -> None:
+    """One-off data collection: download the community Vortex game
+    extensions listed in py_modules/vortex_extensions.json (Nexus "site"
+    mods) so their mod folders and loader rules can be extracted. Runs
+    only when the request file exists; writes progress to status.json."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "py_modules", "vortex_extensions.json"), encoding="utf-8") as f:
+            entries = json.load(f)
+    except (OSError, ValueError) as e:
+        decky.logger.warning(f"vortex fetch: no list ({e})")
+        return
+    os.makedirs(VORTEX_EXT_DIR, exist_ok=True)
+    api_key = _load_settings().get("api_key")
+    done, failed = 0, []
+    for i, ent in enumerate(entries):
+        mod_id, file_id = int(ent["modId"]), int(ent["fileId"])
+        out = os.path.join(VORTEX_EXT_DIR, f"{mod_id}-{file_id}.bin")
+        if os.path.isfile(out) and os.path.getsize(out) > 0:
+            done += 1
+            continue
+        try:
+            err, archive = await _download_archive("site", mod_id, file_id,
+                                                   f"vortexext-{mod_id}.zip", api_key)
+        except Exception as e:  # noqa: BLE001 - keep going
+            err, archive = f"{type(e).__name__}: {e}", ""
+        if err or not archive:
+            failed.append([mod_id, str(err)[:120]])
+        else:
+            shutil.move(archive, out)
+            done += 1
+        if i % 25 == 0:
+            _write_json(os.path.join(VORTEX_EXT_DIR, "status.json"),
+                        {"done": done, "failed": failed, "of": len(entries), "at": i})
+        await asyncio.sleep(0.4)
+    _write_json(os.path.join(VORTEX_EXT_DIR, "status.json"),
+                {"done": done, "failed": failed, "of": len(entries), "finished": True})
+    decky.logger.info(f"vortex fetch: {done}/{len(entries)} extensions, {len(failed)} failed")
+
+
+async def _watch_vortex_fetch_request() -> None:
+    while True:
+        try:
+            if os.path.isfile(VORTEX_FETCH_REQUEST):
+                os.remove(VORTEX_FETCH_REQUEST)
+                decky.logger.info("vortex fetch: started")
+                await _fetch_vortex_extensions()
+        except Exception:  # noqa: BLE001
+            decky.logger.exception("vortex fetch failed")
+        await asyncio.sleep(20)
+
+
 async def _watch_tool_games() -> None:
     """Every few minutes, re-apply tool-managed games whose mods a patch or
     a file verify undid - unless the game is running right now."""
@@ -32111,6 +32167,7 @@ query CollectionInstructions($slug: String!) {
     async def _main(self):
         decky.logger.info("Nexus Mods plugin loaded")
         self._tool_watcher = asyncio.get_running_loop().create_task(_watch_tool_games())
+        self._vortex_fetch = asyncio.get_running_loop().create_task(_watch_vortex_fetch_request())
 
     async def _unload(self):
         # Stop what is in flight, and make sure this process really goes.
