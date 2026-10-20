@@ -78,9 +78,14 @@ def match_games(games: list, display_name: str, limit: int = 8) -> dict:
     agree (with or without edition words) - anything looser is offered as a
     choice, never applied silently.
     """
+    # Capcom's Steam names carry the Japanese title after two spaces
+    # ("RESIDENT EVIL 2  BIOHAZARD RE2"): the first part is the game.
+    if "  " in (display_name or "").strip():
+        display_name = display_name.strip().split("  ")[0]
     target = normalize(display_name)
     target_bare = _strip_editions(display_name)
     exact = None
+    year_exact = None
     scored = []
     for g in games or []:
         if not isinstance(g, dict):
@@ -90,10 +95,17 @@ def match_games(games: list, display_name: str, limit: int = 8) -> dict:
             continue
         n = normalize(name)
         entry = {"domain": domain, "name": name, "mods": mods}
+        # Nexus tells remakes apart by year: "Resident Evil 2 (2019)".
+        n_noyear = normalize(re.sub(r"\s*\((19|20)\d\d\)\s*$", "", name))
         if n and (n == target or _strip_editions(name) == target_bare
                   or domain == target):
             if exact is None or mods > exact["mods"]:
                 exact = entry
+            continue
+        if n_noyear != n and n_noyear == target:
+            # Weaker than a true exact: used only when there is none.
+            if year_exact is None or mods > year_exact["mods"]:
+                year_exact = entry
             continue
         ratio = difflib.SequenceMatcher(None, target_bare, _strip_editions(name)).ratio()
         if target_bare and n and (target_bare in n or n in target_bare):
@@ -102,7 +114,7 @@ def match_games(games: list, display_name: str, limit: int = 8) -> dict:
             scored.append((ratio, mods, entry))
     scored.sort(key=lambda t: (-round(t[0], 2), -t[1]))
     candidates = [e for _r, _m, e in scored[:limit]]
-    return {"exact": exact, "candidates": candidates}
+    return {"exact": exact or year_exact, "candidates": candidates}
 
 
 def guess_domains(display_name: str) -> list:
@@ -130,7 +142,7 @@ def read_appmanifest(path: str) -> dict:
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
-                m = re.match(r'\s*"(installdir|name)"\s+"(.*)"\s*$', line)
+                m = re.match(r'\s*"(installdir|name|StateFlags)"\s+"(.*)"\s*$', line)
                 if m and m.group(1) not in out:
                     out[m.group(1)] = m.group(2).replace("\\\\", "\\")
     except OSError:
@@ -663,7 +675,7 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
 # has a command line (create-profile, install-mods), so the plugin keeps a
 # profile in step with what is installed and runs it - one press, no desktop.
 
-PROFILE_VERSION = 4
+PROFILE_VERSION = 5
 
 OVERSTRIKE_EXTS = [".smpcmod", ".suit", ".stage", ".modular", ".script"]
 OVERSTRIKE_DIR = "Overstrike"
@@ -863,6 +875,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
     merge = game.get("mergeInto")
+    if merge and payload_low and game.get("mergeBase"):
+        return "mods_folder"
     if merge and payload_low and merge != ".":
         merge_root = merge.split("/")[0].lower()
         tops = {f.split("/")[0] for f in low}
@@ -1083,6 +1097,36 @@ def installed_games(steamapps_dirs: list) -> list:
             if not name or not info.get("installdir") or _NOT_GAMES.search(name):
                 continue
             seen.add(app_id)
-            out.append({"appId": app_id, "name": name, "installDir": info["installdir"]})
+            try:
+                flags = int(info.get("StateFlags") or 4)
+            except ValueError:
+                flags = 4
+            out.append({"appId": app_id, "name": name, "installDir": info["installdir"],
+                        # 4 = fully installed; anything else is downloading,
+                        # updating or half-removed (TEKKEN 8 was scanned while
+                        # still downloading and "checked" as an empty folder).
+                        "ready": bool(flags & 4)})
     out.sort(key=lambda g: g["name"].lower())
     return out
+
+
+def vortex_outside_dir(rule: dict) -> str:
+    """A rule's mod folder when it lives outside the game folder (relative
+    to Documents or AppData, e.g. "Electronic Arts/The Sims 4/Mods"), or ""."""
+    raw = rule.get("modPath")
+    if not isinstance(raw, str) or re.match(r"^[a-zA-Z]:", raw) or raw.upper().startswith("C:\\GAME"):
+        return ""
+    p = _norm_rel(raw)
+    if p in ("", ".") or "/" not in p or ".." in p.split("/"):
+        return ""
+    return p
+
+
+def pick_outside_base(rel: str, bases: list) -> str:
+    """The first of `bases` (Documents, AppData...) where the folder above
+    the mod folder exists - the game has run once and made it."""
+    parent = rel.rsplit("/", 1)[0]
+    for b in bases:
+        if b and os.path.isdir(os.path.join(b, *parent.split("/"))):
+            return b
+    return ""

@@ -2397,6 +2397,7 @@ export interface LibraryGame {
   mods: number;
   candidates: { domain: string; name: string; mods: number }[];
   status: "" | "supported" | "added";
+  ready?: boolean;
 }
 
 export interface LibraryResult {

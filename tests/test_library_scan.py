@@ -87,3 +87,37 @@ class LibraryScanTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MatchTests(unittest.TestCase):
+    def test_capcom_names_and_remake_years(self):
+        games = [{"name": "Resident Evil 2 (2019)", "domain_name": "residentevil22019", "mods": 2000},
+                 {"name": "Resident Evil 2", "domain_name": "residentevil2classic", "mods": 10}]
+        r = eg.match_games(games, "RESIDENT EVIL 2  BIOHAZARD RE2")
+        self.assertEqual(r["exact"]["domain"], "residentevil2classic")
+        r = eg.match_games(games[:1], "RESIDENT EVIL 2  BIOHAZARD RE2")
+        self.assertEqual(r["exact"]["domain"], "residentevil22019")
+
+    def test_downloading_games_are_not_ready(self):
+        lib = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(lib, "appmanifest_1778820.acf"), "w") as f:
+                f.write('"AppState"\n{\n\t"name"\t\t"TEKKEN 8"\n\t"StateFlags"\t\t"1026"\n'
+                        '\t"installdir"\t\t"TEKKEN 8"\n}\n')
+            g = eg.installed_games([lib])[0]
+            self.assertFalse(g["ready"])
+        finally:
+            shutil.rmtree(lib)
+
+    def test_outside_dir(self):
+        rule = {"modPath": "Electronic Arts\\The Sims 4\\Mods\\Vortex Mods"}
+        self.assertEqual(eg.vortex_outside_dir(rule), "Electronic Arts/The Sims 4/Mods/Vortex Mods")
+        docs = tempfile.mkdtemp()
+        try:
+            self.assertEqual(eg.pick_outside_base(eg.vortex_outside_dir(rule), [docs]), "")
+            os.makedirs(os.path.join(docs, "Electronic Arts", "The Sims 4", "Mods"))
+            self.assertEqual(eg.pick_outside_base(eg.vortex_outside_dir(rule), ["", docs]), docs)
+        finally:
+            shutil.rmtree(docs)
+        g = {"mergeInto": "Electronic Arts/The Sims 4/Mods", "mergeBase": "C:/Docs"}
+        self.assertEqual(eg.classify_mod(["CAS/hair.package"], g, set(), {}), "mods_folder")

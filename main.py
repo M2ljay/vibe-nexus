@@ -7402,6 +7402,34 @@ def _vortex_rules() -> dict:
     return _VORTEX_RULES
 
 
+def _documents_dir() -> str:
+    """The user's real Documents folder (OneDrive can move it)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            import uuid
+            guid = uuid.UUID("FDD39AD0-238F-46AF-ADB4-6C85480369C7")
+            buf = ctypes.c_wchar_p()
+            gbytes = (ctypes.c_byte * 16).from_buffer_copy(guid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(
+                    ctypes.byref(gbytes), 0, None, ctypes.byref(buf)) == 0:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                if path:
+                    return path
+        except Exception:  # noqa: BLE001 - fall back to the usual place
+            pass
+    return os.path.join(os.path.expanduser("~"), "Documents")
+
+
+def _outside_bases() -> list:
+    docs = _documents_dir()
+    return [b for b in (docs, os.path.join(docs, "My Games"),
+                        os.environ.get("APPDATA", ""), os.environ.get("LOCALAPPDATA", ""))
+            if b]
+
+
 def _experimental_game_for(game_domain: str):
     """The experimental (any-game) entry for a Nexus domain, or None.
     Curated games never match: their domains have no entry here."""
@@ -7439,7 +7467,19 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         roots_low = {e.lower() for e in root_entries}
         # A game-folder layout (Binaries/..., a dll for the exe) still goes
         # where its paths say; everything else merges into the mod folder.
-        if merge == "." or not (tops & roots_low - {merge_root}):
+        if game.get("mergeBase"):
+            # Outside the game folder (Documents\Electronic Arts\The Sims 4\Mods):
+            # everything merges there; nothing is laid out for the game folder.
+            base = game["mergeBase"]
+            merge_dir = os.path.join(base, *merge.split("/"))
+            try:
+                merge_entries = set(os.listdir(merge_dir))
+            except OSError:
+                merge_entries = set()
+            plan = experimental_games.plan_merge(rel_files, merge, merge_entries) or None
+            if plan is None:
+                base = install_path
+        elif merge == "." or not (tops & roots_low - {merge_root}):
             merge_dir = install_path if merge == "." else os.path.join(install_path, *merge.split("/"))
             try:
                 merge_entries = set(os.listdir(merge_dir))
@@ -31922,6 +31962,7 @@ query CollectionInstructions($slug: String!) {
         domain = game.get("nexusDomain") or ""
         api_key = _load_settings().get("api_key")
         game.pop("mergeInto", None)
+        game.pop("mergeBase", None)
         game.pop("vortexRule", None)
         if experimental_games.apply_bethesda_profile(game):
             game["frameworkChecked"] = True
@@ -31953,6 +31994,16 @@ query CollectionInstructions($slug: String!) {
                 root_entries = set(os.listdir(_game_dir(game.get("installDirName") or "")))
             except OSError:
                 root_entries = set()
+            outside = experimental_games.vortex_outside_dir(rule)
+            if (outside and not experimental_games.vortex_mod_dir(rule, root_entries)
+                    and not game.get("toolApply")):
+                base = experimental_games.pick_outside_base(outside, _outside_bases())
+                if base:
+                    game["mergeInto"] = outside
+                    game["mergeBase"] = base
+                    game["vortexRule"] = True
+                    decky.logger.info(
+                        f"experimental {domain}: Vortex rule -> mods in {os.path.join(base, outside)}")
             if experimental_games.apply_vortex_rule(game, rule, root_entries):
                 decky.logger.info(
                     f"experimental {domain}: Vortex rule -> mods in {game.get('mergeInto') or game.get('modsSubdir')!r}"
@@ -32230,10 +32281,24 @@ query CollectionInstructions($slug: String!) {
             nexus = await self._nexus_games_list()
             exp = _load_settings().get("experimental_games") or {}
             rows = []
+            by_steam = {}
+            for dom, rule in _vortex_rules().items():
+                sid = str(rule.get("steamAppId") or "")
+                if sid.isdigit():
+                    by_steam.setdefault(int(sid), dom)
+            nexus_by_domain = {}
+            for ng in nexus or []:
+                name_, dom_, mods_ = experimental_games._game_fields(ng) if isinstance(ng, dict) else ("", "", 0)
+                if dom_:
+                    nexus_by_domain[dom_] = {"domain": dom_, "name": name_, "mods": mods_}
             for g in installed:
                 match = experimental_games.match_games(nexus, g["name"]) if nexus else {
                     "exact": None, "candidates": []}
                 exact = match.get("exact")
+                if by_steam.get(g["appId"]) in nexus_by_domain:
+                    # Vortex knows which Nexus game this Steam app id is:
+                    # firmer than any name match (remakes share names).
+                    exact = nexus_by_domain[by_steam[g["appId"]]]
                 status = ("supported" if g["appId"] in known
                           else "added" if str(g["appId"]) in exp else "")
                 rows.append({
@@ -32283,7 +32348,8 @@ query CollectionInstructions($slug: String!) {
     async def _library_check(self, app_ids: list, count: int) -> None:
         scan = _load_settings().get("library_scan") or {}
         by_id = {int(g["appId"]): g for g in scan.get("games") or []}
-        todo = [by_id[a] for a in app_ids if a in by_id and by_id[a].get("domain")]
+        todo = [by_id[a] for a in app_ids if a in by_id and by_id[a].get("domain")
+                and by_id[a].get("ready", True)]
         failures = 0
         for i, row in enumerate(todo):
             if getattr(self, "_library_cancel", False):
@@ -32330,6 +32396,11 @@ query CollectionInstructions($slug: String!) {
                     roots = set(os.listdir(path))
                 except OSError:
                     roots = set()
+                outside = experimental_games.vortex_outside_dir(rule)
+                if outside and not experimental_games.vortex_mod_dir(rule, roots):
+                    base = experimental_games.pick_outside_base(outside, _outside_bases())
+                    if base:
+                        game["mergeInto"], game["mergeBase"] = outside, base
                 experimental_games.apply_vortex_rule(game, rule, roots)
         rows, *_rest, paths_by_mod = await self._coverage_rows(game, int(row["appId"]), count)
         summary = experimental_games.summarize(rows)

@@ -77,7 +77,9 @@ export function LibraryScan() {
   };
 
   const checkAll = async () => {
-    const ids = games.filter((g) => g.domain && g.status !== "supported").map((g) => g.appId);
+    const ids = games
+      .filter((g) => g.domain && g.status !== "supported" && g.ready !== false)
+      .map((g) => g.appId);
     if (!ids.length) return;
     setProgress([0, ids.length]);
     setRunning(true);
@@ -137,13 +139,17 @@ export function LibraryScan() {
           }
           onClick={running ? () => void cancelLibraryCheck() : checkAll}
         >
-          {running ? "Stop checking" : `Check all ${matched.filter((g) => g.status !== "supported").length} games`}
+          {running
+            ? "Stop checking"
+            : `Check all ${matched.filter((g) => g.status !== "supported" && g.ready !== false).length} games`}
         </ButtonItem>
       )}
       {sorted.map((g) => {
         const r = results[String(g.appId)];
         const label =
-          g.status === "supported"
+          g.ready === false
+            ? "Still downloading - scan again when it's installed"
+            : g.status === "supported"
             ? "Built-in support"
             : g.status === "added"
               ? "Set up · " + resultText(r)
