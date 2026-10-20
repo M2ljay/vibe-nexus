@@ -27,6 +27,7 @@ import decky
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "py_modules"))
 import experimental_games  # noqa: E402 - needs the py_modules path above
 import reloaded_ii  # noqa: E402
+import generic_loaders  # noqa: E402
 
 
 def _steam_root() -> str:
@@ -7487,9 +7488,12 @@ def _refresh_experimental_inspection(game_domain: str) -> bool:
         if found.get("ue4ss") and found["ue4ss"] != game.get("ue4ss"):
             game["ue4ss"] = found["ue4ss"]
             changed = True
-        if (found.get("engine") == "unity-bepinex"
+        if (found.get("engine") in ("unity-bepinex", "unity-melonloader")
                 and game.get("modsSubdir") != found.get("modsSubdir")):
             game["modsSubdir"] = found["modsSubdir"]
+            game["engine"] = found["engine"]
+            if found.get("flatModExtensions"):
+                game["flatModExtensions"] = found["flatModExtensions"]
             changed = True
         if changed:
             settings["experimental_games"][key] = game
@@ -7873,6 +7877,104 @@ def _reloaded_register_helpers(game: dict) -> list:
     if done:
         decky.logger.info(f"Reloaded-II: registered helper programs (no mods): {done}")
     return done
+
+
+async def _github_loader_setup(game_domain: str) -> dict:
+    """Step 1 for a game whose mods need an engine-wide loader: download
+    it from the project's GitHub releases and copy it into the game,
+    recording every file so Remove can take it out again."""
+    game = _experimental_game_for(game_domain)
+    fw = (game or {}).get("framework") or {}
+    spec = generic_loaders.LOADERS.get(fw.get("loaderId") or "")
+    if not game or not spec:
+        return {"ok": False, "error": "No loader is set for this game"}
+    root = _game_dir(game.get("installDirName") or "")
+    rel_exe = (game.get("processName") or "").replace("\\", "/")
+    exe = os.path.join(root, *rel_exe.split("/"))
+    if not os.path.isfile(exe):
+        return {"ok": False, "error": f"The game's {os.path.basename(exe) or 'exe'} wasn't found"}
+    if await _process_running(os.path.basename(exe)):
+        return {"ok": False, "error": "Close the game first."}
+    with open(exe, "rb") as f:
+        is64, imports = reloaded_ii.pe_info(f.read())
+    try:
+        releases = json.loads(await _fetch_bytes(
+            generic_loaders.GITHUB_API.format(repo=spec["repo"]), 60))
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as e:
+        return {"ok": False, "error": f"Could not reach {spec['name']}'s releases: {e}"}
+    picked = generic_loaders.pick_asset(releases, spec, is64)
+    if not picked:
+        return {"ok": False, "error": (
+            f"{spec['name']} has no {'64' if is64 else '32'}-bit Windows release to install.")}
+    tag, asset, url = picked
+    os.makedirs(RELOADED_WORK, exist_ok=True)
+    work = os.path.join(DOWNLOADS_DIR, "loader-" + fw["loaderId"])
+    _force_rmtree(work)
+    os.makedirs(work, exist_ok=True)
+    archive = os.path.join(DOWNLOADS_DIR, "loader-" + asset)
+    try:
+        with open(archive, "wb") as f:
+            f.write(await _fetch_bytes(url, 600))
+        err = await _extract_archive(archive, work)
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, OSError) as e:
+        _force_rmtree(work)
+        return {"ok": False, "error": f"Could not download {spec['name']}: {e}"}
+    finally:
+        try:
+            os.remove(archive)
+        except OSError:
+            pass
+    if err:
+        _force_rmtree(work)
+        return {"ok": False, "error": f"Could not unpack {spec['name']}: {err}"}
+    # A release zipped inside one folder of its own is unwrapped.
+    entries = os.listdir(work)
+    src = work
+    if len(entries) == 1 and os.path.isdir(os.path.join(work, entries[0])) and \
+            entries[0].lower() not in ("bepinex", "melonloader", "ue4ss", "mods"):
+        src = os.path.join(work, entries[0])
+    exe_dir_rel = experimental_games.exe_dir_of(rel_exe)
+    base_rel = exe_dir_rel if spec["target"] == "exe" else ""
+    rename = {}
+    if fw["loaderId"] == "asiloader":
+        proxy = os.path.basename(fw.get("detectFile") or "") or \
+            generic_loaders.pick_asi_proxy(imports, set())
+        if not proxy:
+            _force_rmtree(work)
+            return {"ok": False, "error": "The game loads none of the DLLs the ASI loader can stand in for."}
+        for n in os.listdir(src):
+            if n.lower().endswith(".dll"):
+                rename[n] = proxy
+                break
+    files, backups = [], []
+    for cur, _dirs, names in os.walk(src):
+        for n in names:
+            rel_src = os.path.relpath(os.path.join(cur, n), src).replace(os.sep, "/")
+            rel = rename.get(rel_src, rel_src)
+            dst_rel = "/".join(x for x in (base_rel, rel) if x)
+            if not _safe_rel_path(dst_rel):
+                continue
+            dst = os.path.join(root, *dst_rel.split("/"))
+            _makedirs_for(dst)
+            if os.path.isfile(dst) and not os.path.exists(dst + ".nexusbak"):
+                os.replace(dst, dst + ".nexusbak")
+                backups.append(dst_rel)
+            shutil.copyfile(os.path.join(cur, n), dst)
+            files.append(dst_rel)
+    _force_rmtree(work)
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
+        "install_dir": game.get("installDirName") or "",
+        "files": files,
+        "backups": backups,
+        "loader": fw["loaderId"],
+        "version": tag,
+    }
+    _save_settings(settings)
+    decky.logger.info(
+        f"{spec['name']} {tag} installed for {game_domain}: {len(files)} files, "
+        f"kept aside {backups}")
+    return {"ok": True, "install_path": root, "files": len(files), "version": tag}
 
 
 async def _reloaded_setup(game_domain: str) -> dict:
@@ -23898,6 +24000,11 @@ query Link($slug: String!, $domainName: String!) {
             _record_vanilla_baseline(
                 game_domain, mods_path, app_id, None, install_path
             )
+        if install_kind == "githubLoader":
+            result = await _github_loader_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
+            return result
         if install_kind == "reloaded2":
             # Reloaded-II comes from its own GitHub releases, not Nexus.
             result = await _reloaded_setup(game_domain)
@@ -31815,6 +31922,9 @@ query CollectionInstructions($slug: String!) {
             return  # the player said this game needs no Step 1
         if not reqs:
             decky.logger.info(f"experimental framework {domain}: none shared")
+            fw = await self._suggest_generic_loader(game, top.get("mods") or [], nodes)
+            if fw:
+                game["framework"] = fw
             return
         exe_dir = experimental_games.exe_dir_of(game.get("processName") or "")
         loaders = []
@@ -31859,6 +31969,56 @@ query CollectionInstructions($slug: String!) {
             game["framework"] = loaders[0]
             if len(loaders) > 1:
                 game["extraFrameworks"] = loaders[1:]
+            return
+        fw = await self._suggest_generic_loader(game, top.get("mods") or [], nodes)
+        if fw:
+            game["framework"] = fw
+
+    async def _suggest_generic_loader(self, game: dict, top_mods: list, nodes: list):
+        """BepInEx, MelonLoader, UE4SS or Ultimate ASI Loader as the game's
+        Step 1, when its top mods are made for one and the game lacks it."""
+        domain = game.get("nexusDomain") or ""
+        engine = game.get("engine") or ""
+        root = _game_dir(game.get("installDirName") or "")
+        listings = []
+        for m in top_mods[:12]:
+            mid = int(m.get("modId") or 0)
+            if not mid:
+                continue
+            try:
+                files = await self.get_mod_files(domain, mid)
+                main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
+                listing = (await _mod_file_listing(domain, mid, main["file_id"])
+                           if main else None)
+                listings.append(_listing_paths(listing) if listing is not None else None)
+            except Exception:  # noqa: BLE001 - one bad mod must not stop the check
+                listings.append(None)
+        req_names = [str(r.get("modName") or "")
+                     for n in nodes or [] if isinstance(n, dict)
+                     for r in ((((n.get("modRequirements") or {}).get("nexusRequirements") or {})
+                                .get("nodes")) or [])]
+        il2cpp = os.path.isfile(os.path.join(root, "GameAssembly.dll"))
+        loader = generic_loaders.suggest_loader(engine, il2cpp, listings, req_names)
+        decky.logger.info(
+            f"experimental generic loader {domain}: engine={engine} il2cpp={il2cpp} "
+            f"listings={sum(1 for x in listings if x is not None)}/{len(listings)} -> {loader or 'none'}")
+        if not loader:
+            return None
+        exe_dir = experimental_games.exe_dir_of(game.get("processName") or "")
+        detect = ""
+        if loader == "asiloader":
+            exe = os.path.join(root, *(game.get("processName") or "").split("/"))
+            try:
+                with open(exe, "rb") as f:
+                    _is64, imports = reloaded_ii.pe_info(f.read())
+            except OSError:
+                imports = []
+            proxy = generic_loaders.pick_asi_proxy(imports, set())
+            if not proxy:
+                decky.logger.info(f"experimental generic loader {domain}: exe loads no ASI proxy dll")
+                return None
+            detect = "/".join(x for x in (exe_dir, proxy) if x)
+        return generic_loaders.framework_entry(loader, exe_dir, detect)
 
     async def set_experimental_framework_enabled(
         self, app_id: int, enabled: bool

@@ -663,7 +663,7 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
 # has a command line (create-profile, install-mods), so the plugin keeps a
 # profile in step with what is installed and runs it - one press, no desktop.
 
-PROFILE_VERSION = 3
+PROFILE_VERSION = 4
 
 OVERSTRIKE_EXTS = [".smpcmod", ".suit", ".stage", ".modular", ".script"]
 OVERSTRIKE_DIR = "Overstrike"

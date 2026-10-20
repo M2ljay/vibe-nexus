@@ -80,7 +80,7 @@ export interface GameFramework {
   aliasModIds?: number[];
   /** How the framework archive installs: SMAPI's install.dat method, or
    * flatten-and-copy into the game dir (SKSE-style) */
-  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2";
+  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader";
   /** Shown with Step 1 and confirmed before installing (experimental
    * games: the loader is inferred, and may carry a ban risk). */
   warning?: string;
@@ -1931,7 +1931,7 @@ export function getActiveGame(runningAppId: number | undefined): SupportedGame {
 /** Experimental loaders whose files the backend tracks: switched off by
  * renaming them, removed exactly. */
 export function isTrackedLoader(kind?: string): boolean {
-  return kind === "copyRootTracked" || kind === "reloaded2";
+  return kind === "copyRootTracked" || kind === "reloaded2" || kind === "githubLoader";
 }
 
 /** The display name of a tool-managed game's mod tool. */
