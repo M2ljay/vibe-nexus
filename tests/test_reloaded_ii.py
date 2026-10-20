@@ -155,6 +155,17 @@ class ReloadedBackendTests(unittest.TestCase):
         with open(os.path.join(self.root, "version.dll"), "rb") as f:
             self.assertEqual(f.read(), b"games-own")
 
+    def test_helper_programs_get_no_mod_entries(self):
+        d = os.path.join(self.root, "crashdat", "bin")
+        os.makedirs(d)
+        open(os.path.join(d, "crashpad_handler.exe"), "wb").close()
+        self.assertTrue(self._setup()["ok"])
+        with open(os.path.join(self.launcher, "Apps", "crashpad_handler.exe", "AppConfig.json")) as f:
+            cfg = json.load(f)
+        self.assertEqual(cfg["EnabledMods"], [])
+        self.assertEqual(cfg["AppId"], "crashpad_handler.exe")
+        self.assertFalse(os.path.exists(os.path.join(self.launcher, "Apps", "p4g.exe", "x")))
+
     def test_setup_joins_existing_asi_plugins(self):
         os.makedirs(os.path.join(self.root, "scripts"))
         open(os.path.join(self.root, "scripts", "widescreen.asi"), "wb").close()

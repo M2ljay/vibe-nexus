@@ -7852,6 +7852,29 @@ async def _reloaded_asi_loader(launcher_dir: str, is64: bool) -> bytes:
     raise RuntimeError(f"Could not unpack Reloaded-II's ASI loader: {err or 'not found'}")
 
 
+def _reloaded_register_helpers(game: dict) -> list:
+    """No-mod Reloaded app entries for the game's other programs, so the
+    loader stays silent in them instead of showing an error box."""
+    root = _game_dir(game.get("installDirName") or "")
+    apps = os.path.dirname(os.path.dirname(_reloaded_app_config_path(game)))
+    done = []
+    main_name = os.path.basename(game.get("processName") or "").lower()
+    for rel in reloaded_ii.helper_exes(root, game.get("processName") or ""):
+        name = rel.split("/")[-1].lower()
+        if name == main_name:
+            continue
+        path = os.path.join(apps, name, "AppConfig.json")
+        if os.path.isfile(path):
+            continue
+        exe = os.path.join(root, *rel.split("/"))
+        _write_json(path, reloaded_ii.helper_app_config(
+            exe, game.get("name") or game.get("nexusDomain") or ""))
+        done.append(rel)
+    if done:
+        decky.logger.info(f"Reloaded-II: registered helper programs (no mods): {done}")
+    return done
+
+
 async def _reloaded_setup(game_domain: str) -> dict:
     """Step 1 for a Reloaded-II game: install Reloaded, register the game,
     deploy the ASI loader beside its exe so a Steam launch loads mods."""
@@ -7941,6 +7964,7 @@ async def _reloaded_setup(game_domain: str) -> dict:
     _write_json(app_path, reloaded_ii.app_config(
         exe, game.get("name") or game_domain, existing.get("EnabledMods") or [],
         existing if isinstance(existing, dict) else {}))
+    _reloaded_register_helpers(game)
     decky.logger.info(
         f"Reloaded-II set up for {game_domain}: launcher {launcher}, "
         f"loader files {files}, kept aside {backups}")
@@ -8039,6 +8063,10 @@ async def _reloaded_apply(game: dict) -> dict:
         return {"ok": False, "tool": "Reloaded-II",
                 "error": "Reloaded-II isn't installed yet - Step 1 sets it up."}
     mods_dir = _reloaded_mods_dir()
+    try:
+        await asyncio.to_thread(_reloaded_register_helpers, game)
+    except OSError as e:
+        decky.logger.info(f"Reloaded-II helper registration failed: {e}")
     settings = _load_settings()
     records = (settings.get("installed", {}).get(domain, {}) or {}).values()
     ordered = sorted((r for r in records if r.get("reloadedIds")),

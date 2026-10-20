@@ -309,3 +309,33 @@ def nupkg_member_target(name: str) -> str:
     if ".." in n.split("/") or n.startswith("/"):
         return ""
     return n
+
+
+def helper_exes(root: str, main_rel: str, max_depth: int = 3) -> list:
+    """Other programs in a game folder (crash reporters, launchers).
+
+    The ASI loader beside the game can end up inside them too: P4G starts
+    crashdat/bin/crashpad_handler.exe from the game folder, Windows found
+    our winmm.dll there, Reloaded loaded, found no app entry for it and
+    stopped on an "Oh Noes!" box - which the game sat waiting behind
+    (2026-10-20). Each gets an app entry with no mods, so Reloaded loads
+    quietly and does nothing."""
+    out = []
+    main = main_rel.replace("\\", "/").lower()
+    base_depth = root.rstrip("\\/").count(os.sep)
+    for cur, dirs, names in os.walk(root):
+        if cur.count(os.sep) - base_depth >= max_depth:
+            dirs[:] = []
+        for n in names:
+            if not n.lower().endswith(".exe"):
+                continue
+            rel = os.path.relpath(os.path.join(cur, n), root).replace(os.sep, "/")
+            if rel.lower() != main:
+                out.append(rel)
+        if len(out) >= 40:
+            break
+    return sorted(out)
+
+
+def helper_app_config(exe_path: str, game_name: str) -> dict:
+    return app_config(exe_path, f"{game_name} - {os.path.basename(exe_path)} (no mods)", [])
