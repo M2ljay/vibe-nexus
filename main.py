@@ -7365,7 +7365,9 @@ def _remove_files_record(
         except OSError:
             pass
         parent = os.path.dirname(path)
-        while len(parent) > len(base):
+        keep = {os.path.normcase(os.path.join(base, *k.split("/")))
+                for k in rec.get("keepDirs") or [] if _safe_rel_path(k)}
+        while len(parent) > len(base) and os.path.normcase(parent) not in keep:
             try:
                 os.rmdir(parent)
             except OSError:
@@ -7381,6 +7383,23 @@ def _root_loader_off(install_path: str, name: str) -> bool:
     only its .nexusoff copy is there."""
     return ("." in name and not os.path.exists(os.path.join(install_path, name))
             and os.path.exists(os.path.join(install_path, name + ".nexusoff")))
+
+
+_VORTEX_RULES = None
+
+
+def _vortex_rules() -> dict:
+    """Per-game mod locations extracted from Vortex's game extensions
+    (py_modules/vortex_rules.json), keyed by Nexus domain."""
+    global _VORTEX_RULES
+    if _VORTEX_RULES is None:
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "py_modules", "vortex_rules.json"), encoding="utf-8") as f:
+                _VORTEX_RULES = json.load(f).get("games") or {}
+        except (OSError, ValueError):
+            _VORTEX_RULES = {}
+    return _VORTEX_RULES
 
 
 def _experimental_game_for(game_domain: str):
@@ -7413,7 +7432,29 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         return ""
     base = install_path
     plan = None
-    cfg = experimental_games.ue_config_plan(rel_files) if game.get("engine") == "unreal" else None
+    merge = game.get("mergeInto")
+    if merge:
+        merge_root = merge.split("/")[0].lower() if merge != "." else ""
+        tops = {f.split("/")[0].lower() for f in rel_files}
+        roots_low = {e.lower() for e in root_entries}
+        # A game-folder layout (Binaries/..., a dll for the exe) still goes
+        # where its paths say; everything else merges into the mod folder.
+        if merge == "." or not (tops & roots_low - {merge_root}):
+            merge_dir = install_path if merge == "." else os.path.join(install_path, *merge.split("/"))
+            try:
+                merge_entries = set(os.listdir(merge_dir))
+            except OSError:
+                merge_entries = set()
+            plan = experimental_games.plan_merge(rel_files, merge, merge_entries) or None
+            if plan and merge == ".":
+                # Root merges still need a layout the game folder recognises.
+                plan = experimental_games.plan_root_install(
+                    rel_files, root_entries, experimental_games.index_game_dirs(install_path),
+                    mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
+                    experimental_games.index_game_files(install_path, mods_subdir),
+                    experimental_games.GAME_CONTENT_ROOT.get(game_domain, ""))
+    cfg = (experimental_games.ue_config_plan(rel_files)
+           if plan is None and game.get("engine") == "unreal" else None)
     if cfg:
         cfg_dir = _ue_user_config_dir(game)
         if cfg_dir:
@@ -7463,6 +7504,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         "files": files,
         "backups": backups,
         **({"base": install_path} if install_path != _game_dir(game.get("installDirName") or "") else {}),
+        **({"keepDirs": [merge]} if merge and merge != "." else {}),
     })
     _save_settings(settings)
     decky.logger.info(
@@ -31882,6 +31924,18 @@ query CollectionInstructions($slug: String!) {
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
             return
+        game.pop("mergeInto", None)
+        game.pop("vortexRule", None)
+        rule = _vortex_rules().get(domain)
+        if rule:
+            try:
+                root_entries = set(os.listdir(_game_dir(game.get("installDirName") or "")))
+            except OSError:
+                root_entries = set()
+            if experimental_games.apply_vortex_rule(game, rule, root_entries):
+                decky.logger.info(
+                    f"experimental {domain}: Vortex rule -> mods in {game.get('mergeInto') or game.get('modsSubdir')!r}"
+                    f" (merge={bool(game.get('mergeInto'))})")
         if reloaded_ii.apply_reloaded_profile(game):
             game["frameworkChecked"] = True
             game["profileVersion"] = experimental_games.PROFILE_VERSION

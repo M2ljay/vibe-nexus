@@ -862,6 +862,12 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
+    merge = game.get("mergeInto")
+    if merge and payload_low and merge != ".":
+        merge_root = merge.split("/")[0].lower()
+        tops = {f.split("/")[0] for f in low}
+        if not (tops & ({e.lower() for e in root_entries} - {merge_root})):
+            return "mods_folder"
     exts = tuple(game.get("flatModExtensions") or [])
     if game.get("toolApply") or exts:
         if exts and any(f.endswith(exts) for f in low):
@@ -950,3 +956,90 @@ def is_mods_folder_payload(rel_files: list, engine: str) -> bool:
     low = [f.replace("\\", "/").strip("/").lower() for f in rel_files]
     return any(f.endswith(loadable) for f in low) and not any(
         "/" not in f and (f in PROXY_DLLS or f.endswith(".asi")) for f in low)
+
+
+# ---- Vortex game rules --------------------------------------------------------
+# Extracted offline from Vortex's open game extensions (tools/vortex-rules):
+# where each game's mods go and whether they merge into that folder.
+
+def _norm_rel(p: str) -> str:
+    p = (p or "").replace("\\", "/").strip("/")
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
+
+def vortex_mod_dir(rule: dict, root_entries: set) -> str:
+    """The rule's mod folder relative to the game folder, "." for the game
+    folder itself, or "" when it points outside it (Documents, AppData)
+    or nowhere this install has."""
+    raw = rule.get("modPath")
+    if not isinstance(raw, str):
+        return ""
+    p = _norm_rel(raw)
+    if re.match(r"^[a-zA-Z]:", raw.replace("\\", "/")) and not raw.upper().startswith("C:\\GAME"):
+        return ""
+    if raw.upper().startswith("C:\\GAME"):
+        p = _norm_rel(raw[len("C:\\GAME"):])
+    if p in ("", "."):
+        return "."
+    first = p.split("/")[0].lower()
+    if first not in {e.lower() for e in root_entries}:
+        return ""
+    return p
+
+
+def apply_vortex_rule(game: dict, rule: dict, root_entries: set) -> bool:
+    """Use Vortex's knowledge of where this game's mods go. True if applied."""
+    if not rule or game.get("toolApply") or game.get("installMode") == "dataDir":
+        return False
+    mod_dir = vortex_mod_dir(rule, root_entries)
+    if not mod_dir:
+        return False
+    if mod_dir != ".":
+        game["modsSubdir"] = mod_dir
+    if rule.get("mergeMods") is not False:
+        game["mergeInto"] = mod_dir
+    game["vortexRule"] = True
+    note = (f"Mod locations come from Vortex's support for this game: mods go in "
+            f"{'the game folder' if mod_dir == '.' else mod_dir.replace('/', chr(92))}.")
+    uc = game.get("underConstruction") or ""
+    if "Vortex" not in uc:
+        game["underConstruction"] = (uc + " " + note).strip()
+    return True
+
+
+def plan_merge(rel_files: list, merge_rel: str, merge_entries: set) -> list:
+    """[(archive path, game-relative destination)] merging an archive into
+    the mod folder the way Vortex deploys it: paths kept as they are,
+    except a leading copy of the mod folder's own name, or a single
+    wrapper folder whose contents match what that folder holds."""
+    files = [_norm_rel(f) for f in rel_files if f and not f.endswith("/")]
+    if not files:
+        return []
+    merge_rel = _norm_rel(merge_rel)
+    tail = merge_rel.split("/")[-1].lower() if merge_rel not in ("", ".") else ""
+    full = merge_rel.lower() + "/" if merge_rel not in ("", ".") else ""
+    lowered = [f.lower() for f in files]
+
+    strip = 0
+    if full and all(f.startswith(full) for f in lowered):
+        strip = full.count("/")
+    elif tail and all(f.split("/")[0] == tail and "/" in f for f in lowered):
+        strip = 1
+    else:
+        tops = {f.split("/")[0] for f in lowered}
+        if len(tops) == 1 and all("/" in f for f in lowered):
+            top = next(iter(tops))
+            seconds = {f.split("/")[1] for f in lowered if f.count("/") >= 1}
+            existing = {e.lower() for e in merge_entries}
+            if top not in existing and seconds & existing:
+                strip = 1
+    out = []
+    for f in files:
+        rest = "/".join(f.split("/")[strip:])
+        if not rest:
+            continue
+        dst = rest if merge_rel in ("", ".") else merge_rel + "/" + rest
+        out.append((f, dst))
+    return out

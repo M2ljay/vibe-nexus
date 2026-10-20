@@ -1,0 +1,675 @@
+{
+ "about": "Mod folders per game, extracted from Vortex game extensions (Nexus-Mods/vortex-games and community extensions) by tools/vortex-rules. Facts only: folder names and flags.",
+ "games": {
+  "7daystodie": {
+   "name": "7 Days to Die",
+   "modPath": "Mods",
+   "mergeMods": null,
+   "steamAppId": 251570,
+   "executable": "7DaysToDie.exe",
+   "source": "game-7daystodie"
+  },
+  "ahatintime": {
+   "name": "A Hat in Time",
+   "modPath": "HatInTimeGame/Mods",
+   "mergeMods": true,
+   "steamAppId": 253230,
+   "executable": "Binaries/Win64/HatInTimeGame.exe",
+   "source": "game-ahatintime"
+  },
+  "battletech": {
+   "name": "BattleTech",
+   "modPath": "My Games\\BattleTech\\mods",
+   "mergeMods": true,
+   "steamAppId": 637090,
+   "executable": "BattleTech.exe",
+   "source": "game-battletech"
+  },
+  "bladeandsorcery": {
+   "name": "Blade & Sorcery",
+   "modPath": "BladeAndSorcery_Data\\StreamingAssets\\Mods",
+   "mergeMods": true,
+   "steamAppId": 629730,
+   "executable": "BladeAndSorcery.exe",
+   "source": "game-bladeandsorcery",
+   "modTypes": [
+    {
+     "id": "bas-official-modtype",
+     "path": "BladeAndSorcery_Data\\StreamingAssets\\Mods"
+    },
+    {
+     "id": "bas-legacy-modtype",
+     "path": "BladeAndSorcery_Data\\StreamingAssets"
+    }
+   ]
+  },
+  "bloodstainedritualofthenight": {
+   "name": "Bloodstained:\tRitual of the Night",
+   "modPath": "BloodstainedRotN\\Content\\Paks\\~mods",
+   "mergeMods": null,
+   "steamAppId": 692850,
+   "executable": "BloodstainedROTN.exe",
+   "source": "game-bloodstainedritualofthenight"
+  },
+  "breakingwheel": {
+   "name": "Breaking Wheel",
+   "modPath": "ModdingTools",
+   "mergeMods": true,
+   "steamAppId": 545890,
+   "executable": "Ellie_Ball_Project.exe",
+   "source": "game-breakingwheel"
+  },
+  "codevein": {
+   "name": "Code Vein",
+   "modPath": "CodeVein\\content\\paks\\~mods",
+   "mergeMods": null,
+   "steamAppId": 678960,
+   "executable": "CodeVein\\Binaries\\Win64\\CodeVein-Win64-Shipping.exe",
+   "source": "game-codevein"
+  },
+  "conanexiles": {
+   "name": "Conan Exiles",
+   "modPath": "ConanSandbox\\Mods",
+   "mergeMods": true,
+   "steamAppId": 440900,
+   "executable": "ConanSandbox\\Binaries\\Win64\\ConanSandbox.exe",
+   "source": "game-conanexiles"
+  },
+  "darkestdungeon": {
+   "name": "Darkest Dungeon",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 262060,
+   "executable": "_windows\\win64\\Darkest.exe",
+   "source": "game-darkestdungeon"
+  },
+  "darksouls": {
+   "name": "Dark Souls",
+   "modPath": "DATA\\dsfix\\tex_override",
+   "mergeMods": true,
+   "steamAppId": 211420,
+   "executable": "DATA\\DARKSOULS.exe",
+   "source": "game-darksouls"
+  },
+  "darksouls2": {
+   "name": "Dark Souls II",
+   "modPath": ".",
+   "mergeMods": true,
+   "steamAppId": 236430,
+   "executable": "Game\\DarksoulsII.exe",
+   "source": "game-darksouls2"
+  },
+  "dawnofman": {
+   "name": "Dawn of Man",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 858810,
+   "executable": "DawnOfMan.exe",
+   "source": "game-dawnofman",
+   "modTypes": [
+    {
+     "id": "dom-scene-modtype",
+     "path": "DawnOfMan\\Scenarios"
+    }
+   ]
+  },
+  "divinityoriginalsin2": {
+   "name": "Divinity: Original Sin 2\tOriginal Edition",
+   "modPath": "Larian Studios\\Divinity Original Sin 2\\Mods",
+   "mergeMods": true,
+   "steamAppId": 435150,
+   "executable": "bin/SupportTool.exe",
+   "source": "game-divinityoriginalsin2"
+  },
+  "divinityoriginalsin2definitiveedition": {
+   "name": "Divinity: Original Sin 2\tDefinitive Edition",
+   "modPath": "Larian Studios\\Divinity Original Sin 2 Definitive Edition\\Mods",
+   "mergeMods": true,
+   "steamAppId": 435150,
+   "executable": "DefEd/bin/SupportTool.exe",
+   "source": "game-divinityoriginalsin2"
+  },
+  "dragonage": {
+   "name": "Dragon Age: Origins",
+   "modPath": "BioWare\\Dragon Age\\packages\\core\\override",
+   "mergeMods": true,
+   "steamAppId": 17450,
+   "executable": "bin_ship/daorigins.exe",
+   "source": "game-dragonage"
+  },
+  "dragonage2": {
+   "name": "Dragon Age 2",
+   "modPath": "BioWare\\Dragon Age 2\\packages\\core\\override",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "bin_ship/dragonage2.exe",
+   "source": "game-dragonage2"
+  },
+  "elex": {
+   "name": "Elex",
+   "modPath": "data\\packed",
+   "mergeMods": true,
+   "steamAppId": 411300,
+   "executable": "system\\ELEX.exe",
+   "source": "game-elex"
+  },
+  "enderal": {
+   "name": "Enderal",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 933480,
+   "executable": "Enderal Launcher.exe",
+   "source": "game-enderal"
+  },
+  "factorio": {
+   "name": "Factorio",
+   "modPath": "Factorio\\mods",
+   "mergeMods": true,
+   "steamAppId": 427520,
+   "executable": "bin/x64/Factorio.exe",
+   "source": "game-factorio"
+  },
+  "fallout3": {
+   "name": "Fallout 3",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 22300,
+   "executable": "fallout3.exe",
+   "source": "game-fallout3"
+  },
+  "fallout4": {
+   "name": "Fallout 4",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 377160,
+   "executable": "Fallout4.exe",
+   "source": "game-fallout4"
+  },
+  "fallout4vr": {
+   "name": "Fallout 4 VR",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 611660,
+   "executable": "Fallout4VR.exe",
+   "source": "game-fallout4vr"
+  },
+  "falloutnv": {
+   "name": "Fallout:\tNew Vegas",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 22380,
+   "executable": "FalloutNV.exe",
+   "source": "game-falloutnv"
+  },
+  "galacticcivilizations3": {
+   "name": "Galactic Civilizations III",
+   "modPath": "My Games\\GC3Crusade",
+   "mergeMods": true,
+   "steamAppId": 976210,
+   "executable": "GalCiv3.exe",
+   "source": "game-galciv3",
+   "modTypes": [
+    {
+     "id": "galciv3crusade",
+     "path": "My Games\\GC3Crusade"
+    }
+   ]
+  },
+  "gardenpaws": {
+   "name": "Garden Paws",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 840010,
+   "executable": "GardenPaws.exe",
+   "source": "game-gardenpaws"
+  },
+  "greedfall": {
+   "name": "GreedFall",
+   "modPath": "datalocal",
+   "mergeMods": true,
+   "steamAppId": 606880,
+   "executable": "GreedFall.exe",
+   "source": "game-greedfall"
+  },
+  "grimdawn": {
+   "name": "Grim Dawn",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 219990,
+   "executable": "Grim Dawn.exe",
+   "source": "game-grimdawn"
+  },
+  "grimrock": {
+   "name": "Legend of Grimrock",
+   "modPath": "Almost Human\\Legend of Grimrock\\Dungeons",
+   "mergeMods": true,
+   "steamAppId": 207170,
+   "executable": "grimrock.exe",
+   "source": "game-grimrock"
+  },
+  "kenshi": {
+   "name": "Kenshi",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 233860,
+   "executable": "kenshi_x64.exe",
+   "source": "game-kenshi"
+  },
+  "kerbalspaceprogram": {
+   "name": "Kerbal Space Program",
+   "modPath": "GameData",
+   "mergeMods": true,
+   "steamAppId": 220200,
+   "executable": "KSP_x64.exe",
+   "source": "game-kerbalspaceprogram"
+  },
+  "kotor": {
+   "name": "Star Wars: KOTOR",
+   "modPath": "override",
+   "mergeMods": true,
+   "steamAppId": 32370,
+   "executable": "swkotor.exe",
+   "source": "game-sw-kotor"
+  },
+  "kotor2": {
+   "name": "Star Wars: KOTOR II",
+   "modPath": "override",
+   "mergeMods": true,
+   "steamAppId": 208580,
+   "executable": "swkotor2.exe",
+   "source": "game-sw-kotor"
+  },
+  "mbwarband": {
+   "name": "Mount & Blade:\tWarband",
+   "modPath": "modules",
+   "mergeMods": true,
+   "steamAppId": 48700,
+   "executable": "mb_warband.exe",
+   "source": "game-mount-and-blade"
+  },
+  "mbwithfireandsword": {
+   "name": "Mount & Blade:\tWith Fire and Sword",
+   "modPath": "modules",
+   "mergeMods": true,
+   "steamAppId": 48720,
+   "executable": "mb_wfas.exe",
+   "source": "game-mount-and-blade"
+  },
+  "microsoftflightsimulator": {
+   "name": "Microsoft Flight Simulator",
+   "modPath": "packages\\Microsoft.FlightSimulator_8wekyb3d8bbwe\\LocalCache\\Packages\\Community",
+   "mergeMods": null,
+   "steamAppId": 1250410,
+   "executable": "FlightSimulator.exe",
+   "source": "game-microsoftflightsimulator",
+   "modTypes": [
+    {
+     "id": "msfs-pack",
+     "path": "packages\\Microsoft.FlightSimulator_8wekyb3d8bbwe\\LocalCache\\Packages\\Community"
+    }
+   ]
+  },
+  "monsterhunterworld": {
+   "name": "Monster Hunter: World",
+   "modPath": "nativePC",
+   "mergeMods": true,
+   "steamAppId": 582010,
+   "executable": "MonsterHunterWorld.exe",
+   "source": "game-monster-hunter-world"
+  },
+  "mountandblade": {
+   "name": "Mount & Blade",
+   "modPath": "modules",
+   "mergeMods": true,
+   "steamAppId": 22100,
+   "executable": "mount&blade.exe",
+   "source": "game-mount-and-blade"
+  },
+  "nehrim": {
+   "name": "Nehrim: At Fate's Edge",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": 1014940,
+   "executable": "Oblivion.exe",
+   "source": "game-nehrim"
+  },
+  "neverwinter2": {
+   "name": "Neverwinter Nights 2",
+   "modPath": "Neverwinter Nights 2",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "nwn2.exe",
+   "source": "game-neverwinter-nights2",
+   "modTypes": [
+    {
+     "id": "nwn2-override-mod",
+     "path": "Neverwinter Nights 2\\override"
+    }
+   ]
+  },
+  "nomanssky": {
+   "name": "No Man's Sky",
+   "modPath": "GAMEDATA\\MODS",
+   "mergeMods": true,
+   "steamAppId": 275850,
+   "executable": "Binaries\\NMS.exe",
+   "source": "game-nomanssky",
+   "modTypes": [
+    {
+     "id": "nomanssky-deprecated-pak",
+     "path": "GAMEDATA\\PCBANKS\\MODS"
+    },
+    {
+     "id": "nomanssky-binaries",
+     "path": "Binaries"
+    }
+   ]
+  },
+  "nwnee": {
+   "name": "Neverwinter Nights:\tEnhanced Edition",
+   "modPath": "Neverwinter Nights",
+   "mergeMods": true,
+   "steamAppId": 704450,
+   "executable": "bin/win32/nwmain.exe",
+   "source": "game-neverwinter-nights"
+  },
+  "oblivion": {
+   "name": "Oblivion",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 22330,
+   "executable": "oblivion.exe",
+   "source": "game-oblivion"
+  },
+  "oxygennotincluded": {
+   "name": "Oxygen Not Included",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 457140,
+   "executable": "OxygenNotIncluded.exe",
+   "source": "game-oni"
+  },
+  "pathfinderkingmaker": {
+   "name": "Pathfinder:\tKingmaker",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 640820,
+   "executable": "Kingmaker.exe",
+   "source": "game-pathfinderkingmaker"
+  },
+  "pathfinderwrathoftherighteous": {
+   "name": "Pathfinder: Wrath\tof the Righteous",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 1184370,
+   "executable": "Wrath.exe",
+   "source": "game-pathfinderwrathoftherighteous"
+  },
+  "rimworld": {
+   "name": "RimWorld",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 294100,
+   "executable": "RimWorldWin64.exe",
+   "source": "game-rimworld"
+  },
+  "sekiro": {
+   "name": "Sekiro",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 814380,
+   "executable": "sekiro.exe",
+   "source": "game-sekiro"
+  },
+  "shadowrunreturns": {
+   "name": "Shadowrun Returns",
+   "modPath": "Shadowrun_Data\\StreamingAssets\\ContentPacks",
+   "mergeMods": false,
+   "steamAppId": 234650,
+   "executable": "Shadowrun.exe",
+   "source": "game-shadowrunreturns"
+  },
+  "skyrim": {
+   "name": "Skyrim",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 72850,
+   "executable": "TESV.exe",
+   "source": "game-skyrim"
+  },
+  "skyrimse": {
+   "name": "Skyrim Special Edition",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 489830,
+   "executable": "SkyrimSE.exe",
+   "source": "game-skyrimse"
+  },
+  "skyrimvr": {
+   "name": "Skyrim VR",
+   "modPath": "Data",
+   "mergeMods": true,
+   "steamAppId": 611670,
+   "executable": "SkyrimVR.exe",
+   "source": "game-skyrimvr"
+  },
+  "spyroreignitedtrilogy": {
+   "name": "Spyro Reignited Trilogy",
+   "modPath": "falcon\\content\\paks\\~mods",
+   "mergeMods": null,
+   "steamAppId": 996580,
+   "executable": "Spyro.exe",
+   "source": "game-spyroreignitedtrilogy"
+  },
+  "starbound": {
+   "name": "Starbound",
+   "modPath": "mods",
+   "mergeMods": true,
+   "steamAppId": 211820,
+   "executable": "win64/starbound.exe",
+   "source": "game-starbound"
+  },
+  "stardewvalley": {
+   "name": "Stardew Valley",
+   "modPath": "Mods",
+   "mergeMods": true,
+   "steamAppId": 413150,
+   "executable": "Stardew Valley.exe",
+   "source": "game-stardewvalley",
+   "modTypes": [
+    {
+     "id": "sdv-configuration-mod",
+     "path": "Mods"
+    }
+   ]
+  },
+  "stateofdecay": {
+   "name": "State of Decay",
+   "modPath": "game",
+   "mergeMods": true,
+   "steamAppId": 241540,
+   "executable": "StateOfDecay.exe",
+   "source": "game-stateofdecay"
+  },
+  "survivingmars": {
+   "name": "Surviving Mars",
+   "modPath": "Surviving Mars\\mods",
+   "mergeMods": true,
+   "steamAppId": 464920,
+   "executable": "MarsSteam.exe",
+   "source": "game-survivingmars"
+  },
+  "teamfortress2": {
+   "name": "Team Fortress 2",
+   "modPath": "tf\\custom",
+   "mergeMods": true,
+   "steamAppId": 440,
+   "executable": "tf_win64.exe",
+   "source": "game-teamfortress2"
+  },
+  "teso": {
+   "name": "The Elder Scrolls Online",
+   "modPath": "Elder Scrolls Online\\live\\Addons",
+   "mergeMods": true,
+   "steamAppId": 306130,
+   "executable": "Bethesda.net_Launcher.exe",
+   "source": "game-teso"
+  },
+  "thesims3": {
+   "name": "The Sims 3",
+   "modPath": "Electronic Arts\\The Sims 3\\Mods\\Packages",
+   "mergeMods": true,
+   "steamAppId": 47890,
+   "executable": "game/bin/TS3.exe",
+   "source": "game-sims3"
+  },
+  "thesims4": {
+   "name": "The Sims 4",
+   "modPath": "Electronic Arts\\The Sims 4\\Mods\\Vortex Mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "game/bin/TS4_x64.exe",
+   "source": "game-sims4",
+   "modTypes": [
+    {
+     "id": "sims4mixed",
+     "path": "\\tmp\\claude-0\\-home-claude\\720f7888-6617-5ecf-8101-4094cdfa9089\\scratchpad\\vortex-extract\\Electronic Arts\\The Sims 4"
+    }
+   ]
+  },
+  "torchlight2": {
+   "name": "Torchlight II",
+   "modPath": "My Games\\runic games\\torchlight 2\\mods",
+   "mergeMods": true,
+   "steamAppId": 200710,
+   "executable": "ModLauncher.exe",
+   "source": "game-torchlight2"
+  },
+  "totalwarthreekingdoms": {
+   "name": "Total War: Three Kingdoms",
+   "modPath": "data",
+   "mergeMods": true,
+   "steamAppId": 779340,
+   "executable": "Launcher.exe",
+   "source": "game-totalwarthreekingdoms"
+  },
+  "untitledgoosegame": {
+   "name": "Untitled Goose Game",
+   "modPath": "BepInEx\\plugins",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "Untitled.exe",
+   "source": "game-untitledgoose"
+  },
+  "vampirebloodlines": {
+   "name": "Vampire the Masquerade\tBloodlines",
+   "modPath": "Vampire",
+   "mergeMods": true,
+   "steamAppId": 2600,
+   "executable": "Vampire.exe",
+   "source": "game-vtmbloodlines",
+   "modTypes": [
+    {
+     "id": "vtmb-up-modtype",
+     "path": "Unofficial_Patch"
+    }
+   ]
+  },
+  "warthunder": {
+   "name": "War Thunder",
+   "modPath": "UserSkins",
+   "mergeMods": true,
+   "steamAppId": 236390,
+   "executable": "win64/aces.exe",
+   "source": "game-warthunder",
+   "modTypes": [
+    {
+     "id": "warthunder-audio-modtype",
+     "path": "sound\\mod"
+    }
+   ]
+  },
+  "witcher": {
+   "name": "The Witcher",
+   "modPath": "Data/Override",
+   "mergeMods": true,
+   "steamAppId": 20900,
+   "executable": "system/witcher.exe",
+   "source": "game-witcher",
+   "modTypes": [
+    {
+     "id": "witcheruser",
+     "path": "Data\\Override"
+    }
+   ]
+  },
+  "witcher2": {
+   "name": "The Witcher 2",
+   "modPath": "CookedPC",
+   "mergeMods": true,
+   "steamAppId": 20920,
+   "executable": "bin/witcher2.exe",
+   "source": "game-witcher2",
+   "modTypes": [
+    {
+     "id": "witcher2user",
+     "path": "UserContent"
+    }
+   ]
+  },
+  "wolcenlordsofmayhem": {
+   "name": "Wolcen:\tLords Of Mayhem",
+   "modPath": "Game",
+   "mergeMods": true,
+   "steamAppId": 424370,
+   "executable": "win_x64\\Wolcen.exe",
+   "source": "game-wolcen"
+  },
+  "worldoftanks": {
+   "name": "World Of Tanks",
+   "modPath": "C:\\GAME\\res_mods",
+   "mergeMods": true,
+   "steamAppId": null,
+   "executable": "WorldOfTanks.exe",
+   "source": "game-worldoftanks"
+  },
+  "x4foundations": {
+   "name": "X4: Foundations",
+   "modPath": "extensions",
+   "mergeMods": true,
+   "steamAppId": 392160,
+   "executable": "X4.exe",
+   "source": "game-x4foundations",
+   "modTypes": [
+    {
+     "id": "x4-documents-modtype",
+     "path": "Egosoft\\X4\\extensions"
+    }
+   ]
+  },
+  "xcom2": {
+   "name": "XCOM 2",
+   "modPath": "XComGame\\Mods",
+   "mergeMods": true,
+   "steamAppId": "268500",
+   "executable": "Binaries\\Win64\\XCom2.exe",
+   "source": "game-xcom2"
+  },
+  "xcom2-wotc": {
+   "name": "XCOM 2: War of the Chosen",
+   "modPath": "XCom2-WarOfTheChosen\\XComGame\\Mods",
+   "mergeMods": true,
+   "steamAppId": "268500",
+   "executable": "XCom2-WarOfTheChosen\\Binaries\\Win64\\XCom2.exe",
+   "source": "game-xcom2"
+  },
+  "xrebirth": {
+   "name": "X Rebirth",
+   "modPath": "extensions",
+   "mergeMods": true,
+   "steamAppId": 2870,
+   "executable": "XRebirth.exe",
+   "source": "game-xrebirth"
+  }
+ }
+}

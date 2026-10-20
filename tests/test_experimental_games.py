@@ -395,3 +395,38 @@ class MoreGamesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VortexRuleTests(unittest.TestCase):
+    def test_mod_dir_validation(self):
+        from experimental_games import vortex_mod_dir
+        roots = {"Mods", "Game.exe", "HatInTimeGame"}
+        self.assertEqual(vortex_mod_dir({"modPath": "Mods"}, roots), "Mods")
+        self.assertEqual(vortex_mod_dir({"modPath": "HatInTimeGame/Mods"}, roots), "HatInTimeGame/Mods")
+        self.assertEqual(vortex_mod_dir({"modPath": "C:\\GAME\\Mods"}, roots), "Mods")
+        self.assertEqual(vortex_mod_dir({"modPath": "."}, roots), ".")
+        self.assertEqual(vortex_mod_dir({"modPath": "My Games\\BattleTech\\mods"}, roots), "")
+        self.assertEqual(vortex_mod_dir({"modPath": "D:\\Docs\\x"}, roots), "")
+
+    def test_plan_merge(self):
+        from experimental_games import plan_merge
+        # Kept as-is under the mod folder: 7 Days to Die mods are folders.
+        self.assertEqual(plan_merge(["MyMod/ModInfo.xml"], "Mods", {"Other"}),
+                         [("MyMod/ModInfo.xml", "Mods/MyMod/ModInfo.xml")])
+        # A leading copy of the mod folder's name is not doubled.
+        self.assertEqual(plan_merge(["Mods/MyMod/ModInfo.xml"], "Mods", set()),
+                         [("Mods/MyMod/ModInfo.xml", "Mods/MyMod/ModInfo.xml")])
+        self.assertEqual(plan_merge(["BepInEx/plugins/x.dll"], "BepInEx/plugins", set()),
+                         [("BepInEx/plugins/x.dll", "BepInEx/plugins/x.dll")])
+        # A wrapper folder around content the target already has is unwrapped.
+        self.assertEqual(plan_merge(["Wrapper v1/textures/a.dds"], "Data", {"textures"}),
+                         [("Wrapper v1/textures/a.dds", "Data/textures/a.dds")])
+
+    def test_apply_rule_and_classify(self):
+        from experimental_games import apply_vortex_rule, classify_mod
+        g = {"nexusDomain": "7daystodie", "modsSubdir": "Mods", "engine": "unity"}
+        self.assertTrue(apply_vortex_rule(g, {"modPath": "Mods", "mergeMods": True}, {"Mods", "Data"}))
+        self.assertEqual(g["mergeInto"], "Mods")
+        self.assertEqual(classify_mod(["MyMod/ModInfo.xml", "MyMod/Config/x.xml"], g, {"Mods", "Data"}, {}),
+                         "mods_folder")
+        self.assertFalse(apply_vortex_rule({"toolApply": "overstrike"}, {"modPath": "Mods"}, {"Mods"}))

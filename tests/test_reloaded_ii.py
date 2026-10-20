@@ -316,3 +316,31 @@ class ReloadedBackendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VortexMergeInstallTests(unittest.TestCase):
+    def test_merge_install_and_uninstall(self):
+        root = main._game_dir("Seven Days")
+        shutil.rmtree(root, ignore_errors=True)
+        os.makedirs(os.path.join(root, "Mods"))
+        os.makedirs(os.path.join(root, "Data"))
+        game = {"appId": 7, "nexusDomain": "7daystodie", "installDirName": "Seven Days",
+                "processName": "7DaysToDie.exe", "modsSubdir": "Mods", "engine": "unity",
+                "mergeInto": "Mods"}
+        main._save_settings({"experimental_games": {"7": game}})
+        scratch = os.path.join(main.DOWNLOADS_DIR, "merge-scratch")
+        shutil.rmtree(scratch, ignore_errors=True)
+        os.makedirs(os.path.join(scratch, "BetterLoot", "Config"))
+        for rel in ("BetterLoot/ModInfo.xml", "BetterLoot/Config/loot.xml"):
+            with open(os.path.join(scratch, *rel.split("/")), "w") as f:
+                f.write("x")
+        key = main._experimental_root_install(scratch, root, "Mods", game, "7daystodie", 7,
+                                              {"mod_id": 1, "file_id": 1, "name": "Better Loot"})
+        self.assertTrue(key)
+        self.assertTrue(os.path.isfile(os.path.join(root, "Mods", "BetterLoot", "ModInfo.xml")))
+        settings = main._load_settings()
+        main._remove_files_record("7daystodie", key, root, settings)
+        main._save_settings(settings)
+        self.assertFalse(os.path.exists(os.path.join(root, "Mods", "BetterLoot")))
+        self.assertTrue(os.path.isdir(os.path.join(root, "Mods")))
+        shutil.rmtree(root, ignore_errors=True)
