@@ -76,6 +76,10 @@ def loader_config(launcher_dir: str, existing: dict = None) -> dict:
         if not cfg.get(k):
             cfg[k] = v
     cfg.setdefault("FirstLaunch", False)
+    # Reloaded's console window opens over the game at launch; in Steam Big
+    # Picture it took the foreground and P4G never came up (2026-10-20).
+    # The log file is written either way.
+    cfg.setdefault("ShowConsole", False)
     return cfg
 
 
