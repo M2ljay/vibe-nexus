@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.41",
- "hash": "e8954cdc43629bca3713a11282c88597480cda85ddd3484b55b28d74805ff9b9",
+ "version": "1.21.32-anygame.42",
+ "hash": "63a7c9bfe29a7616d47737967f0d20b43d301c9fb9e241bc9e5ca42e19bfa253",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Mod check reads archives Nexus has no file list for."
+ "notes": "Mod check reads RAR archives too."
 }
