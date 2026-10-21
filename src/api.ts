@@ -742,7 +742,7 @@ export const installFramework = callable<
     game_domain: string,
     mod_id: number,
     install_dir: string,
-    install_kind: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools",
+    install_kind: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools" | "tfcInstaller",
     detect_file: string,
     avoid_file_keywords: string[],
     install_subdir: string,

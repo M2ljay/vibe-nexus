@@ -1753,7 +1753,7 @@ export function storeHeaderMinWidth(plan: StoreHeaderPlan): number {
 /** Install kinds that fetch the loader themselves instead of from a Nexus
  * mod page. Mass Effect's Bink bypass is the compiled LEBinkProxy from the
  * ME3Tweaks repository, pinned by hash, so it has no mod id. */
-const SELF_SOURCED_FRAMEWORK_KINDS = new Set(["masseffectBink", "reloaded2", "githubLoader", "xv2tools"]);
+const SELF_SOURCED_FRAMEWORK_KINDS = new Set(["masseffectBink", "reloaded2", "githubLoader", "xv2tools", "tfcInstaller"]);
 
 /** Can Step 1 actually install this game's framework?
  *

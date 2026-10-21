@@ -780,6 +780,57 @@ BETHESDA_GAMES = {
 }
 
 
+# Batman: Arkham Origins texture and graphics packs are TFC Installer mods
+# (Vortex's game extension: the tool from site/mods/588 in
+# SinglePlayer/TFCInstaller, its mods in SinglePlayer/TFCInstaller/Mods, then
+# run it). A TFC mod is a folder with GameProfile.xml / TexturePack /
+# *.TFCMapping / ObjectDescriptors files.
+TFC_GAMES = {"batmanarkhamorigins": "SinglePlayer/TFCInstaller"}
+TFC_SITE_MOD = 588
+_TFC_FILES = ("gameprofile.xml", "gameprofile.idremappings.xml", "objectdescriptors.xml",
+              "packageextensions.xml")
+_TFC_EXTS = (".packagepatch", ".descriptor", ".tfcmapping", ".inipatch")
+
+
+def apply_tfc_profile(game: dict) -> bool:
+    """Batman: Arkham Origins and friends: TFC Installer as Step 1."""
+    tdir = TFC_GAMES.get(game.get("nexusDomain") or "")
+    if not tdir:
+        return False
+    game["tfcDir"] = tdir
+    game["toolApply"] = "tfcinstaller"
+    game["framework"] = {
+        "name": "TFC Installer",
+        "nexusModId": TFC_SITE_MOD,
+        "sourceDomain": "site",
+        "detectFile": tdir + "/TFCInstaller.exe",
+        "url": f"https://www.nexusmods.com/site/mods/{TFC_SITE_MOD}",
+        "installKind": "tfcInstaller",
+        "installSubdir": tdir,
+        "warning": (
+            "Most of this game's texture and graphics mods are TFC Installer mods. Step 1 "
+            "puts TFC Installer (from Nexus) in the game folder. After you install such a "
+            "mod, TFC Installer opens on the desktop: tick the mod and press Install there. "
+            "To take one out, uninstall it in TFC Installer first."),
+    }
+    return True
+
+
+def tfc_mod_roots(rel_files: list) -> list:
+    """Folders of an archive that are TFC Installer mods (each holds a
+    GameProfile.xml or the like), outermost only."""
+    roots = set()
+    for f in rel_files or []:
+        f = f.replace("\\", "/")
+        name = f.split("/")[-1].lower()
+        if name in _TFC_FILES or name.endswith(_TFC_EXTS):
+            d = f.rsplit("/", 1)[0] if "/" in f else ""
+            if d.lower().endswith("/texturepack") or d.lower() == "texturepack":
+                d = d.rsplit("/", 1)[0] if "/" in d else ""
+            roots.add(d)
+    return sorted(r for r in roots if not any(r != o and r.startswith(o + "/") for o in roots if o))
+
+
 # DOOM (2016): mods are zips in Mods/, built into the game by DOOMModLoader
 # (ZwipZwapZapony/DOOMModLoader, "Place mod zips into a Mods folder ...
 # without extracting them, and run DOOMModLoader").
@@ -1141,6 +1192,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
+        return "tool_managed"
+    if game.get("toolApply") == "tfcinstaller" and tfc_mod_roots(files):
         return "tool_managed"
     if game.get("toolApply") == "doommodloader" and payload_low and not any(
             f.endswith((".exe", ".dll", ".asi")) for f in payload_low):

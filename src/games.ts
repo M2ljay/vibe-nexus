@@ -80,7 +80,7 @@ export interface GameFramework {
   aliasModIds?: number[];
   /** How the framework archive installs: SMAPI's install.dat method, or
    * flatten-and-copy into the game dir (SKSE-style) */
-  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools";
+  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools" | "tfcInstaller";
   /** Shown with Step 1 and confirmed before installing (experimental
    * games: the loader is inferred, and may carry a ban risk). */
   warning?: string;
@@ -306,7 +306,7 @@ export interface SupportedGame {
   /** Experimental tool-managed games: the backend applies installed mods
    * with this tool after every change (Insomniac ports: Overstrike;
    * Persona and friends: Reloaded-II). */
-  toolApply?: "overstrike" | "reloaded" | "xv2ins" | "doommodloader";
+  toolApply?: "overstrike" | "reloaded" | "xv2ins" | "doommodloader" | "tfcinstaller";
   /** Experimental: bring the game's window to the front after launch. */
   focusAfterLaunch?: boolean;
   /** Experimental: ReShade has been set up for this game. */
@@ -1935,11 +1935,12 @@ export function getActiveGame(runningAppId: number | undefined): SupportedGame {
 /** Experimental loaders whose files the backend tracks: switched off by
  * renaming them, removed exactly. */
 export function isTrackedLoader(kind?: string): boolean {
-  return kind === "copyRootTracked" || kind === "reloaded2" || kind === "githubLoader" || kind === "xv2tools";
+  return kind === "copyRootTracked" || kind === "reloaded2" || kind === "githubLoader" || kind === "xv2tools" || kind === "tfcInstaller";
 }
 
 /** The display name of a tool-managed game's mod tool. */
 export function toolName(kind?: string): string {
   return kind === "reloaded" ? "Reloaded-II" : kind === "xv2ins" ? "XV2 Mods Installer"
-    : kind === "doommodloader" ? "DOOMModLoader" : "Overstrike";
+    : kind === "doommodloader" ? "DOOMModLoader"
+    : kind === "tfcinstaller" ? "TFC Installer" : "Overstrike";
 }

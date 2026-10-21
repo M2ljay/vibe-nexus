@@ -7447,7 +7447,7 @@ def _experimental_game_for(game_domain: str):
 
 def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str,
                                game: dict, game_domain: str, app_id,
-                               base_record: dict) -> str:
+                               base_record: dict, choice: str = "") -> str:
     """Install an extracted archive into the game folder when its layout
     says where every file goes. Returns the record key, or "" to leave the
     archive to the mods-folder install."""
@@ -7460,6 +7460,9 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
+    tfc = experimental_games.tfc_mod_roots(rel_files) if game.get("tfcDir") else []
+    if tfc:
+        return _install_tfc_mod(scratch, rel_files, tfc, game, game_domain, base_record, choice)
     if experimental_games.only_programs(rel_files):
         key = _keep_program(scratch, rel_files, game, game_domain, base_record)
         if key:
@@ -9699,7 +9702,137 @@ def _sr2_restore_exe(root: str) -> bool:
     return True
 
 
-TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader")
+TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader", "tfcinstaller")
+
+
+async def _root_install_call(choice: str, *args):
+    """_experimental_root_install in a worker thread; a needs-a-choice
+    answer comes back as the install result the page asks with."""
+    try:
+        return await asyncio.to_thread(_experimental_root_install, *args, choice)
+    except NeedsChoice as e:
+        return {"ok": False, "needs_choice": True, "options": e.options,
+                "option_labels": _payload_choice_labels(e.options)}
+
+
+class NeedsChoice(Exception):
+    """An archive offers alternatives; the install has to ask which."""
+
+    def __init__(self, options):
+        super().__init__("choose")
+        self.options = options
+
+
+def _install_tfc_mod(scratch: str, rel_files: list, roots: list, game: dict, game_domain: str,
+                     base_record: dict, choice: str) -> str:
+    """Copy a TFC Installer mod into the tool's Mods folder; the tool itself
+    (opened on the desktop after) patches the game."""
+    if len(roots) > 1 and not choice:
+        raise NeedsChoice(roots)
+    pick = [r for r in roots if r == choice] if choice and choice != "*" else roots
+    if not pick:
+        raise NeedsChoice(roots)
+    root = _game_dir(game.get("installDirName") or "")
+    mods_rel = game["tfcDir"] + "/Mods"
+    name = _safe_name(base_record.get("name") or "TFC mod")
+    files = []
+    for r in pick:
+        sub_name = name if len(pick) == 1 else _safe_name(f"{name} - {r.split('/')[-1]}")
+        pre = (r + "/") if r else ""
+        for f in rel_files:
+            f = f.replace("\\", "/")
+            if not f.startswith(pre) or f.lower().endswith((".txt", ".md", ".url", ".jpg", ".png")) and "/" not in f[len(pre):]:
+                continue
+            rel = f"{mods_rel}/{sub_name}/{f[len(pre):]}"
+            if not _safe_rel_path(rel):
+                continue
+            dst = os.path.join(root, *rel.split("/"))
+            _makedirs_for(dst)
+            shutil.copyfile(os.path.join(scratch, *f.split("/")), dst)
+            files.append(rel)
+    _force_rmtree(scratch)
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(base_record.get("name") or "TFC mod")
+    note = ("This is a TFC Installer mod: TFC Installer opens on the desktop after installs - tick it "
+            "there and press Install. Uninstall it in TFC Installer before uninstalling it here.")
+    if any(f.lower().endswith(".bat") for f in rel_files):
+        note += " It also ships a settings script (.bat); run that from the desktop if you want its presets."
+    installed[key] = _merge_install_record(installed.get(key), {
+        **base_record, "mode": "files", "target": ".", "files": files, "backups": [],
+        "tfcMod": True, "warning": note})
+    _save_settings(settings)
+    decky.logger.info(f"TFC mod {key!r}: {len(files)} files into {mods_rel} ({pick})")
+    return key
+
+
+async def _tfc_setup(game_domain: str) -> dict:
+    """Step 1: TFC Installer from Nexus (site/mods/588) into the game."""
+    game = _experimental_game_for(game_domain)
+    if not game or not game.get("tfcDir"):
+        return {"ok": False, "error": "This game doesn't use TFC Installer"}
+    api_key = _load_settings().get("api_key")
+    files = await Plugin.get_mod_files(None, "site", experimental_games.TFC_SITE_MOD)
+    main = _pick_main_file((files.get("files") or []) if files.get("ok") else [])
+    if not main:
+        return {"ok": False, "error": "Couldn't get TFC Installer's files from Nexus"}
+    err, archive = await _download_archive("site", experimental_games.TFC_SITE_MOD, main["file_id"],
+                                           main.get("file_name") or "", api_key)
+    if err:
+        return {"ok": False, "error": f"Couldn't download TFC Installer: {err}"}
+    work = os.path.join(DOWNLOADS_DIR, "tfc-work")
+    _force_rmtree(work)
+    os.makedirs(work, exist_ok=True)
+    err = await _extract_archive(archive, work)
+    if err:
+        _force_rmtree(work)
+        return {"ok": False, "error": f"Couldn't unpack TFC Installer: {err}"}
+    exe_dir = next((cur for cur, _d, ns in os.walk(work) if any(n.lower() == "tfcinstaller.exe" for n in ns)), "")
+    if not exe_dir:
+        _force_rmtree(work)
+        return {"ok": False, "error": "The TFC Installer download has no TFCInstaller.exe"}
+    root = _game_dir(game.get("installDirName") or "")
+    files_done = []
+    for cur, _d, ns in os.walk(exe_dir):
+        for n in ns:
+            rel = "/".join(x for x in (game["tfcDir"], os.path.relpath(os.path.join(cur, n), exe_dir).replace(os.sep, "/")) if x)
+            dst = os.path.join(root, *rel.split("/"))
+            _makedirs_for(dst)
+            shutil.copyfile(os.path.join(cur, n), dst)
+            files_done.append(rel)
+    os.makedirs(os.path.join(root, *game["tfcDir"].split("/"), "Mods"), exist_ok=True)
+    _force_rmtree(work)
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/{experimental_games.TFC_SITE_MOD}"] = {
+        "install_dir": game.get("installDirName") or "", "files": files_done, "backups": [],
+        "tool": "tfc", "version": main.get("version") or ""}
+    _save_settings(settings)
+    decky.logger.info(f"TFC Installer for {game_domain}: {len(files_done)} files")
+    return {"ok": True, "install_path": root, "files": len(files_done)}
+
+
+async def _tfc_apply(game: dict) -> dict:
+    """Open TFC Installer on the desktop when its mod set changed."""
+    tool = "TFC Installer"
+    root = _game_dir(game.get("installDirName") or "")
+    exe = os.path.join(root, *game.get("tfcDir", "").split("/"), "TFCInstaller.exe")
+    domain = game.get("nexusDomain") or ""
+    recs = {k: r for k, r in (_load_settings().get("installed", {}).get(domain) or {}).items()
+            if isinstance(r, dict) and r.get("tfcMod") and r.get("enabled") is not False}
+    sig = sorted(recs)
+    settings = _load_settings()
+    last = (settings.get("tfc_last") or {}).get(domain)
+    if sig == last:
+        return {"ok": True, "tool": tool, "count": len(sig)}
+    if not os.path.isfile(exe):
+        return {"ok": False, "tool": tool, "error": "TFC Installer isn't in the game folder - run Step 1 first."}
+    opened = await asyncio.to_thread(_xv2_open_installer, exe)
+    settings.setdefault("tfc_last", {})[domain] = sig
+    _save_settings(settings)
+    return {"ok": opened, "tool": tool, "count": len(sig),
+            **({"note": "TFC Installer is open on the desktop: tick your mods and press Install "
+                        "(untick and Uninstall for ones you removed)."} if opened else
+               {"error": "Couldn't open TFC Installer"})}
 
 
 def _doom_framework() -> dict:
@@ -9791,6 +9924,8 @@ async def _tool_apply(game: dict) -> dict:
         return await _xv2_apply(game)
     if kind == "doommodloader":
         return await _doom_apply(game)
+    if kind == "tfcinstaller":
+        return await _tfc_apply(game)
     result = await _overstrike_apply(game)
     result.setdefault("tool", "Overstrike")
     return result
@@ -24499,14 +24634,18 @@ query Link($slug: String!, $domainName: String!) {
             if not flat and not sk_textures and _experimental_game_for(game_domain):
                 # Tool-managed games still get dll/ReShade-style mods put
                 # where they belong, when the layout says where.
-                done = await asyncio.to_thread(
-                    _experimental_root_install, scratch, install_path, mods_subdir,
+                done = await _root_install_call(
+                    payload_choice, scratch, install_path, mods_subdir,
                     _experimental_game_for(game_domain), game_domain, app_id, {
                         "mod_id": mod_id, "file_id": file_id, "name": mod_name,
                         "version": mod_version, "file_name": file_name,
                         "installed_at": int(time.time()), "page_version": page_version,
                         "source": record_source, "collection_slug": collection_slug,
                     })
+                if isinstance(done, dict):
+                    _force_rmtree(scratch)
+                    await _emit_progress(mod_id, "error", 0, "choose a version")
+                    return done
                 if done:
                     try:
                         os.remove(archive_path)
@@ -24911,8 +25050,8 @@ query Link($slug: String!, $domainName: String!) {
         # an exact record and the game's own files kept aside.
         exp_game = _experimental_game_for(game_domain)
         if install_mode == "folder" and exp_game is not None:
-            done = await asyncio.to_thread(
-                _experimental_root_install, scratch, install_path, mods_subdir,
+            done = await _root_install_call(
+                payload_choice, scratch, install_path, mods_subdir,
                 exp_game, game_domain, app_id, {
                     "mod_id": mod_id,
                     "file_id": file_id,
@@ -24924,6 +25063,10 @@ query Link($slug: String!, $domainName: String!) {
                     "source": record_source,
                     "collection_slug": collection_slug,
                 })
+            if isinstance(done, dict):
+                _force_rmtree(scratch)
+                await _emit_progress(mod_id, "error", 0, "choose a version")
+                return done
             if done:
                 try:
                     os.remove(archive_path)
@@ -25790,6 +25933,11 @@ query Link($slug: String!, $domainName: String!) {
                         "The game still starts; Juiced may ask to patch it on first launch.")
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
+            return result
+        if install_kind == "tfcInstaller":
+            result = await _tfc_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"TFC Step 1 for {game_domain}: {result.get('error')}")
             return result
         if install_kind == "xv2tools":
             # Eternity Tools come from videogamemods.com, not Nexus.
@@ -33483,6 +33631,8 @@ query CollectionInstructions($slug: String!) {
                              and g.get("engine") != "sr2")
                          or (g.get("nexusDomain") == experimental_games.DOOM_DOMAIN
                              and g.get("toolApply") != "doommodloader")
+                         or (g.get("nexusDomain") in experimental_games.TFC_GAMES
+                             and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
                              and (_vortex_rules().get(g.get("nexusDomain") or "") or {}).get("executable")))]
         if unchecked and not getattr(self, "_exp_checking", False):
@@ -33726,6 +33876,12 @@ query CollectionInstructions($slug: String!) {
             if exe and (not proc or not os.path.isfile(os.path.join(gdir, *proc.split("/")))):
                 game["processName"] = exe
                 decky.logger.info(f"experimental {domain}: exe from Vortex rule {exe}")
+        if experimental_games.apply_tfc_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: TFC Installer")
+            return
+        if rule:
             try:
                 root_entries = set(os.listdir(gdir))
             except OSError:
