@@ -13,11 +13,14 @@ import {
   showModal,
 } from "@decky/ui";
 import { toaster } from "@decky/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   CoverageRow,
   ExperimentalCandidate,
+  GotrOption,
+  getGotrOptions,
+  setGotrOption,
   applyExperimentalTool,
   checkExperimentalCoverage,
   experimentalFolderOptions,
@@ -322,6 +325,67 @@ export function ExperimentalUnsupportedRows({
 }
 
 /** Extra rows under "Current Game" for a game set up experimentally. */
+/** Gentlemen of the Row's optional mods, one switch each. Turning one on
+ * turns off any that change the same files. */
+function GotrOptionsModal({ closeModal }: { closeModal?: () => void }) {
+  const [options, setOptions] = useState<GotrOption[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void getGotrOptions().then((r) =>
+      r.ok ? setOptions(r.options ?? []) : setError(r.error ?? "Couldn't read the options")
+    );
+  }, []);
+  return (
+    <ModalRoot onCancel={closeModal} onEscKeypress={closeModal}>
+      <Field label="Gentlemen of the Row: optional mods" bottomSeparator="none">
+        Switching one on switches off any that change the same files. Changes
+        apply the next time the game starts.
+      </Field>
+      {error && <Field label={error} />}
+      {!options && !error && <Field label="Loading…" />}
+      {options?.map((o) => (
+        <ToggleField
+          key={o.name}
+          label={o.name}
+          description={
+            o.clashesWith.length
+              ? `${o.files} files · overlaps with ${o.clashesWith.join(", ")}`
+              : `${o.files} files`
+          }
+          checked={o.enabled}
+          disabled={busy}
+          onChange={async (on: boolean) => {
+            setBusy(true);
+            try {
+              const r = await setGotrOption(o.name, on);
+              if (!r.ok) {
+                toaster.toast({ title: "Couldn't switch it", body: r.error ?? "" });
+                return;
+              }
+              setOptions(r.options ?? options);
+              if (r.turnedOff?.length) {
+                toaster.toast({
+                  title: `Switched off ${r.turnedOff.length} overlapping mod${r.turnedOff.length === 1 ? "" : "s"}`,
+                  body: r.turnedOff.join(", "),
+                });
+              }
+              if (r.restart) {
+                toaster.toast({
+                  title: "Restart the game to see it",
+                  body: "The game reads its mod list when it starts",
+                });
+              }
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ))}
+    </ModalRoot>
+  );
+}
+
 function FolderModal({
   game,
   current,
@@ -491,6 +555,17 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
             }}
           >
             {busy ? "Applying…" : `Apply mods with ${toolName(game.toolApply)}`}
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
+      {game.nexusDomain === "saintsrow2" && (
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            description="Switch Gentlemen of the Row's optional mods on and off. Overlapping ones switch each other off."
+            onClick={() => showModal(<GotrOptionsModal />)}
+          >
+            GotR optional mods
           </ButtonItem>
         </PanelSectionRow>
       )}

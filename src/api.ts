@@ -2328,6 +2328,24 @@ export const setExperimentalFrameworkEnabled = callable<
   { ok: boolean; enabled?: boolean; error?: string }
 >("set_experimental_framework_enabled");
 
+export interface GotrOption {
+  name: string;
+  enabled: boolean;
+  files: number;
+  /** Optional mods that change some of the same files. */
+  clashesWith: string[];
+}
+
+export const getGotrOptions = callable<
+  [],
+  { ok: boolean; options?: GotrOption[]; error?: string }
+>("get_gotr_options");
+
+export const setGotrOption = callable<
+  [name: string, enabled: boolean],
+  { ok: boolean; options?: GotrOption[]; turnedOff?: string[]; restart?: boolean; error?: string }
+>("set_gotr_option");
+
 export const applyExperimentalTool = callable<
   [app_id: number],
   {

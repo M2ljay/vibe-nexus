@@ -804,13 +804,14 @@ def sr2_builder(paths) -> bool:
 
 # Gentlemen of the Row on Juiced (saintsrowmods.com, "Installing GotR using
 # Juiced v7.1.0 or later"): optional_mod_stuff/modified/* and the two
-# preload tables into mods/GotR, chosen optional mods into
-# mods/GotR/Optional, both folders listed in loose.txt (Optional first, so
-# it wins), the game's own patch.vpp_pc left alone, and GotR's patch
-# builder never run. gotr.txt in the root skips the intro warning that
-# crashes some games.
+# preload tables into mods/GotR, the game's own patch.vpp_pc left alone,
+# GotR's patch builder never run, gotr.txt in the root (skips the intro
+# warning that crashes some games). Each optional mod gets its own folder
+# under mods/GotR/Optional; switching one on lists its folder in
+# loose.txt, above mods/GotR. Juiced keeps the FIRST copy of a file name it
+# meets in loose.txt order, so listed options win over the base.
 GOTR_DIR = "mods/GotR"
-GOTR_LOOSE_LINES = ["mods/GotR/Optional", "mods/GotR"]
+GOTR_OPT_DIR = GOTR_DIR + "/Optional"
 GOTR_FLAG = "gotr.txt"
 
 
@@ -838,11 +839,16 @@ def gotr_options(rel_files: list) -> list:
     return sorted(out)
 
 
-def gotr_plan(rel_files: list, optional: list = (), clashes: list = None) -> list:
-    """[(archive path, game-relative destination)] for a GotR install;
-    files land flat in their folder (loose.txt is read one level deep).
-    Later sources win a name clash: preloads over modified/, and an
-    optional mod over the base."""
+def gotr_option_name(option_dir: str) -> str:
+    """The folder name an optional mod gets under mods/GotR/Optional."""
+    name = option_dir.rstrip("/").split("/")[-1]
+    return re.sub(r'[<>:"|?*\x00-\x1f]', "_", name).strip(" .") or "option"
+
+
+def gotr_plan(rel_files: list) -> list:
+    """[(archive path, game-relative destination)] for GotR's base; files
+    land flat (loose.txt is read one level deep). Preloads win over
+    modified/."""
     base = gotr_base(rel_files)
     if base is None:
         return []
@@ -859,33 +865,67 @@ def gotr_plan(rel_files: list, optional: list = (), clashes: list = None) -> lis
             if src:
                 picks[name] = (src, GOTR_DIR + "/" + name)
                 break
-    out = sorted(picks.values())
-    opt_seen = {}
-    for opt in optional or []:
-        pre = opt.rstrip("/").lower() + "/"
+    return sorted(picks.values())
+
+
+def gotr_option_plans(rel_files: list) -> dict:
+    """{option folder name: [(archive path, game-relative destination)]},
+    each optional mod flat in its own folder."""
+    files = [f.replace("\\", "/") for f in rel_files if f and not f.endswith("/")]
+    out = {}
+    for opt in gotr_options(rel_files):
+        name = gotr_option_name(opt)
+        pre = opt.lower() + "/"
+        picks = {}
         for f in sorted(files):
             if f.lower().startswith(pre) and not f.lower().endswith(_DOC_EXTS):
-                name = f.split("/")[-1].lower()
-                if name in opt_seen and clashes is not None:
-                    # Two optional mods change the same file: the one later
-                    # in name order wins, and the caller is told.
-                    clashes.append((name, opt_seen[name][0].split("/")[-2], f.split("/")[-2]))
-                opt_seen[name] = (f, GOTR_DIR + "/Optional/" + f.split("/")[-1])
-    return out + sorted(opt_seen.values())
+                picks[f.split("/")[-1].lower()] = (f, f"{GOTR_OPT_DIR}/{name}/" + f.split("/")[-1])
+        if picks:
+            out[name] = sorted(picks.values())
+    return out
 
 
-def loose_with_gotr(text: str) -> str:
-    """loose.txt with GotR's folders listed at the end, once."""
-    lines = [l for l in (text or "").splitlines()
-             if l.strip().lower() not in {x.lower() for x in GOTR_LOOSE_LINES}]
+def gotr_enable(option_files: dict, enabled: list, name: str) -> tuple:
+    """Switch an optional mod on. Any switched-on option that changes one
+    of the same files is switched off, so nothing quietly overrides
+    anything. Returns (new enabled list, [names switched off])."""
+    mine = set(option_files.get(name) or [])
+    off = [o for o in enabled if o != name and mine & set(option_files.get(o) or [])]
+    new = [o for o in enabled if o not in off and o != name] + [name]
+    return sorted(new), sorted(off)
+
+
+def gotr_default_enabled(option_files: dict) -> tuple:
+    """Every optional mod on, except ones that would change a file an
+    earlier one (name order) already changes. (enabled, left off)."""
+    enabled, taken, left = [], set(), []
+    for name in sorted(option_files):
+        files = set(option_files[name])
+        if files & taken:
+            left.append(name)
+            continue
+        enabled.append(name)
+        taken |= files
+    return enabled, left
+
+
+def _is_gotr_line(line: str) -> bool:
+    low = line.strip().replace("\\", "/").lower()
+    return low == GOTR_DIR.lower() or low.startswith(GOTR_DIR.lower() + "/")
+
+
+def loose_with_gotr(text: str, enabled: list = ()) -> str:
+    """loose.txt listing the switched-on GotR options, then GotR's base,
+    at the end (earlier lines win, so options override the base)."""
+    lines = [l for l in (text or "").splitlines() if not _is_gotr_line(l)]
     while lines and not lines[-1].strip():
         lines.pop()
-    return "\n".join(lines + GOTR_LOOSE_LINES) + "\n"
+    ours = [f"{GOTR_OPT_DIR}/{n}" for n in enabled] + [GOTR_DIR]
+    return "\n".join(lines + ours) + "\n"
 
 
 def loose_without_gotr(text: str) -> str:
-    lines = [l for l in (text or "").splitlines()
-             if l.strip().lower() not in {x.lower() for x in GOTR_LOOSE_LINES}]
+    lines = [l for l in (text or "").splitlines() if not _is_gotr_line(l)]
     return "\n".join(lines) + "\n"
 
 

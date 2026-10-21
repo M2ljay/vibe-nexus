@@ -7376,13 +7376,8 @@ def _remove_files_record(
             parent = os.path.dirname(parent)
     _restore_backups(base, rec.get("backups"))
     if rec.get("gotr"):
-        # Its loose.txt entries and folders go with it.
-        _sr2_loose_gotr(base, False)
-        for d in (("mods", "GotR", "Optional"), ("mods", "GotR")):
-            try:
-                os.rmdir(os.path.join(base, *d))
-            except OSError:
-                pass
+        # Its loose.txt entries go with it.
+        _sr2_loose_gotr(base, None)
     records.pop(record_key, None)
     return True
 
@@ -8861,15 +8856,15 @@ def _sr2_heal(game: dict) -> str:
             os.replace(dll, dll + ".nexusbak")
         shutil.copyfile(keep, dll)
         done.append("DFEngine.dll")
-    gotr = any(r.get("gotr") for r in (_load_settings().get("installed", {})
-                                        .get(experimental_games.SR2_DOMAIN, {})).values())
+    _gk, gotr = _sr2_gotr_record(_load_settings())
     try:
         with open(os.path.join(root, "loose.txt"), encoding="utf-8", errors="replace") as f:
             loose = f.read()
     except OSError:
         loose = None
-    if loose is not None and gotr and experimental_games.loose_with_gotr(loose) != loose:
-        _sr2_loose_gotr(root, True)
+    enabled = (gotr or {}).get("gotrEnabled") or []
+    if loose is not None and gotr and experimental_games.loose_with_gotr(loose, enabled) != loose:
+        _sr2_loose_gotr(root, enabled)
         done.append("loose.txt")
     exe_now = _md5(os.path.join(root, SR2_EXE))
     if exe_now and exe_now == state.get("unpatched"):
@@ -8887,8 +8882,9 @@ def _sr2_heal(game: dict) -> str:
 def _sr2_install_gotr(scratch: str, rel_files: list, root: str, game_domain: str,
                       base_record: dict) -> dict:
     """Gentlemen of the Row the way its community guide installs it on
-    Juiced: base files into mods/GotR, loose.txt told about it, the game's
-    own patch.vpp_pc untouched, GotR's patch builder never run."""
+    Juiced: base files into mods/GotR, each optional mod in a folder of its
+    own that loose.txt lists while it is switched on, the game's own
+    patch.vpp_pc untouched, GotR's patch builder never run."""
     name = base_record.get("name") or "Gentlemen of the Row"
     if not os.path.isfile(os.path.join(root, "loose.txt")):
         _force_rmtree(scratch)
@@ -8903,64 +8899,86 @@ def _sr2_install_gotr(scratch: str, rel_files: list, root: str, game_domain: str
         return {"ok": False, "error": (
             f"Gentlemen of the Row needs the game's own patch.vpp_pc, and "
             f"{', '.join(clash)} replaced it. Uninstall that first, then install GotR again.")}
+    prev_enabled = None
     if installed.get(key):
+        prev_enabled = installed[key].get("gotrEnabled")
         _remove_files_record(game_domain, key, root, settings)
+        _save_settings(settings)
         settings = _load_settings()
         installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
-    # Every optional mod GotR ships goes in (asked for on 2026-10-21).
-    clashes = []
-    plan = experimental_games.gotr_plan(
-        rel_files, experimental_games.gotr_options(rel_files), clashes)
+    plan = experimental_games.gotr_plan(rel_files)
     if not plan:
         _force_rmtree(scratch)
         return {"ok": False, "error": "This GotR archive has no optional_mod_stuff/modified folder."}
+    opt_plans = experimental_games.gotr_option_plans(rel_files)
     files = []
-    for src, dst_rel in plan:
+    for src, dst_rel in plan + [x for p in opt_plans.values() for x in p]:
+        if not _safe_rel_path(dst_rel):
+            continue
         dst = os.path.join(root, *dst_rel.split("/"))
         _makedirs_for(dst)
         if os.path.isfile(dst):
             os.remove(dst)
         shutil.copyfile(os.path.join(scratch, *src.split("/")), dst)
         files.append(dst_rel)
-    os.makedirs(os.path.join(root, "mods", "GotR", "Optional"), exist_ok=True)
     flag = os.path.join(root, experimental_games.GOTR_FLAG)
     if not os.path.exists(flag):
         open(flag, "w").close()
         files.append(experimental_games.GOTR_FLAG)
-    _sr2_loose_gotr(root, True)
-    options = [o.rsplit("/", 1)[-1] for o in experimental_games.gotr_options(rel_files)]
     _force_rmtree(scratch)
-    note = ""
-    if clashes:
-        lost = sorted({a for _n, a, _b in clashes})
-        note = (f"All {len(options)} optional mods are in. Some change the same files, "
-                f"so these lost part of their changes: {', '.join(lost)}.")
+    option_files = {n: sorted({d.split("/")[-1].lower() for _s, d in p}) for n, p in opt_plans.items()}
+    enabled, left = experimental_games.gotr_default_enabled(option_files)
+    if prev_enabled is not None:
+        # A reinstall or update keeps the player's choices.
+        enabled, left = [n for n in prev_enabled if n in option_files], []
     installed[key] = _merge_install_record(None, {
         **base_record, "mode": "files", "target": ".", "files": files, "backups": [],
-        "gotr": True,
-        "warning": note,
+        "gotr": True, "gotrOptions": option_files, "gotrEnabled": enabled, "warning": "",
     })
     _save_settings(settings)
-    decky.logger.info(f"installed GotR: {len(files)} files into mods/GotR, optional mods {options}; "
-                      f"clashes (file, lost, won): {clashes}")
+    _sr2_loose_gotr(root, enabled)
+    decky.logger.info(f"installed GotR: {len(files)} files; options on {enabled}, left off {left}")
     out = {"ok": True, "folder": key}
-    if note:
-        out["warning"] = note
+    if left:
+        out["warning"] = (
+            f"{len(enabled)} of {len(option_files)} optional mods are on. These change the same "
+            f"files as one that's on, so they start off: {', '.join(left)}. Switch them in "
+            "GotR optional mods.")
     return out
 
 
-def _sr2_loose_gotr(root: str, present: bool) -> None:
+def _sr2_loose_gotr(root: str, enabled) -> None:
+    """loose.txt lists GotR (enabled: the switched-on options), or not
+    (enabled None)."""
     path = os.path.join(root, "loose.txt")
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
     except OSError:
         return
-    new = (experimental_games.loose_with_gotr(text) if present
-           else experimental_games.loose_without_gotr(text))
+    new = (experimental_games.loose_without_gotr(text) if enabled is None
+           else experimental_games.loose_with_gotr(text, enabled))
     if new != text:
         with open(path, "w", encoding="utf-8") as f:
             f.write(new)
+
+
+def _sr2_gotr_record(settings: dict):
+    for k, r in (settings.get("installed", {}).get(experimental_games.SR2_DOMAIN) or {}).items():
+        if isinstance(r, dict) and r.get("gotr"):
+            return k, r
+    return None, None
+
+
+def _sr2_gotr_view(rec: dict) -> list:
+    opts = rec.get("gotrOptions") or {}
+    on = set(rec.get("gotrEnabled") or [])
+    out = []
+    for n in sorted(opts, key=str.lower):
+        mine = set(opts[n])
+        out.append({"name": n, "enabled": n in on, "files": len(mine),
+                    "clashesWith": sorted(o for o in opts if o != n and mine & set(opts[o]))})
+    return out
 
 
 def _sr2_restore_exe(root: str) -> bool:
@@ -32989,6 +33007,40 @@ query CollectionInstructions($slug: String!) {
         except Exception as e:  # noqa: BLE001
             decky.logger.exception("remove_experimental_framework crashed")
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    async def get_gotr_options(self) -> dict:
+        """Gentlemen of the Row's optional mods and which are switched on."""
+        _k, rec = _sr2_gotr_record(_load_settings())
+        if not rec:
+            return {"ok": False, "error": "Gentlemen of the Row isn't installed"}
+        return {"ok": True, "options": _sr2_gotr_view(rec)}
+
+    async def set_gotr_option(self, name: str, enabled: bool) -> dict:
+        """Switch one GotR optional mod. Switching one on switches off any
+        that change the same files. Takes effect at the next game start."""
+        settings = _load_settings()
+        key, rec = _sr2_gotr_record(settings)
+        if not rec:
+            return {"ok": False, "error": "Gentlemen of the Row isn't installed"}
+        opts = rec.get("gotrOptions") or {}
+        if name not in opts:
+            return {"ok": False, "error": f"No optional mod called {name}"}
+        on = list(rec.get("gotrEnabled") or [])
+        off = []
+        if enabled:
+            on, off = experimental_games.gotr_enable(opts, on, name)
+        else:
+            on = [n for n in on if n != name]
+        rec["gotrEnabled"] = on
+        settings["installed"][experimental_games.SR2_DOMAIN][key] = rec
+        _save_settings(settings)
+        game = _experimental_game_for(experimental_games.SR2_DOMAIN) or {}
+        await asyncio.to_thread(_sr2_loose_gotr, _game_dir(game.get("installDirName") or ""), on)
+        decky.logger.info(f"GotR option {name!r} -> {enabled}; switched off {off}; on now {on}")
+        out = {"ok": True, "options": _sr2_gotr_view(rec), "turnedOff": off}
+        if await _process_running(SR2_EXE):
+            out["restart"] = True
+        return out
 
     async def apply_experimental_tool(self, app_id: int) -> dict:
         """Run a tool-managed game's mod tool now (the panel's Apply button)."""
