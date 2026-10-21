@@ -9348,6 +9348,111 @@ async def _watch_tool_games() -> None:
 _TOOL_APPLY_TASKS: dict = {}
 
 
+# ---- Gaming mode: bring the game to the front ----------------------------------
+# In Big Picture / Playhub the launcher can keep the foreground, and older
+# games that pause when they lose focus sit on a black or frozen screen
+# (Saints Row 2, 2026-10-21). Per game, the plugin can bring the game's
+# window to the front a few seconds after it starts, and again once more.
+FOCUS_DELAYS = (6, 18)
+
+
+def _running_pids() -> dict:
+    """{image name lower-case: [pid, ...]} from one tasklist call."""
+    import csv
+    import io
+    import subprocess
+    if sys.platform != "win32":
+        return {}
+    try:
+        out = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True,
+                             timeout=20, env=_host_env(), **_NO_WINDOW).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    pids = {}
+    for row in csv.reader(io.StringIO(out.decode(errors="replace"))):
+        if len(row) >= 2 and row[1].isdigit():
+            pids.setdefault(row[0].lower(), []).append(int(row[1]))
+    return pids
+
+
+def _main_window(pid: int):
+    """The biggest visible top-level window of a process, or None."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    best, area = None, 0
+    for hwnd, _title in _xv2_windows(pid):
+        r = wintypes.RECT()
+        if user32.GetWindowRect(hwnd, ctypes.byref(r)):
+            a = max(0, r.right - r.left) * max(0, r.bottom - r.top)
+            if a > area:
+                best, area = hwnd, a
+    return best
+
+
+def _bring_to_front(hwnd) -> bool:
+    """Windows only lets the foreground app hand focus over; a tap of Alt
+    and joining the foreground thread's input lift that, the way
+    launchers do it."""
+    if sys.platform != "win32" or not hwnd:
+        return False
+    import ctypes
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    if user32.GetForegroundWindow() == hwnd:
+        return True
+    fg = user32.GetForegroundWindow()
+    fg_thread = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+    me = kernel32.GetCurrentThreadId()
+    attached = bool(fg_thread) and fg_thread != me and user32.AttachThreadInput(me, fg_thread, True)
+    try:
+        user32.keybd_event(0x12, 0, 0, 0)       # Alt down
+        user32.keybd_event(0x12, 0, 2, 0)       # Alt up
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)          # SW_RESTORE
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+        user32.SetFocus(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(me, fg_thread, False)
+    return user32.GetForegroundWindow() == hwnd
+
+
+_FOCUS_SEEN: dict = {}
+
+
+async def _watch_focus() -> None:
+    """Games with "bring to front after launch" on: when one starts, focus
+    its window after FOCUS_DELAYS seconds."""
+    while True:
+        try:
+            games = [g for g in (_load_settings().get("experimental_games") or {}).values()
+                     if isinstance(g, dict) and g.get("focusAfterLaunch") and g.get("processName")]
+            if games:
+                pids = await asyncio.to_thread(_running_pids)
+                now = time.monotonic()
+                for g in games:
+                    exe = os.path.basename(g["processName"]).lower()
+                    for pid in pids.get(exe, []):
+                        started = _FOCUS_SEEN.setdefault(pid, [now, set()])
+                        for d in FOCUS_DELAYS:
+                            if d not in started[1] and now - started[0] >= d:
+                                started[1].add(d)
+                                ok = await asyncio.to_thread(
+                                    lambda p=pid: _bring_to_front(_main_window(p)))
+                                decky.logger.info(f"focus {exe} (pid {pid}) after {d}s: {ok}")
+                live = {p for ps in pids.values() for p in ps}
+                for p in list(_FOCUS_SEEN):
+                    if p not in live:
+                        _FOCUS_SEEN.pop(p, None)
+        except Exception:  # noqa: BLE001 - a watcher must never die
+            decky.logger.exception("focus watcher failed")
+        await asyncio.sleep(3)
+
+
 async def _process_running(exe_name: str) -> bool:
     """Is a process with this image name running? (Windows only.)"""
     if sys.platform != "win32" or not exe_name:
@@ -33559,6 +33664,15 @@ query CollectionInstructions($slug: String!) {
         settings.setdefault("experimental_games", {})[str(int(game["appId"]))] = game
         _save_settings(settings)
 
+    async def set_experimental_focus(self, app_id: int, on: bool) -> dict:
+        """Bring this game's window to the front after it starts."""
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        game["focusAfterLaunch"] = bool(on)
+        self._exp_save(game)
+        return {"ok": True, "game": game}
+
     async def experimental_folder_options(self, app_id: int) -> dict:
         game = self._exp_game(app_id)
         if not game:
@@ -33696,6 +33810,7 @@ query CollectionInstructions($slug: String!) {
     async def _main(self):
         decky.logger.info("Nexus Mods plugin loaded")
         self._tool_watcher = asyncio.get_running_loop().create_task(_watch_tool_games())
+        self._focus_watcher = asyncio.get_running_loop().create_task(_watch_focus())
         self._vortex_fetch = asyncio.get_running_loop().create_task(_watch_vortex_fetch_request())
 
     async def _unload(self):

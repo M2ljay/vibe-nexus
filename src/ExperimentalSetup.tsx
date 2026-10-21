@@ -27,6 +27,7 @@ import {
   experimentalFolderOptions,
   setExperimentalFramework,
   setExperimentalModsFolder,
+  setExperimentalFocus,
   findExperimentalGame,
   getExperimentalState,
   removeExperimentalFramework,
@@ -582,6 +583,17 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
           </ButtonItem>
         </PanelSectionRow>
       )}
+      <PanelSectionRow>
+        <ToggleField
+          label="Bring to front after launch"
+          description="For games that sit on a black or frozen screen in gaming mode because Steam keeps the focus. The plugin focuses the game's window a few seconds after it starts."
+          checked={!!game.focusAfterLaunch}
+          onChange={async (on: boolean) => {
+            const r = await setExperimentalFocus(game.appId, on);
+            if (r.ok) await loadExperimentalState();
+          }}
+        />
+      </PanelSectionRow>
       {game.nexusDomain === "saintsrow2" && (
         <PanelSectionRow>
           <ButtonItem

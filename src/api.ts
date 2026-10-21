@@ -2413,6 +2413,11 @@ export const experimentalFolderOptions = callable<
   { ok: boolean; error?: string; current?: string; options?: string[] }
 >("experimental_folder_options");
 
+export const setExperimentalFocus = callable<
+  [app_id: number, on: boolean],
+  { ok: boolean; error?: string; game?: SupportedGame }
+>("set_experimental_focus");
+
 export const setExperimentalModsFolder = callable<
   [app_id: number, subdir: string],
   { ok: boolean; error?: string; game?: SupportedGame }

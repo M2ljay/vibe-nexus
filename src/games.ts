@@ -307,6 +307,8 @@ export interface SupportedGame {
    * with this tool after every change (Insomniac ports: Overstrike;
    * Persona and friends: Reloaded-II). */
   toolApply?: "overstrike" | "reloaded" | "xv2ins";
+  /** Experimental: bring the game's window to the front after launch. */
+  focusAfterLaunch?: boolean;
   /** Shown as a banner at the top of the QAM panel: support for this game
    * is real but rough. Honest signposting beats silent rough edges. */
   underConstruction?: string;
