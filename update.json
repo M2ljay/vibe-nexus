@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.40",
- "hash": "3af8707b608e0a7a3d03e499f5efeea3fa0f5857d8739de80e5854990d917a17",
+ "version": "1.21.32-anygame.41",
+ "hash": "e8954cdc43629bca3713a11282c88597480cda85ddd3484b55b28d74805ff9b9",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Mod setups, file overlaps, storage, setup backups, problem reports, install checks, re-apply after game updates."
+ "notes": "Mod check reads archives Nexus has no file list for."
 }
