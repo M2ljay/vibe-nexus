@@ -143,5 +143,81 @@ class HealTests(ExePatchTests):
                          "program")
 
 
+
+class GotRTests(unittest.TestCase):
+    B = "Gentlemen_of_the_Row_Saints_Row_2_Super_Mod_v1.9.2/"
+    FILES = [B + "Create_Custom_GotR_v1.9.2.bat", B + "readme.txt",
+             B + "MY_CUSTOM_PATCH/preload_anim.tbl",
+             B + "optional_mod_stuff/preload.tbl", B + "optional_mod_stuff/preload_anim.tbl",
+             B + "optional_mod_stuff/modified/weapons.xtbl",
+             B + "optional_mod_stuff/modified/sub/cnpc_x.cvtf",
+             B + "optional_mod_stuff/modified/notes.txt",
+             B + "optional_mod_stuff/optional_mods/Classic HUD/hud.xtbl",
+             B + "optional_mod_stuff/optional_mods/Classic HUD/readme.txt",
+             B + "tools/sr2_chunk.exe"]
+
+    def test_plan(self):
+        self.assertEqual(eg.gotr_base(self.FILES), self.B)
+        self.assertEqual(eg.gotr_options(self.FILES), [self.B + "optional_mod_stuff/optional_mods/Classic HUD"])
+        dst = {d: s for s, d in eg.gotr_plan(self.FILES)}
+        self.assertEqual(sorted(dst), ["mods/GotR/cnpc_x.cvtf", "mods/GotR/preload.tbl",
+                                       "mods/GotR/preload_anim.tbl", "mods/GotR/weapons.xtbl"])
+        self.assertEqual(dst["mods/GotR/preload_anim.tbl"], self.B + "optional_mod_stuff/preload_anim.tbl")
+        opt = eg.gotr_plan(self.FILES, [self.B + "optional_mod_stuff/optional_mods/Classic HUD"])
+        self.assertIn((self.B + "optional_mod_stuff/optional_mods/Classic HUD/hud.xtbl",
+                       "mods/GotR/Optional/hud.xtbl"), opt)
+        self.assertIsNone(eg.gotr_base(["Mod Files/a.xtbl"]))
+        g = {"nexusDomain": "saintsrow2"}
+        eg.apply_sr2_profile(g, {})
+        self.assertEqual(eg.classify_mod(self.FILES, g, set(), {}, False, {}), "mods_folder")
+
+    def test_loose(self):
+        base = "mods\nmods/JUICED - Credits\n"
+        once = eg.loose_with_gotr(base)
+        self.assertEqual(once, base + "mods/GotR/Optional\nmods/GotR\n")
+        self.assertEqual(eg.loose_with_gotr(once), once)
+        self.assertEqual(eg.loose_without_gotr(once), base)
+
+    def test_install_and_uninstall(self):
+        root = tempfile.mkdtemp()
+        scratch = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(root, "loose.txt"), "w") as f:
+                f.write("mods\n")
+            for rel in self.FILES:
+                p = os.path.join(scratch, *rel.split("/"))
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    f.write(rel)
+            main._save_settings({"installed": {"saintsrow2": {
+                "Nude": {"name": "Nude", "mode": "files", "target": ".", "files": ["patch.vpp_pc"]}}}})
+            r = main._sr2_install_gotr(scratch, self.FILES, root, "saintsrow2", {"name": "Gentlemen of the Row"})
+            self.assertFalse(r["ok"])
+            self.assertIn("Nude", r["error"])
+            main._save_settings({})
+            os.makedirs(scratch, exist_ok=True)
+            for rel in self.FILES:
+                p = os.path.join(scratch, *rel.split("/"))
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    f.write(rel)
+            r = main._sr2_install_gotr(scratch, self.FILES, root, "saintsrow2", {"name": "Gentlemen of the Row"})
+            self.assertTrue(r["ok"], r)
+            self.assertTrue(os.path.isfile(os.path.join(root, "mods", "GotR", "weapons.xtbl")))
+            self.assertTrue(os.path.isdir(os.path.join(root, "mods", "GotR", "Optional")))
+            self.assertTrue(os.path.isfile(os.path.join(root, "gotr.txt")))
+            with open(os.path.join(root, "loose.txt")) as f:
+                self.assertIn("mods/GotR\n", f.read())
+            settings = main._load_settings()
+            self.assertTrue(main._remove_files_record("saintsrow2", r["folder"], root, settings))
+            self.assertFalse(os.path.exists(os.path.join(root, "mods", "GotR")))
+            self.assertFalse(os.path.exists(os.path.join(root, "gotr.txt")))
+            with open(os.path.join(root, "loose.txt")) as f:
+                self.assertEqual(f.read(), "mods\n")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+            shutil.rmtree(scratch, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

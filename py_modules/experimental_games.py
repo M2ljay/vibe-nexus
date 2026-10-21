@@ -802,6 +802,88 @@ def sr2_builder(paths) -> bool:
     return any("/my_custom_patch/" in "/" + p or "optional_mod_stuff/" in p for p in low)
 
 
+# Gentlemen of the Row on Juiced (saintsrowmods.com, "Installing GotR using
+# Juiced v7.1.0 or later"): optional_mod_stuff/modified/* and the two
+# preload tables into mods/GotR, chosen optional mods into
+# mods/GotR/Optional, both folders listed in loose.txt (Optional first, so
+# it wins), the game's own patch.vpp_pc left alone, and GotR's patch
+# builder never run. gotr.txt in the root skips the intro warning that
+# crashes some games.
+GOTR_DIR = "mods/GotR"
+GOTR_LOOSE_LINES = ["mods/GotR/Optional", "mods/GotR"]
+GOTR_FLAG = "gotr.txt"
+
+
+def gotr_base(rel_files: list) -> str:
+    """The folder holding optional_mod_stuff/modified, or None."""
+    for f in rel_files or []:
+        low = f.replace("\\", "/").lower()
+        i = low.find("optional_mod_stuff/modified/")
+        if i >= 0:
+            return f.replace("\\", "/")[:i]
+    return None
+
+
+def gotr_options(rel_files: list) -> list:
+    """The optional mods GotR ships (folders under optional_mods)."""
+    base = gotr_base(rel_files)
+    if base is None:
+        return []
+    pre = (base + "optional_mod_stuff/optional_mods/").lower()
+    out = set()
+    for f in rel_files:
+        f = f.replace("\\", "/")
+        if f.lower().startswith(pre) and "/" in f[len(pre):]:
+            out.add(f[:len(pre)] + f[len(pre):].split("/")[0])
+    return sorted(out)
+
+
+def gotr_plan(rel_files: list, optional: list = ()) -> list:
+    """[(archive path, game-relative destination)] for a GotR install;
+    files land flat in their folder (loose.txt is read one level deep).
+    Later sources win a name clash: preloads over modified/, and an
+    optional mod over the base."""
+    base = gotr_base(rel_files)
+    if base is None:
+        return []
+    files = [f.replace("\\", "/") for f in rel_files if f and not f.endswith("/")]
+    low = {f.lower(): f for f in files}
+    mod_pre = (base + "optional_mod_stuff/modified/").lower()
+    picks = {}
+    for f in sorted(files):
+        if f.lower().startswith(mod_pre) and not f.lower().endswith(_DOC_EXTS):
+            picks[f.split("/")[-1].lower()] = (f, GOTR_DIR + "/" + f.split("/")[-1])
+    for name in ("preload.tbl", "preload_anim.tbl"):
+        for where in ("optional_mod_stuff/", "", "MY_CUSTOM_PATCH/"):
+            src = low.get((base + where + name).lower())
+            if src:
+                picks[name] = (src, GOTR_DIR + "/" + name)
+                break
+    out = sorted(picks.values())
+    opt_seen = {}
+    for opt in optional or []:
+        pre = opt.rstrip("/").lower() + "/"
+        for f in sorted(files):
+            if f.lower().startswith(pre) and not f.lower().endswith(_DOC_EXTS):
+                opt_seen[f.split("/")[-1].lower()] = (f, GOTR_DIR + "/Optional/" + f.split("/")[-1])
+    return out + sorted(opt_seen.values())
+
+
+def loose_with_gotr(text: str) -> str:
+    """loose.txt with GotR's folders listed at the end, once."""
+    lines = [l for l in (text or "").splitlines()
+             if l.strip().lower() not in {x.lower() for x in GOTR_LOOSE_LINES}]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines + GOTR_LOOSE_LINES) + "\n"
+
+
+def loose_without_gotr(text: str) -> str:
+    lines = [l for l in (text or "").splitlines()
+             if l.strip().lower() not in {x.lower() for x in GOTR_LOOSE_LINES}]
+    return "\n".join(lines) + "\n"
+
+
 def flat_variants(flat_rel: list) -> dict:
     """Mods that ship alternatives (Optional/Darker Nights/x.xtbl beside
     The Mod/x.xtbl): {folder: [files]} for every folder holding a file
@@ -936,6 +1018,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
         return "tool_managed"
+    if game.get("nexusDomain") == SR2_DOMAIN and gotr_base(files) is not None:
+        return "mods_folder"
     if game.get("nexusDomain") == SR2_DOMAIN and sr2_builder(files):
         return "program"
     merge = game.get("mergeInto")

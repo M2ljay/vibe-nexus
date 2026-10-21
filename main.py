@@ -7375,6 +7375,14 @@ def _remove_files_record(
                 break
             parent = os.path.dirname(parent)
     _restore_backups(base, rec.get("backups"))
+    if rec.get("gotr"):
+        # Its loose.txt entries and folders go with it.
+        _sr2_loose_gotr(base, False)
+        for d in (("mods", "GotR", "Optional"), ("mods", "GotR")):
+            try:
+                os.rmdir(os.path.join(base, *d))
+            except OSError:
+                pass
     records.pop(record_key, None)
     return True
 
@@ -8853,6 +8861,16 @@ def _sr2_heal(game: dict) -> str:
             os.replace(dll, dll + ".nexusbak")
         shutil.copyfile(keep, dll)
         done.append("DFEngine.dll")
+    gotr = any(r.get("gotr") for r in (_load_settings().get("installed", {})
+                                        .get(experimental_games.SR2_DOMAIN, {})).values())
+    try:
+        with open(os.path.join(root, "loose.txt"), encoding="utf-8", errors="replace") as f:
+            loose = f.read()
+    except OSError:
+        loose = None
+    if loose is not None and gotr and experimental_games.loose_with_gotr(loose) != loose:
+        _sr2_loose_gotr(root, True)
+        done.append("loose.txt")
     exe_now = _md5(os.path.join(root, SR2_EXE))
     if exe_now and exe_now == state.get("unpatched"):
         # Steam's own exe is back: build Juiced's from it again.
@@ -8864,6 +8882,73 @@ def _sr2_heal(game: dict) -> str:
         # that is the patched exe now. Never mistake it for the original.
         _sr2_keep_juiced(root)
     return ", ".join(done)
+
+
+def _sr2_install_gotr(scratch: str, rel_files: list, root: str, game_domain: str,
+                      base_record: dict) -> dict:
+    """Gentlemen of the Row the way its community guide installs it on
+    Juiced: base files into mods/GotR, loose.txt told about it, the game's
+    own patch.vpp_pc untouched, GotR's patch builder never run."""
+    name = base_record.get("name") or "Gentlemen of the Row"
+    if not os.path.isfile(os.path.join(root, "loose.txt")):
+        _force_rmtree(scratch)
+        return {"ok": False, "error": "Gentlemen of the Row needs the Juiced Patch: run Step 1 first."}
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(name)
+    clash = sorted({r.get("name") or k for k, r in installed.items() if k != key
+                    for f in (r.get("files") or []) if f.lower() == "patch.vpp_pc"})
+    if clash:
+        _force_rmtree(scratch)
+        return {"ok": False, "error": (
+            f"Gentlemen of the Row needs the game's own patch.vpp_pc, and "
+            f"{', '.join(clash)} replaced it. Uninstall that first, then install GotR again.")}
+    if installed.get(key):
+        _remove_files_record(game_domain, key, root, settings)
+        settings = _load_settings()
+        installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    plan = experimental_games.gotr_plan(rel_files)
+    if not plan:
+        _force_rmtree(scratch)
+        return {"ok": False, "error": "This GotR archive has no optional_mod_stuff/modified folder."}
+    files = []
+    for src, dst_rel in plan:
+        dst = os.path.join(root, *dst_rel.split("/"))
+        _makedirs_for(dst)
+        if os.path.isfile(dst):
+            os.remove(dst)
+        shutil.copyfile(os.path.join(scratch, *src.split("/")), dst)
+        files.append(dst_rel)
+    os.makedirs(os.path.join(root, "mods", "GotR", "Optional"), exist_ok=True)
+    flag = os.path.join(root, experimental_games.GOTR_FLAG)
+    if not os.path.exists(flag):
+        open(flag, "w").close()
+        files.append(experimental_games.GOTR_FLAG)
+    _sr2_loose_gotr(root, True)
+    options = [o.rsplit("/", 1)[-1] for o in experimental_games.gotr_options(rel_files)]
+    _force_rmtree(scratch)
+    installed[key] = _merge_install_record(None, {
+        **base_record, "mode": "files", "target": ".", "files": files, "backups": [],
+        "gotr": True,
+        "warning": "",
+    })
+    _save_settings(settings)
+    decky.logger.info(f"installed GotR: {len(files)} files into mods/GotR; optional mods available: {options}")
+    return {"ok": True, "folder": key}
+
+
+def _sr2_loose_gotr(root: str, present: bool) -> None:
+    path = os.path.join(root, "loose.txt")
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return
+    new = (experimental_games.loose_with_gotr(text) if present
+           else experimental_games.loose_without_gotr(text))
+    if new != text:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
 
 
 def _sr2_restore_exe(root: str) -> bool:
@@ -23606,6 +23691,19 @@ query Link($slug: String!, $domainName: String!) {
                 rel_flat = [os.path.relpath(f, scratch).replace(os.sep, "/") for f in flat]
                 every = [os.path.relpath(os.path.join(r, n), scratch).replace(os.sep, "/")
                          for r, _d, ns in os.walk(scratch) for n in ns]
+                if experimental_games.gotr_base(every) is not None:
+                    out = await asyncio.to_thread(_sr2_install_gotr, scratch, every, install_path, game_domain, {
+                        "mod_id": mod_id, "file_id": file_id, "name": mod_name,
+                        "version": mod_version, "file_name": file_name,
+                        "installed_at": int(time.time()), "page_version": page_version,
+                        "source": record_source, "collection_slug": collection_slug})
+                    if out.get("ok"):
+                        try:
+                            os.remove(archive_path)
+                        except OSError:
+                            pass
+                        await _emit_progress(mod_id, "done", 100)
+                    return out
                 if experimental_games.sr2_builder(every):
                     _force_rmtree(scratch)
                     return {"ok": False, "refused": True, "error": (
