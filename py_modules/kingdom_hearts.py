@@ -118,6 +118,20 @@ def patch_kind(name: str) -> str:
     return ""
 
 
+def patcher_finished(line: str) -> bool:
+    """KHPCPatchManager's last line for a run, good or bad."""
+    s = (line or "").strip()
+    return s == "Done!" or s.startswith(("Could not find any folder", "There was an error", "Error:")) \
+        or s.startswith("You have selected different types of patches")
+
+
+def patcher_succeeded(out: str) -> bool:
+    lines = [ln.strip() for ln in (out or "").splitlines()]
+    return "Done!" in lines and not any(
+        ln.startswith(("Could not find any folder", "There was an error", "Error:"))
+        or (ln.startswith("System.") and "Exception" in ln.split(":")[0]) for ln in lines)
+
+
 def luabackend_toml(text: str, game_root: str) -> str:
     """LuaBackend.toml for the Steam version (game_docs under My Games) with
     the plugin's Mods/scripts/<id> folder added to each game's scripts."""

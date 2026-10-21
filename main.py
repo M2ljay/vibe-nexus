@@ -9790,13 +9790,55 @@ def _kh_hed_state(root: str) -> dict:
     return out
 
 
+def _kh_image_dir(root: str) -> str:
+    for sub in ("dt", "en"):  # Steam has dt, the Epic release en
+        d = os.path.join(root, "Image", sub)
+        if os.path.isdir(d):
+            return d
+    return ""
+
+
 def _kh_run_patcher(root: str, patches: list) -> tuple:
+    """Run KHPCPatchManager on one kind of patch. It patches on a background
+    thread and waits for Enter on the main one - Enter before it's finished
+    kills the patch half way - so Enter goes in only once it says it's done
+    (or the game folder when it asks for one)."""
     import subprocess
     exe = os.path.join(root, *kingdom_hearts.TOOL_DIR.split("/"), "KHPCPatchManager.exe")
-    proc = subprocess.run([exe, *patches], cwd=os.path.dirname(exe), env=_host_env(),
-                          input=b"\n\n\n", capture_output=True, timeout=3600, **_NO_WINDOW)
-    out = (proc.stdout or b"").decode("utf-8", "replace") + (proc.stderr or b"").decode("utf-8", "replace")
-    return proc.returncode, out
+    proc = subprocess.Popen([exe, *patches], cwd=os.path.dirname(exe), env=_host_env(),
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            **_NO_WINDOW)
+    lines, ended, image = [], False, _kh_image_dir(root)
+    deadline = time.monotonic() + 3 * 3600
+    try:
+        for raw in iter(proc.stdout.readline, b""):
+            line = raw.decode("utf-8", "replace").rstrip()
+            lines.append(line)
+            reply = None
+            if kingdom_hearts.patcher_finished(line):
+                ended, reply = True, b"\r\n"
+            elif "press Enter" in line and "drag your" in line:
+                reply = (image.encode() if image and not ended else b"") + b"\r\n"
+                if not image:
+                    ended = True
+            if reply is not None:
+                try:
+                    proc.stdin.write(reply)
+                    proc.stdin.flush()
+                except OSError:
+                    pass
+            if time.monotonic() > deadline:
+                proc.kill()
+                lines.append("KHPCPatchManager took over 3 hours - stopped")
+                break
+        rc = proc.wait(timeout=60)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    out = "\n".join(lines)
+    if not kingdom_hearts.patcher_succeeded(out):
+        rc = rc or 1
+    return rc, out
 
 
 async def _kh_apply(game: dict) -> dict:
@@ -9813,7 +9855,8 @@ async def _kh_apply(game: dict) -> dict:
         present = []
     settings = _load_settings()
     st = settings.get("kh_patches") or {}
-    applied, after = st.get("applied") or [], st.get("heds") or {}
+    # v2: before it, a patch the patcher was cut off on was recorded as applied.
+    applied, after = (st.get("applied") or [], st.get("heds") or {}) if st.get("v") == 2 else ([], {})
     now = await asyncio.to_thread(_kh_hed_state, root)
     reset = bool(applied) and now != after
     todo, gone = kingdom_hearts.plan_patches(present, applied, reset)
@@ -9834,12 +9877,12 @@ async def _kh_apply(game: dict) -> dict:
         except (OSError, ValueError) as e:
             rc, out = -1, str(e)
         decky.logger.info(f"KHPCPatchManager {kind} x{len(paths)}: exit {rc}: {out.strip()[-800:]}")
-        if rc != 0 or "Could not find any folder" in out:
+        if rc != 0:
             failed += [os.path.basename(p) for p in paths]
     done = [p for p in todo if p not in failed]
     keep = sorted(set(done) if reset else (set(applied) - set(gone)) | set(done))
     settings = _load_settings()
-    settings["kh_patches"] = {"applied": keep, "heds": await asyncio.to_thread(_kh_hed_state, root)}
+    settings["kh_patches"] = {"v": 2, "applied": keep, "heds": await asyncio.to_thread(_kh_hed_state, root)}
     _save_settings(settings)
     notes = []
     if gone:

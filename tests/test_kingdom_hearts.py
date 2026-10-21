@@ -54,6 +54,16 @@ class KhHelperTests(unittest.TestCase):
         self.assertIn({"path": "C:\\Games\\KH\\Mods\\scripts\\kh2", "relative": False}, data["kh2"]["scripts"])
         self.assertEqual(kh.luabackend_toml(out, "C:\\Games\\KH"), out)
 
+    def test_patcher_output(self):
+        ok = "KHPCPatchManager v1.2.1\nApplying KH1 patch...\nApplying patch...\nPatching kh1_first...\nDone!"
+        self.assertTrue(kh.patcher_succeeded(ok))
+        self.assertFalse(kh.patcher_succeeded("KHPCPatchManager v1.2.1\nApplying KH1 patch..."))
+        self.assertFalse(kh.patcher_succeeded(ok.replace("Done!", "Could not find any folder to patch!")))
+        self.assertFalse(kh.patcher_succeeded("System.IO.IOException: disk full\n" + ok))
+        self.assertTrue(kh.patcher_finished("Done!"))
+        self.assertTrue(kh.patcher_finished("There was an error! x"))
+        self.assertFalse(kh.patcher_finished("Patching kh1_first..."))
+
     def test_plan_patches(self):
         self.assertEqual(kh.plan_patches(["a", "b"], ["a", "c"], False), (["b"], ["c"]))
         self.assertEqual(kh.plan_patches(["a", "b"], ["a"], True), (["a", "b"], []))
