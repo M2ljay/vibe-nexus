@@ -387,6 +387,17 @@ export const getInstallBlock = callable<
   }
 >("get_install_block");
 
+/** An installer-program mod kept to run from its page. */
+export const getModProgram = callable<
+  [game_domain: string, folder: string],
+  { ok: boolean; exe?: string; runs?: number; running?: boolean }
+>("get_mod_program");
+
+export const runModProgram = callable<
+  [game_domain: string, folder: string],
+  { ok: boolean; exe?: string; error?: string }
+>("run_mod_program");
+
 /** The versions an installed mod's archive offers (experimental games). */
 export const getModOptions = callable<
   [game_domain: string, folder: string],

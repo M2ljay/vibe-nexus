@@ -7460,6 +7460,10 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
+    if experimental_games.only_programs(rel_files):
+        key = _keep_program(scratch, rel_files, game, game_domain, base_record)
+        if key:
+            return key
     presets = reshade_setup.is_preset_archive(rel_files)
     if presets and (_load_settings().get("reshade") or {}).get(game_domain):
         return _install_reshade_preset(scratch, rel_files, presets, game, game_domain, base_record)
@@ -7899,6 +7903,137 @@ def _reshade_remove(game: dict) -> int:
     _restore_backups(root, rec.get("backups"))
     _save_settings(settings)
     return removed
+
+
+# ---- Mods that are their own installer program --------------------------------
+PROGRAMS_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "mod-programs")
+_PROGRAM_RUNS: dict = {}
+
+
+def _pick_program(rel_files: list, mod_name: str) -> str:
+    exes = [f for f in rel_files if f.lower().endswith((".exe", ".msi", ".bat"))
+            and not re.search(r"unins|vc_?redist|dotnet|directx|setup_helper", f.lower())]
+    if not exes:
+        return ""
+    words = set(re.findall(r"[a-z0-9]+", (mod_name or "").lower()))
+
+    def score(f):
+        name = set(re.findall(r"[a-z0-9]+", f.lower().split("/")[-1]))
+        return (len(words & name), f.lower().endswith(".exe"), -f.count("/"))
+    return max(exes, key=score)
+
+
+def _keep_program(scratch: str, rel_files: list, game: dict, game_domain: str,
+                  base_record: dict) -> str:
+    """Keep an installer-program mod (an LB Installer .exe, a resolution
+    tool) to run from the panel, as a record with no files yet."""
+    exe = _pick_program(rel_files, base_record.get("name") or "")
+    if not exe:
+        return ""
+    key = _safe_name(base_record.get("name") or "program")
+    home = os.path.join(PROGRAMS_DIR, game_domain, key)
+    _force_rmtree(home)
+    shutil.copytree(scratch, home)
+    _force_rmtree(scratch)
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    prev = installed.get(key) or {}
+    installed[key] = _merge_install_record(prev or None, {
+        **base_record, "mode": "files", "target": ".", "files": prev.get("files") or [],
+        "backups": prev.get("backups") or [],
+        "program": {"dir": home, "exe": exe, "runs": (prev.get("program") or {}).get("runs", 0)},
+        "warning": ("This mod is an installer program. Press Run installer on this page: it opens "
+                    "on the desktop, and the files it adds are noted so uninstalling removes them."),
+    })
+    _save_settings(settings)
+    decky.logger.info(f"kept installer-program mod {key!r}: {exe}")
+    return key
+
+
+def _snapshot(root: str) -> dict:
+    out = {}
+    for cur, _d, names in os.walk(root):
+        for n in names:
+            p = os.path.join(cur, n)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            out[os.path.relpath(p, root).replace(os.sep, "/")] = (st.st_size, st.st_mtime_ns)
+    return out
+
+
+def _run_program_blocking(exe: str, timeout: float) -> int:
+    import subprocess
+    try:
+        proc = subprocess.Popen([exe], cwd=os.path.dirname(exe), env=_host_env())
+    except OSError as e:
+        if getattr(e, "winerror", None) == 740:
+            return _run_elevated(exe, [], timeout)
+        raise
+    try:
+        return proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+async def _run_mod_program(game_domain: str, key: str) -> dict:
+    settings = _load_settings()
+    rec = (settings.get("installed", {}).get(game_domain) or {}).get(key) or {}
+    prog = rec.get("program") or {}
+    exe = os.path.join(prog.get("dir") or "", *(prog.get("exe") or "").split("/"))
+    if not prog or not os.path.isfile(exe):
+        return {"ok": False, "error": "This mod has no installer program to run"}
+    if key in _PROGRAM_RUNS:
+        return {"ok": False, "error": "It's already running on the desktop"}
+    game = _experimental_game_for(game_domain) or {}
+    root = _game_dir(game.get("installDirName") or "")
+    before = await asyncio.to_thread(_snapshot, root)
+    _PROGRAM_RUNS[key] = True
+
+    async def watch():
+        try:
+            rc = await asyncio.to_thread(_run_program_blocking, exe, 3600)
+            after = await asyncio.to_thread(_snapshot, root)
+            added = sorted(set(after) - set(before))
+            changed = sorted(r for r in set(after) & set(before) if after[r] != before[r])
+            s = _load_settings()
+            r = (s.get("installed", {}).get(game_domain) or {}).get(key)
+            if r is not None:
+                r["files"] = sorted(set(r.get("files") or []) | set(added))
+                r.setdefault("program", {})["runs"] = int(r["program"].get("runs") or 0) + 1
+                r["warning"] = (
+                    f"Installer last run added {len(added)} file(s)"
+                    + (f" and changed {len(changed)} existing one(s) - uninstalling removes the added "
+                       "ones; Steam's 'verify files' undoes the changed ones" if changed else
+                       "; uninstalling removes them") + ".")
+                if changed:
+                    r["programChanged"] = sorted(set(r.get("programChanged") or []) | set(changed))
+                _save_settings(s)
+            decky.logger.info(f"installer {key!r} exited {rc}: added {len(added)}, changed {changed[:10]}")
+            await decky.emit("mod_program_done", game_domain, key, len(added), len(changed))
+        except Exception:  # noqa: BLE001
+            decky.logger.exception(f"installer {key!r} failed")
+            await decky.emit("mod_program_done", game_domain, key, -1, 0)
+        finally:
+            _PROGRAM_RUNS.pop(key, None)
+
+    asyncio.get_running_loop().create_task(watch())
+    return {"ok": True, "exe": os.path.basename(exe)}
+
+
+def _prune_programs() -> None:
+    wanted = {os.path.normcase(((r or {}).get("program") or {}).get("dir") or "")
+              for recs in (_load_settings().get("installed") or {}).values() if isinstance(recs, dict)
+              for r in recs.values() if isinstance(r, dict)}
+    try:
+        for dom in os.listdir(PROGRAMS_DIR):
+            for k in os.listdir(os.path.join(PROGRAMS_DIR, dom)):
+                p = os.path.join(PROGRAMS_DIR, dom, k)
+                if os.path.normcase(p) not in wanted:
+                    _force_rmtree(p)
+    except OSError:
+        pass
 
 
 # ---- Save-file mods -----------------------------------------------------------
@@ -9677,6 +9812,7 @@ async def _watch_tool_games() -> None:
                     running.add(exe)
             if not running:
                 await asyncio.to_thread(_prune_kept_archives)
+                await asyncio.to_thread(_prune_programs)
                 lost = []
                 healed = await asyncio.to_thread(_heal_replaced_files, lost)
                 if healed or lost:
@@ -34021,6 +34157,18 @@ query CollectionInstructions($slug: String!) {
         settings = _load_settings()
         settings.setdefault("experimental_games", {})[str(int(game["appId"]))] = game
         _save_settings(settings)
+
+    async def get_mod_program(self, game_domain: str, folder: str) -> dict:
+        rec = (_load_settings().get("installed", {}).get(game_domain) or {}).get(folder) or {}
+        prog = rec.get("program")
+        if not prog:
+            return {"ok": False}
+        return {"ok": True, "exe": os.path.basename(prog.get("exe") or ""),
+                "runs": prog.get("runs", 0), "running": folder in _PROGRAM_RUNS}
+
+    async def run_mod_program(self, game_domain: str, folder: str) -> dict:
+        """Run an installer-program mod on the desktop and note what it adds."""
+        return await _run_mod_program(game_domain, folder)
 
     async def install_reshade(self, app_id: int) -> dict:
         """Set up ReShade for an experimental game (from reshade.me)."""

@@ -29,6 +29,8 @@ import {
   setEndorsement,
   getModOptions,
   setModOption,
+  getModProgram,
+  runModProgram,
 
   getKnownModVerdict,
   getShowAdult,
@@ -124,6 +126,7 @@ export function ModDetailPage() {
   const [modOptions, setModOptions] = useState<
     { options: string[]; labels: string[]; choice?: string } | undefined
   >();
+  const [modProgram, setModProgram] = useState<{ exe: string; runs: number } | undefined>();
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [endorseStatus, setEndorseStatus] = useState<string | undefined>();
   const [endorseBusy, setEndorseBusy] = useState(false);
@@ -204,7 +207,11 @@ export function ModDetailPage() {
       const mine = r.mods?.find((m) => m.mod_id === s.mod.modId);
       setInstalledCopy(mine);
       setModOptions(undefined);
+      setModProgram(undefined);
       if (mine) {
+        void getModProgram(s.game.nexusDomain, mine.folder).then((p) => {
+          if (p.ok && p.exe) setModProgram({ exe: p.exe, runs: p.runs ?? 0 });
+        });
         void getModOptions(s.game.nexusDomain, mine.folder).then((o) => {
           if (o.ok && (o.options?.length ?? 0) > 1) {
             setModOptions({ options: o.options!, labels: o.labels ?? o.options!, choice: o.choice });
@@ -647,7 +654,8 @@ export function ModDetailPage() {
   // same fill language as the collection rows and the QAM tool button.
   // All files + (Uninstall) + Go to downloads. The hero above them takes
   // its width from this count.
-  const secondaryActions = 2 + (installedCopy ? 1 : 0) + (installedCopy && modOptions ? 1 : 0);
+  const secondaryActions = 2 + (installedCopy ? 1 : 0) + (installedCopy && modOptions ? 1 : 0)
+    + (installedCopy && modProgram ? 1 : 0);
   const primaryBusy =
     primaryFile !== undefined && installingFileId === primaryFile.file_id;
   const primaryPct =
@@ -1255,6 +1263,31 @@ export function ModDetailPage() {
             }
           >
             Uninstall
+          </DialogButton>
+        )}
+        {installedCopy && modProgram && (
+          <DialogButton
+            disabled={installingFileId !== undefined}
+            style={ACTION_BUTTON}
+            onClick={() =>
+              showModal(
+                <ConfirmModal
+                  strTitle={`Run ${modProgram.exe}?`}
+                  strDescription={`${mod.name} installs itself with its own program. It opens on the desktop - switch to it there (or use desktop mode) and follow its steps. When it closes, the files it added are noted so uninstalling removes them. Only run programs from authors you trust.`}
+                  strOKButtonText="Run it"
+                  onOK={async () => {
+                    const r = await runModProgram(game.nexusDomain, installedCopy.folder);
+                    toaster.toast(
+                      r.ok
+                        ? { title: `${r.exe} is open on the desktop`, body: "Finish it there; you'll get a message when it closes" }
+                        : { title: "Couldn't run it", body: r.error ?? "" }
+                    );
+                  }}
+                />
+              )
+            }
+          >
+            {modProgram.runs ? "Run installer again" : "Run installer"}
           </DialogButton>
         )}
         {installedCopy && modOptions && (

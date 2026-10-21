@@ -1021,7 +1021,7 @@ VERDICTS = {
     "wizard": "has an installer wizard (FOMOD) the plugin runs",
     "tool_managed": "applied by the game's mod tool",
     "loader": "is the game's loader (Step 1)",
-    "program": "is a program you run on the desktop",
+    "program": "is an installer program - kept, run it from the mod's page (Run installer)",
     "no_target": "has no clear place to go - would land in the mods folder unused",
     "ue_config": "is a settings tweak (Engine.ini), placed in the game's config folder",
     "save_file": "is a save file - goes into the game's save folder (yours are backed up first)",

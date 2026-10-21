@@ -4700,6 +4700,21 @@ export default definePlugin(() => {
   );
   // Steam's "verify files" put a game's own file back over a mod's; the
   // backend put the mod's back and says which.
+  const programListener = addEventListener<[domain: string, folder: string, added: number, changed: number]>(
+    "mod_program_done",
+    (_d, folder, added, changed) => {
+      toaster.toast(
+        added < 0
+          ? { title: `${folder}: the installer failed`, body: "See the plugin log" }
+          : {
+              title: `${folder}: installer finished`,
+              body:
+                `${added} file${added === 1 ? "" : "s"} added` +
+                (changed ? `, ${changed} game file${changed === 1 ? "" : "s"} changed` : ""),
+            }
+      );
+    }
+  );
   const healedListener = addEventListener<[healed: string[], lost?: string[]]>(
     "mod_files_healed",
     (healed, lost) => {
@@ -4838,6 +4853,7 @@ export default definePlugin(() => {
       removeEventListener("experimental_tool_applied", toolListener);
       removeEventListener("experimental_tool_applying", toolStartListener);
       removeEventListener("mod_files_healed", healedListener);
+      removeEventListener("mod_program_done", programListener);
       lifetime?.unregister();
     },
   };
