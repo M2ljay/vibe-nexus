@@ -794,6 +794,14 @@ def apply_sr2_profile(game: dict, framework: dict) -> bool:
     return True
 
 
+def sr2_builder(paths) -> bool:
+    """Overhauls like Gentlemen of the Row compile their own patch.vpp_pc
+    with bundled tools (optional_mod_stuff -> MY_CUSTOM_PATCH): their files
+    are build inputs, not files the game loads as they are."""
+    low = [p.replace("\\", "/").lower() for p in paths or []]
+    return any("/my_custom_patch/" in "/" + p or "optional_mod_stuff/" in p for p in low)
+
+
 def flat_variants(flat_rel: list) -> dict:
     """Mods that ship alternatives (Optional/Darker Nights/x.xtbl beside
     The Mod/x.xtbl): {folder: [files]} for every folder holding a file
@@ -928,6 +936,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
         return "tool_managed"
+    if game.get("nexusDomain") == SR2_DOMAIN and sr2_builder(files):
+        return "program"
     merge = game.get("mergeInto")
     if merge and only_programs(files):
         return "program"

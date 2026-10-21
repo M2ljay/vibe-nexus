@@ -8800,6 +8800,72 @@ def _sr2_patch_exe(root: str) -> str:
     return f"xdelta: {err or 'failed'}"
 
 
+SR2_KEEP = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "sr2juiced")
+
+
+def _md5(path: str) -> str:
+    import hashlib
+    h = hashlib.md5()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return ""
+    return h.hexdigest()
+
+
+def _sr2_keep_juiced(root: str) -> None:
+    """Keep Juiced's DFEngine.dll and the patched exe's fingerprint, so a
+    Steam file check that puts the game's own back can be undone."""
+    os.makedirs(SR2_KEEP, exist_ok=True)
+    try:
+        shutil.copyfile(os.path.join(root, "DFEngine.dll"), os.path.join(SR2_KEEP, "DFEngine.dll"))
+    except OSError:
+        pass
+    _write_json(os.path.join(SR2_KEEP, "state.json"), {
+        "exe": _md5(os.path.join(root, SR2_EXE)),
+        "unpatched": _md5(os.path.join(root, SR2_UNPATCHED))})
+
+
+def _sr2_heal(game: dict) -> str:
+    """Put Juiced back after Steam's "verify files" restored the game's own
+    DFEngine.dll and exe (2026-10-21: every mod went quiet). "" if nothing
+    needed doing, else what was done."""
+    if "saintsrow2/0" not in (_load_settings().get("experimental_frameworks") or {}):
+        return ""
+    root = _game_dir(game.get("installDirName") or "")
+    keep = os.path.join(SR2_KEEP, "DFEngine.dll")
+    if not os.path.isfile(keep) and os.path.isfile(os.path.join(root, "juiced.ini")):
+        # Set up before this check existed: learn it now if Juiced is in.
+        if os.path.getsize(os.path.join(root, "DFEngine.dll")) > 1 << 21:
+            _sr2_keep_juiced(root)
+        return ""
+    try:
+        with open(os.path.join(SR2_KEEP, "state.json"), encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        state = {}
+    done = []
+    dll = os.path.join(root, "DFEngine.dll")
+    if os.path.isfile(keep) and _md5(dll) != _md5(keep):
+        if os.path.isfile(dll) and not os.path.exists(dll + ".nexusbak"):
+            os.replace(dll, dll + ".nexusbak")
+        shutil.copyfile(keep, dll)
+        done.append("DFEngine.dll")
+    exe_now = _md5(os.path.join(root, SR2_EXE))
+    if exe_now and exe_now == state.get("unpatched"):
+        # Steam's own exe is back: build Juiced's from it again.
+        if not _sr2_patch_exe(root):
+            done.append(SR2_EXE)
+        _sr2_keep_juiced(root)
+    elif exe_now and exe_now != state.get("exe"):
+        # Juiced itself edits the exe on first run (Large Address Aware):
+        # that is the patched exe now. Never mistake it for the original.
+        _sr2_keep_juiced(root)
+    return ", ".join(done)
+
+
 def _sr2_restore_exe(root: str) -> bool:
     orig = os.path.join(root, SR2_UNPATCHED)
     if not os.path.isfile(orig):
@@ -8915,6 +8981,11 @@ async def _watch_tool_games() -> None:
     while True:
         try:
             for game in list((_load_settings().get("experimental_games") or {}).values()):
+                if (isinstance(game, dict) and game.get("nexusDomain") == experimental_games.SR2_DOMAIN
+                        and not await _process_running(SR2_EXE)):
+                    fixed = await asyncio.to_thread(_sr2_heal, game)
+                    if fixed:
+                        decky.logger.info(f"Juiced Patch: put back {fixed} (Steam had restored the game's own)")
                 if not isinstance(game, dict) or game.get("toolApply") != "overstrike":
                     continue
                 reason = _tool_reapply_reason(game)
@@ -23533,6 +23604,14 @@ query Link($slug: String!, $domainName: String!) {
                 }
             if not hd2_layout and game_domain == experimental_games.SR2_DOMAIN:
                 rel_flat = [os.path.relpath(f, scratch).replace(os.sep, "/") for f in flat]
+                every = [os.path.relpath(os.path.join(r, n), scratch).replace(os.sep, "/")
+                         for r, _d, ns in os.walk(scratch) for n in ns]
+                if experimental_games.sr2_builder(every):
+                    _force_rmtree(scratch)
+                    return {"ok": False, "refused": True, "error": (
+                        f"{mod_name} builds its own patch with the tools it comes "
+                        "with, so it has to be set up by hand following its "
+                        "readme - copying its files in as they are breaks the game.")}
                 alts = experimental_games.flat_variants(rel_flat)
                 if alts and payload_choice == "*":
                     flat = [os.path.join(scratch, *r.split("/")) for r in
@@ -23611,6 +23690,24 @@ query Link($slug: String!, $domainName: String!) {
             moved = []
             placed = {}
             sr2_root_files, sr2_root_backups = [], []
+            if game_domain == experimental_games.SR2_DOMAIN:
+                # Two mods can't both replace patch.vpp_pc: the second one
+                # silently broke the first (Gentlemen of the Row, 2026-10-21).
+                owners = {
+                    f.lower(): r.get("name") or k
+                    for k, r in (_load_settings().get("installed", {})
+                                 .get(game_domain, {})).items()
+                    if k != _safe_name(mod_name)
+                    for f in (r.get("files") or []) if "/" not in f}
+                clash = sorted({owners[os.path.basename(f).lower()] for f in flat
+                                if os.path.basename(f).lower().endswith(experimental_games.SR2_ROOT_FILES)
+                                and os.path.basename(f).lower() in owners})
+                if clash:
+                    _force_rmtree(scratch)
+                    return {"ok": False, "error": (
+                        f"{mod_name} replaces the same game file (patch.vpp_pc) as "
+                        f"{', '.join(clash)}. Only one of them can be installed: "
+                        "uninstall that one first.")}
             if hd2_layout:
                 # Renumber per archive hash instead of overwriting: HD2
                 # loads <hash>.patch_0, patch_1, ... in sequence, so two
@@ -24640,6 +24737,7 @@ query Link($slug: String!, $domainName: String!) {
             result = await _github_loader_setup(game_domain)
             if result.get("ok") and game_domain == experimental_games.SR2_DOMAIN:
                 err = await asyncio.to_thread(_sr2_patch_exe, result["install_path"])
+                await asyncio.to_thread(_sr2_keep_juiced, result["install_path"])
                 decky.logger.info(f"Juiced exe patch: {err or 'applied'}")
                 if err:
                     result["warning"] = (

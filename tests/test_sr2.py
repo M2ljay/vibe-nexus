@@ -103,5 +103,45 @@ class ExePatchTests(unittest.TestCase):
         self.assertEqual(self.read("SR2_pc.exe"), b"steam")
 
 
+class HealTests(ExePatchTests):
+    def test_steam_restore_is_undone(self):
+        import unittest.mock
+        self._xdelta(True)
+        with open(os.path.join(self.root, "DFEngine.dll"), "wb") as f:
+            f.write(b"J" * (3 << 20))
+        open(os.path.join(self.root, "juiced.ini"), "w").close()
+        main._sr2_patch_exe(self.root)
+        keep = tempfile.mkdtemp()
+        game = {"nexusDomain": "saintsrow2", "installDirName": "x"}
+        main._save_settings({"experimental_frameworks": {"saintsrow2/0": {"files": []}}})
+        with unittest.mock.patch.object(main, "SR2_KEEP", keep), \
+                unittest.mock.patch.object(main, "_game_dir", lambda _d: self.root):
+            self.assertEqual(main._sr2_heal(game), "")  # learns the Juiced state
+            self.assertEqual(main._sr2_heal(game), "")  # nothing changed
+            # Steam's verify: its own DFEngine.dll and exe come back.
+            with open(os.path.join(self.root, "DFEngine.dll"), "wb") as f:
+                f.write(b"vanilla")
+            shutil.copyfile(os.path.join(self.root, "sr2_pc_unpatched.exe"),
+                            os.path.join(self.root, "SR2_pc.exe"))
+            self.assertEqual(main._sr2_heal(game), "DFEngine.dll, SR2_pc.exe")
+            self.assertEqual(len(self.read("DFEngine.dll")), 3 << 20)
+            self.assertEqual(len(self.read("SR2_pc.exe")), 2 << 20)
+            # Juiced's own first-run edit of the exe is not "Steam's exe".
+            with open(os.path.join(self.root, "SR2_pc.exe"), "ab") as f:
+                f.write(b"laa")
+            self.assertEqual(main._sr2_heal(game), "")
+            self.assertEqual(self.read("sr2_pc_unpatched.exe"), b"steam")
+        shutil.rmtree(keep, ignore_errors=True)
+
+    def test_builder_mods_refused(self):
+        self.assertTrue(eg.sr2_builder(["GOTR/MY_CUSTOM_PATCH/preload_anim.tbl"]))
+        self.assertTrue(eg.sr2_builder(["GOTR/optional_mod_stuff/x.xtbl"]))
+        self.assertFalse(eg.sr2_builder(["Mod Files/x.xtbl"]))
+        g = {"nexusDomain": "saintsrow2"}
+        eg.apply_sr2_profile(g, {})
+        self.assertEqual(eg.classify_mod(["G/MY_CUSTOM_PATCH/a.xtbl", "G/b.xtbl"], g, set(), {}, False, {}),
+                         "program")
+
+
 if __name__ == "__main__":
     unittest.main()
