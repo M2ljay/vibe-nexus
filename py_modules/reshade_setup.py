@@ -148,7 +148,11 @@ def is_preset_archive(rel_files: list) -> list:
              or "reshade-shaders/" in f for f in payload)
     if not ok or any(f.split("/")[-1] in ("dxgi.dll", "d3d9.dll", "d3d11.dll", "opengl32.dll") for f in low):
         return []
-    return [f for f in files if f.lower().endswith(".ini") and f.split("/")[-1].lower() != "reshade.ini"]
+    inis = [f for f in files if f.lower().endswith(".ini") and f.split("/")[-1].lower() != "reshade.ini"]
+    import experimental_games  # engine configs (DefaultEngine.ini) are not presets
+    if inis and all(experimental_games.engine_config_ini(f) for f in inis):
+        return []
+    return inis
 
 
 def reshade_ini(text: str, preset: str = "") -> str:

@@ -7512,7 +7512,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
                     rel_files, root_entries, experimental_games.index_game_dirs(install_path),
                     mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
                     experimental_games.index_game_files(install_path, mods_subdir),
-                    experimental_games.GAME_CONTENT_ROOT.get(game_domain, ""))
+                    experimental_games.content_root(game))
     cfg = (experimental_games.ue_config_plan(rel_files)
            if plan is None and game.get("engine") == "unreal" else None)
     if cfg:
@@ -7528,7 +7528,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
             rel_files, root_entries, experimental_games.index_game_dirs(install_path),
             mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
             experimental_games.index_game_files(install_path, mods_subdir),
-            experimental_games.GAME_CONTENT_ROOT.get(game_domain, ""),
+            experimental_games.content_root(game),
         )
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""

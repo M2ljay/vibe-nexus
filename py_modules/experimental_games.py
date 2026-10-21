@@ -544,6 +544,20 @@ GAME_CONTENT_ROOT = {
     "portal": "portal",
 }
 
+def content_root(game: dict) -> str:
+    """The folder a game's mods are laid out from, when it isn't the game
+    folder itself: a known one, or the folder the exe's Binaries sit in
+    (Unreal Engine 3 games like Batman: Arkham Origins keep everything in
+    SinglePlayer/, so a mod's BmGame/CookedPCConsole/... goes there)."""
+    known = GAME_CONTENT_ROOT.get(game.get("nexusDomain") or "")
+    if known:
+        return known
+    parts = (game.get("processName") or "").replace("\\", "/").split("/")
+    if len(parts) >= 3 and parts[1].lower() == "binaries":
+        return parts[0]
+    return ""
+
+
 # Extensions too generic to say where a loose file belongs.
 _GENERIC_EXTS = {".txt", ".ini", ".cfg", ".json", ".xml", ".dll", ".exe", ".png",
                  ".jpg", ".jpeg", ".bmp", ".dds", ".log", ".md", ".html", ".csv",
@@ -929,6 +943,16 @@ def loose_without_gotr(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+_ENGINE_INI = re.compile(r"^(default|bm|base|ud|ut)\w*\.ini$|(engine|input|game|ui|system|settings|scalability)\.ini$")
+
+
+def engine_config_ini(path: str) -> bool:
+    """A game-engine config file (DefaultEngine.ini, BmInput.ini, a Config/
+    folder) rather than a ReShade preset."""
+    low = path.replace("\\", "/").lower()
+    return "/config/" in "/" + low or bool(_ENGINE_INI.search(low.split("/")[-1]))
+
+
 def save_files(rel_files: list) -> list:
     """The save files of an archive made only of saves (and readmes), else []."""
     files = [f.replace("\\", "/") for f in rel_files or [] if f and not f.endswith("/")]
@@ -1085,7 +1109,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "ue_config"
     if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon64"))
                            or "reshade-shaders/" in f for f in payload_low) \
-            and not any(f.split("/")[-1] in PROXY_DLLS for f in low):
+            and not any(f.split("/")[-1] in PROXY_DLLS for f in low) \
+            and not all(engine_config_ini(f) for f in payload_low if f.endswith(".ini")):
         return "reshade_ready" if game.get("reshadeSetup") else "reshade_preset"
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
@@ -1112,7 +1137,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
             return "tool_managed" if game.get("toolApply") else "mods_folder"
         if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
                              exe_dir_of(game.get("processName") or ""), file_index,
-                             GAME_CONTENT_ROOT.get(game.get("nexusDomain") or "", "")):
+                             content_root(game)):
             return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
@@ -1129,7 +1154,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "mods_folder"
     plan = plan_root_install(files, root_entries, dir_index,
                              game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""),
-                             file_index, GAME_CONTENT_ROOT.get(game.get("nexusDomain") or "", ""))
+                             file_index, content_root(game))
     if plan:
         return "game_folder"
     loadable = _LOADABLE.get(game.get("engine") or "")
