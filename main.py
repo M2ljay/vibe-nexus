@@ -9318,6 +9318,7 @@ async def _watch_tool_games() -> None:
                 if exe and await _process_running(exe):
                     running.add(exe)
             if not running:
+                await asyncio.to_thread(_prune_kept_archives)
                 lost = []
                 healed = await asyncio.to_thread(_heal_replaced_files, lost)
                 if healed or lost:
@@ -33792,3 +33793,153 @@ def _wrap_enable_clashes() -> None:
 
 
 _wrap_enable_clashes()
+
+
+# ---- Switching a mod's version later ----------------------------------------------
+# Archives that ship alternatives (an Optional/ folder, a version per
+# resolution) ask which one at install. Keeping the archive and how it was
+# installed lets the player change their mind from the mod's page, without a
+# fresh download: uninstall, then install the archive again with the other
+# choice. Experimental games only.
+OPTIONS_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "mod-options")
+_LAST_OPTIONS: dict = {}
+
+
+def _kept_archive_path(domain: str, mod_id, file_id, file_name: str) -> str:
+    ext = os.path.splitext(file_name or "")[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,5}", ext):
+        ext = ""
+    return os.path.join(OPTIONS_DIR, domain, f"{int(mod_id)}-{int(file_id)}{ext}")
+
+
+def _keep_archive(src: str, dst: str) -> bool:
+    try:
+        if os.path.isfile(dst) and os.path.getsize(dst) == os.path.getsize(src):
+            return True
+        _makedirs_for(dst)
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copyfile(src, dst)
+        return True
+    except OSError as e:
+        decky.logger.info(f"could not keep {src} for later version changes: {e}")
+        return False
+
+
+def _prune_kept_archives() -> None:
+    """Kept archives of mods since uninstalled go."""
+    wanted = {os.path.normcase(((r or {}).get("modOptions") or {}).get("archive") or "")
+              for recs in (_load_settings().get("installed") or {}).values() if isinstance(recs, dict)
+              for r in recs.values() if isinstance(r, dict)}
+    for root_dir, _d, names in os.walk(OPTIONS_DIR):
+        for n in names:
+            p = os.path.join(root_dir, n)
+            if os.path.normcase(p) not in wanted:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+
+def _wrap_install_options() -> None:
+    import inspect
+    original = Plugin.install_mod
+    sig = inspect.signature(original)
+
+    @functools.wraps(original)
+    async def wrapper(self, *args, **kwargs):
+        try:
+            bound = sig.bind(self, *args, **kwargs)
+            bound.apply_defaults()
+            call = {k: v for k, v in bound.arguments.items() if k != "self"}
+        except TypeError:
+            return await original(self, *args, **kwargs)
+        domain = call.get("game_domain") or ""
+        if not _experimental_game_for(domain):
+            return await original(self, *args, **kwargs)
+        choice = call.get("payload_choice") or ""
+        ident = (domain, int(call.get("mod_id") or 0), int(call.get("file_id") or 0))
+        kept = ""
+        if choice:
+            err, path = await _download_archive(
+                domain, ident[1], ident[2], call.get("file_name") or "",
+                _load_settings().get("api_key"), call.get("dl_key") or "",
+                call.get("dl_expires") or "")
+            if not err:
+                kept = _kept_archive_path(domain, ident[1], ident[2], call.get("file_name") or "")
+                if not await asyncio.to_thread(_keep_archive, path, kept):
+                    kept = ""
+        result = await original(self, *args, **kwargs)
+        if not isinstance(result, dict):
+            return result
+        if result.get("needs_choice"):
+            _LAST_OPTIONS[ident] = (result.get("options") or [], result.get("option_labels") or [])
+        elif result.get("ok") and choice and kept and result.get("folder"):
+            settings = _load_settings()
+            rec = (settings.get("installed", {}).get(domain) or {}).get(result["folder"])
+            if isinstance(rec, dict):
+                opts, labels = _LAST_OPTIONS.get(ident) or (
+                    (rec.get("modOptions") or {}).get("options"),
+                    (rec.get("modOptions") or {}).get("labels"))
+                rec["modOptions"] = {
+                    "options": opts, "labels": labels, "choice": choice, "archive": kept,
+                    "call": {k: v for k, v in call.items()
+                             if k not in ("dl_key", "dl_expires", "payload_choice")},
+                }
+                _save_settings(settings)
+        return result
+
+    Plugin.install_mod = wrapper
+
+
+_wrap_install_options()
+
+
+async def _get_mod_options(self, game_domain: str, folder: str) -> dict:
+    """The versions a mod's archive offers, and the one installed."""
+    rec = (_load_settings().get("installed", {}).get(game_domain) or {}).get(folder) or {}
+    mo = rec.get("modOptions") or {}
+    if not mo or not os.path.isfile(mo.get("archive") or ""):
+        return {"ok": False, "error": "This mod has no other versions to switch to"}
+    options, labels = mo.get("options"), mo.get("labels")
+    if not options:
+        # Not seen this session: ask the archive again (nothing installs on
+        # a choose-a-version answer).
+        call = dict(mo["call"])
+        _keep_archive(mo["archive"], _archive_cache_path(call["mod_id"], call["file_id"], call["file_name"]))
+        probe = await Plugin.install_mod(self, **{**call, "payload_choice": ""})
+        if not probe.get("needs_choice"):
+            return {"ok": False, "error": "This mod has no other versions to switch to"}
+        options, labels = probe.get("options") or [], probe.get("option_labels") or []
+    return {"ok": True, "options": options, "labels": labels or options, "choice": mo.get("choice")}
+
+
+async def _set_mod_option(self, game_domain: str, folder: str, choice: str) -> dict:
+    """Reinstall a mod from its kept archive with another of its versions."""
+    settings = _load_settings()
+    rec = (settings.get("installed", {}).get(game_domain) or {}).get(folder) or {}
+    mo = rec.get("modOptions") or {}
+    if not mo or not os.path.isfile(mo.get("archive") or ""):
+        return {"ok": False, "error": "This mod has no other versions to switch to"}
+    call = dict(mo["call"])
+    old = mo.get("choice") or ""
+    cache = _archive_cache_path(call["mod_id"], call["file_id"], call["file_name"])
+    await asyncio.to_thread(_keep_archive, mo["archive"], cache)
+    un = await self.uninstall_mod(game_domain, call["install_dir"], call["mods_subdir"], folder,
+                                  call.get("install_mode") or "folder", call.get("app_id") or 0,
+                                  call.get("plugins_subpath") or "", call.get("plugins_style") or "starred")
+    if not un.get("ok"):
+        return {"ok": False, "error": f"Couldn't take the current version out: {un.get('error')}"}
+    result = await Plugin.install_mod(self, **{**call, "payload_choice": choice})
+    if not result.get("ok") and old:
+        await asyncio.to_thread(_keep_archive, mo["archive"], cache)
+        await Plugin.install_mod(self, **{**call, "payload_choice": old})
+        return {"ok": False, "error": f"That version didn't install ({result.get('error')}); "
+                                      "the previous one is back."}
+    decky.logger.info(f"{game_domain}/{folder}: version {old!r} -> {choice!r}")
+    return result
+
+
+Plugin.get_mod_options = _get_mod_options
+Plugin.set_mod_option = _set_mod_option

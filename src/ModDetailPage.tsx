@@ -27,6 +27,8 @@ import {
   getModSupport,
   matchFileToGame,
   setEndorsement,
+  getModOptions,
+  setModOption,
 
   getKnownModVerdict,
   getShowAdult,
@@ -118,6 +120,10 @@ export function ModDetailPage() {
   const [installingFileId, setInstallingFileId] = useState<number | undefined>();
   const [installedFileIds, setInstalledFileIds] = useState<Set<number>>(new Set());
   const [installedCopy, setInstalledCopy] = useState<InstalledMod | undefined>();
+  // Versions this mod's archive offers, when it was installed with a choice.
+  const [modOptions, setModOptions] = useState<
+    { options: string[]; labels: string[]; choice?: string } | undefined
+  >();
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
   const [endorseStatus, setEndorseStatus] = useState<string | undefined>();
   const [endorseBusy, setEndorseBusy] = useState(false);
@@ -197,6 +203,14 @@ export function ModDetailPage() {
       setInstalledMods(r.mods ?? []);
       const mine = r.mods?.find((m) => m.mod_id === s.mod.modId);
       setInstalledCopy(mine);
+      setModOptions(undefined);
+      if (mine) {
+        void getModOptions(s.game.nexusDomain, mine.folder).then((o) => {
+          if (o.ok && (o.options?.length ?? 0) > 1) {
+            setModOptions({ options: o.options!, labels: o.labels ?? o.options!, choice: o.choice });
+          }
+        });
+      }
       // A warning that lives only in an install RESULT is invisible the
       // moment the page is reopened, which is exactly when the user comes
       // looking for it - the character looked wrong, so they went back to
@@ -633,7 +647,7 @@ export function ModDetailPage() {
   // same fill language as the collection rows and the QAM tool button.
   // All files + (Uninstall) + Go to downloads. The hero above them takes
   // its width from this count.
-  const secondaryActions = 2 + (installedCopy ? 1 : 0);
+  const secondaryActions = 2 + (installedCopy ? 1 : 0) + (installedCopy && modOptions ? 1 : 0);
   const primaryBusy =
     primaryFile !== undefined && installingFileId === primaryFile.file_id;
   const primaryPct =
@@ -1241,6 +1255,35 @@ export function ModDetailPage() {
             }
           >
             Uninstall
+          </DialogButton>
+        )}
+        {installedCopy && modOptions && (
+          <DialogButton
+            disabled={installingFileId !== undefined}
+            style={ACTION_BUTTON}
+            onClick={() =>
+              showModal(
+                <PayloadChoiceModal
+                  modName={mod.name}
+                  options={modOptions.options}
+                  labels={modOptions.labels.map((l, i) =>
+                    modOptions.options[i] === modOptions.choice ? `${l} (installed)` : l
+                  )}
+                  onPick={async (choice) => {
+                    toaster.toast({ title: "Switching version…", body: mod.name });
+                    const r = await setModOption(game.nexusDomain, installedCopy.folder, choice);
+                    toaster.toast(
+                      r.ok
+                        ? { title: "Version switched", body: r.warning ?? mod.name }
+                        : { title: "Couldn't switch", body: r.error ?? "" }
+                    );
+                    refreshInstalled(sel);
+                  }}
+                />
+              )
+            }
+          >
+            Change version
           </DialogButton>
         )}
         <DownloadsButton />

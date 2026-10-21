@@ -387,6 +387,18 @@ export const getInstallBlock = callable<
   }
 >("get_install_block");
 
+/** The versions an installed mod's archive offers (experimental games). */
+export const getModOptions = callable<
+  [game_domain: string, folder: string],
+  { ok: boolean; options?: string[]; labels?: string[]; choice?: string; error?: string }
+>("get_mod_options");
+
+/** Reinstall a mod from its kept archive with another of its versions. */
+export const setModOption = callable<
+  [game_domain: string, folder: string, choice: string],
+  InstallResult
+>("set_mod_option");
+
 export const installMod = callable<
   [
     game_domain: string,
