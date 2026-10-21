@@ -34625,6 +34625,12 @@ query CollectionInstructions($slug: String!) {
         if loader and not (game.get("framework") or {}):
             out["loader"] = generic_loaders.LOADERS[loader]["name"]
         decky.logger.info(f"library check {row['domain']}: {out}")
+        for r in rows:
+            if r["verdict"] in ("no_target", "unknown"):
+                paths = paths_by_mod.get(r["modId"]) or []
+                decky.logger.info(
+                    f"library check {row['domain']}: {r['verdict']}: {r['name']!r} "
+                    f"(mod {r['modId']}, {r['file']}, {len(paths)} files) {paths[:14]}")
         return out
 
     async def check_experimental_coverage(self, app_id: int, count: int = 50,
