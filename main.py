@@ -7522,9 +7522,11 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         game_domain, os.path.join(install_path, *mods_subdir.split("/")),
         app_id, None, install_path)
     install_path = base
+    key = _safe_name(base_record.get("name") or "mod")
+    clash_off, clash_over = _switch_off_clashes(
+        game_domain, key, install_path, [d for _s, d in plan], base_record.get("name") or key)
     settings = _load_settings()
     installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
-    key = _safe_name(base_record.get("name") or "mod")
     prev = installed.get(key) or {}
     # Files this mod already owns (a reinstall) are replaced, not backed up.
     owned = {r.lower() for r in prev.get("files") or []}
@@ -7551,6 +7553,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         "backups": backups,
         **({"base": install_path} if install_path != _game_dir(game.get("installDirName") or "") else {}),
         **({"keepDirs": [merge]} if merge and merge != "." else {}),
+        **({"warning": _clash_note(clash_off, clash_over)} if clash_off or clash_over else {}),
     })
     _save_settings(settings)
     decky.logger.info(
@@ -7558,6 +7561,82 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         f"{len(files)} file(s), {len(backups)} game file(s) kept aside "
         f"(e.g. {files[:3]})")
     return key
+
+
+def _files_record_paths(rec: dict, game_root: str) -> tuple:
+    """(base folder, {normalised absolute path}) of a files-mode record."""
+    target = rec.get("target") or "."
+    base = (rec.get("base") or game_root) if target in (".", "") \
+        else os.path.join(game_root, *target.split("/"))
+    return base, {os.path.normcase(os.path.join(base, *f.split("/")))
+                  for f in rec.get("files") or [] if _safe_rel_path(f)}
+
+
+def _park_files_record(game_domain: str, key: str, why: str, settings: dict) -> bool:
+    """Switch a game-folder files mod off the way set_mod_enabled does:
+    its files parked outside the game, the game's own put back."""
+    records = settings.get("installed", {}).get(game_domain, {})
+    rec = records.get(key)
+    game = _experimental_game_for(game_domain) or {}
+    if not rec or rec.get("target") != "." or rec.get("enabled") is False:
+        return False
+    base = rec.get("base") or _game_dir(game.get("installDirName") or "")
+    park = _parked_files_dir(game_domain, key)
+    shared = _shared_paths(records, key, modes=("files",))
+    _move_mod_files(base, park, [r for r in rec.get("files") or [] if r.lower() not in shared])
+    _restore_backups(base, rec.get("backups"))
+    rec["parked"] = True
+    rec["enabled"] = False
+    rec["disabled_reason"] = why
+    return True
+
+
+def _switch_off_clashes(game_domain: str, key: str, base: str, rels: list, name: str) -> tuple:
+    """Before a mod writes `rels` (relative to `base`): switch off every
+    other switched-on mod that changed one of those same files, so nothing
+    overwrites anything silently (asked for on 2026-10-21). Mods that can't
+    be switched off (mods-folder files) are only named. Returns
+    (switched off, overwritten) mod names."""
+    settings = _load_settings()
+    records = settings.get("installed", {}).get(game_domain, {})
+    game = _experimental_game_for(game_domain) or {}
+    root = _game_dir(game.get("installDirName") or "")
+    mine = {os.path.normcase(os.path.join(base, *r.split("/"))) for r in rels if _safe_rel_path(r)}
+    off, over = [], []
+    for k, rec in list(records.items()):
+        if k == key or not isinstance(rec, dict) or rec.get("mode") != "files" \
+                or rec.get("enabled") is False:
+            continue
+        _b, theirs = _files_record_paths(rec, root)
+        if not mine & theirs:
+            continue
+        label = rec.get("name") or k
+        if _park_files_record(game_domain, k, f"Switched off: {name} changes the same files", settings):
+            off.append(label)
+        else:
+            over.append(label)
+    if off:
+        _save_settings(settings)
+        decky.logger.info(f"{name!r} clashes with {off}: switched them off")
+    return off, over
+
+
+def _with_record_warning(result: dict, game_domain: str, key: str) -> dict:
+    """An install result carrying its record's note (a clash, say)."""
+    rec = (_load_settings().get("installed", {}).get(game_domain) or {}).get(key) or {}
+    if rec.get("warning"):
+        result["warning"] = rec["warning"]
+    return result
+
+
+def _clash_note(off: list, over: list) -> str:
+    parts = []
+    if off:
+        parts.append(f"Switched off {', '.join(off)}: it changes the same files. "
+                     "Switch it back on to swap them round.")
+    if over:
+        parts.append(f"Replaced some files from {', '.join(over)}.")
+    return " ".join(parts)
 
 
 def _refresh_experimental_inspection(game_domain: str) -> bool:
@@ -23758,7 +23837,7 @@ query Link($slug: String!, $domainName: String!) {
                     except OSError:
                         pass
                     await _emit_progress(mod_id, "done", 100)
-                    return {"ok": True, "folder": done}
+                    return _with_record_warning({"ok": True, "folder": done}, game_domain, done)
             if not flat and not sk_textures:
                 is_reshade = hd2_layout and any(
                     "reshade" in n.lower() or n.lower().endswith(".ini")
@@ -23985,6 +24064,13 @@ query Link($slug: String!, $domainName: String!) {
                         f"{mod_name} replaces the same game file (patch.vpp_pc) as "
                         f"{', '.join(clash)}. Only one of them can be installed: "
                         "uninstall that one first.")}
+            flat_clash = ("", "")
+            if _experimental_game_for(game_domain) and not hd2_layout:
+                rels = [os.path.basename(f) for f in flat
+                        if not (game_domain == experimental_games.SR2_DOMAIN and os.path.basename(f).lower()
+                                .endswith(experimental_games.SR2_ROOT_FILES))]
+                flat_clash = await asyncio.to_thread(
+                    _switch_off_clashes, game_domain, _safe_name(mod_name), mods_path, rels, mod_name)
             if hd2_layout:
                 # Renumber per archive hash instead of overwriting: HD2
                 # loads <hash>.patch_0, patch_1, ... in sequence, so two
@@ -24088,7 +24174,8 @@ query Link($slug: String!, $domainName: String!) {
             # Before scratch goes: whatever is still in it did not go in,
             # and the user should hear what that was.
             skip_note = "" if hd2_layout else _flat_skip_note(scratch, placed)
-            skip_note = " ".join(n for n in (convert_note, skip_note) if n)
+            skip_note = " ".join(n for n in (convert_note, skip_note,
+                                             _clash_note(*flat_clash) if any(flat_clash) else "") if n)
             _force_rmtree(scratch)
             try:
                 os.remove(archive_path)
@@ -24165,7 +24252,7 @@ query Link($slug: String!, $domainName: String!) {
                 except OSError:
                     pass
                 await _emit_progress(mod_id, "done", 100)
-                return {"ok": True, "folder": done}
+                return _with_record_warning({"ok": True, "folder": done}, game_domain, done)
 
         # Archives that ship the mods DIRECTORY itself (Bannerlord zips
         # rooted at Modules/, Stardew at Mods/, BepInEx at plugins/):
@@ -33673,3 +33760,35 @@ def _wrap_toggle_apply() -> None:
 
 
 _wrap_toggle_apply()
+
+
+def _wrap_enable_clashes() -> None:
+    """Switching a game-folder mod back on switches off whichever mods now
+    hold the same files, the same rule installs follow."""
+    original = Plugin.set_mod_enabled
+
+    @functools.wraps(original)
+    async def wrapper(self, *args, **kwargs):
+        names = ["install_dir", "mods_subdir", "folder", "enabled", "install_mode", "game_domain"]
+        got = dict(zip(names, args))
+        got.update({k: v for k, v in kwargs.items() if k in names})
+        domain, folder = got.get("game_domain") or "", got.get("folder") or ""
+        note = ""
+        if got.get("enabled") and domain and _experimental_game_for(domain):
+            rec = (_load_settings().get("installed", {}).get(domain) or {}).get(folder) or {}
+            if rec.get("mode") == "files" and rec.get("target") == "." and rec.get("enabled") is False:
+                game = _experimental_game_for(domain) or {}
+                base = rec.get("base") or _game_dir(game.get("installDirName") or "")
+                off, _over = await asyncio.to_thread(
+                    _switch_off_clashes, domain, folder, base, rec.get("files") or [],
+                    rec.get("name") or folder)
+                note = _clash_note(off, [])
+        result = await original(self, *args, **kwargs)
+        if note and isinstance(result, dict) and result.get("ok"):
+            result["warning"] = note
+        return result
+
+    Plugin.set_mod_enabled = wrapper
+
+
+_wrap_enable_clashes()
