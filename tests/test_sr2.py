@@ -204,7 +204,7 @@ class GotRTests(unittest.TestCase):
             r = main._sr2_install_gotr(scratch, self.FILES, root, "saintsrow2", {"name": "Gentlemen of the Row"})
             self.assertTrue(r["ok"], r)
             self.assertTrue(os.path.isfile(os.path.join(root, "mods", "GotR", "weapons.xtbl")))
-            self.assertTrue(os.path.isdir(os.path.join(root, "mods", "GotR", "Optional")))
+            self.assertTrue(os.path.isfile(os.path.join(root, "mods", "GotR", "Optional", "hud.xtbl")))
             self.assertTrue(os.path.isfile(os.path.join(root, "gotr.txt")))
             with open(os.path.join(root, "loose.txt")) as f:
                 self.assertIn("mods/GotR\n", f.read())

@@ -838,7 +838,7 @@ def gotr_options(rel_files: list) -> list:
     return sorted(out)
 
 
-def gotr_plan(rel_files: list, optional: list = ()) -> list:
+def gotr_plan(rel_files: list, optional: list = (), clashes: list = None) -> list:
     """[(archive path, game-relative destination)] for a GotR install;
     files land flat in their folder (loose.txt is read one level deep).
     Later sources win a name clash: preloads over modified/, and an
@@ -865,7 +865,12 @@ def gotr_plan(rel_files: list, optional: list = ()) -> list:
         pre = opt.rstrip("/").lower() + "/"
         for f in sorted(files):
             if f.lower().startswith(pre) and not f.lower().endswith(_DOC_EXTS):
-                opt_seen[f.split("/")[-1].lower()] = (f, GOTR_DIR + "/Optional/" + f.split("/")[-1])
+                name = f.split("/")[-1].lower()
+                if name in opt_seen and clashes is not None:
+                    # Two optional mods change the same file: the one later
+                    # in name order wins, and the caller is told.
+                    clashes.append((name, opt_seen[name][0].split("/")[-2], f.split("/")[-2]))
+                opt_seen[name] = (f, GOTR_DIR + "/Optional/" + f.split("/")[-1])
     return out + sorted(opt_seen.values())
 
 

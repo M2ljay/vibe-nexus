@@ -8907,7 +8907,10 @@ def _sr2_install_gotr(scratch: str, rel_files: list, root: str, game_domain: str
         _remove_files_record(game_domain, key, root, settings)
         settings = _load_settings()
         installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
-    plan = experimental_games.gotr_plan(rel_files)
+    # Every optional mod GotR ships goes in (asked for on 2026-10-21).
+    clashes = []
+    plan = experimental_games.gotr_plan(
+        rel_files, experimental_games.gotr_options(rel_files), clashes)
     if not plan:
         _force_rmtree(scratch)
         return {"ok": False, "error": "This GotR archive has no optional_mod_stuff/modified folder."}
@@ -8927,14 +8930,23 @@ def _sr2_install_gotr(scratch: str, rel_files: list, root: str, game_domain: str
     _sr2_loose_gotr(root, True)
     options = [o.rsplit("/", 1)[-1] for o in experimental_games.gotr_options(rel_files)]
     _force_rmtree(scratch)
+    note = ""
+    if clashes:
+        lost = sorted({a for _n, a, _b in clashes})
+        note = (f"All {len(options)} optional mods are in. Some change the same files, "
+                f"so these lost part of their changes: {', '.join(lost)}.")
     installed[key] = _merge_install_record(None, {
         **base_record, "mode": "files", "target": ".", "files": files, "backups": [],
         "gotr": True,
-        "warning": "",
+        "warning": note,
     })
     _save_settings(settings)
-    decky.logger.info(f"installed GotR: {len(files)} files into mods/GotR; optional mods available: {options}")
-    return {"ok": True, "folder": key}
+    decky.logger.info(f"installed GotR: {len(files)} files into mods/GotR, optional mods {options}; "
+                      f"clashes (file, lost, won): {clashes}")
+    out = {"ok": True, "folder": key}
+    if note:
+        out["warning"] = note
+    return out
 
 
 def _sr2_loose_gotr(root: str, present: bool) -> None:
