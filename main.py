@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import functools
+import io
 import glob
 import hashlib
 import itertools
@@ -28,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "py_
 import experimental_games  # noqa: E402 - needs the py_modules path above
 import reloaded_ii  # noqa: E402
 import xenoverse2  # noqa: E402
+import reshade_setup  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7458,6 +7460,9 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
+    presets = reshade_setup.is_preset_archive(rel_files)
+    if presets and (_load_settings().get("reshade") or {}).get(game_domain):
+        return _install_reshade_preset(scratch, rel_files, presets, game, game_domain, base_record)
     saves = experimental_games.save_files(rel_files)
     if saves:
         key = _install_save_mod(scratch, saves, game, game_domain, base_record)
@@ -7642,6 +7647,258 @@ def _clash_note(off: list, over: list) -> str:
     if over:
         parts.append(f"Replaced some files from {', '.join(over)}.")
     return " ".join(parts)
+
+
+# ---- ReShade -------------------------------------------------------------------
+RESHADE_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "reshade")
+
+
+def _http_get(url: str, timeout: int = 180) -> bytes:
+    """Blocking GET for worker threads (shader packs, the setup)."""
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": _BROWSER_UA})
+    with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
+        return resp.read()
+
+
+def _reshade_dirs(game: dict) -> tuple:
+    """(game folder, folder of the exe relative to it)."""
+    root = _game_dir(game.get("installDirName") or "")
+    return root, experimental_games.exe_dir_of(game.get("processName") or "")
+
+
+def _effect_packages() -> list:
+    cache = os.path.join(RESHADE_CACHE, "EffectPackages.ini")
+    try:
+        if time.time() - os.path.getmtime(cache) < 86400:
+            with open(cache, encoding="utf-8", errors="replace") as f:
+                return reshade_setup.packages(f.read())
+    except OSError:
+        pass
+    text = _http_get(reshade_setup.PACKAGES_URL, 60).decode("utf-8", "replace")
+    os.makedirs(RESHADE_CACHE, exist_ok=True)
+    with open(cache, "w", encoding="utf-8") as f:
+        f.write(text)
+    return reshade_setup.packages(text)
+
+
+def _reshade_add_effects(game_domain: str, effects: set) -> tuple:
+    """Fetch the shader packs that provide `effects` (and the required
+    ones) into the game's reshade-shaders. Returns (packages fetched,
+    effects still missing). Files go on the ReShade record, so removing
+    ReShade takes them too."""
+    import zipfile
+    game = _experimental_game_for(game_domain) or {}
+    root, exe_rel = _reshade_dirs(game)
+    base = os.path.join(root, *exe_rel.split("/")) if exe_rel else root
+    shaders = os.path.join(base, *reshade_setup.EFFECTS_DIR.split("/"))
+    have = set()
+    for cur, _d, names in os.walk(shaders):
+        have |= {n.lower() for n in names if n.lower().endswith(".fx")}
+    try:
+        pkgs = _effect_packages()
+    except (OSError, ValueError) as e:
+        decky.logger.warning(f"ReShade effect list: {e!r}")
+        return [], sorted(effects)
+    fetched, added = [], []
+    for p in reshade_setup.packages_for(effects, pkgs, have):
+        try:
+            blob = _http_get(p["url"], 300)
+        except OSError as e:
+            decky.logger.info(f"ReShade pack {p['name']}: {e!r}")
+            continue
+        try:
+            z = zipfile.ZipFile(io.BytesIO(blob))
+        except zipfile.BadZipFile:
+            continue
+        names = [n for n in z.namelist() if not n.endswith("/")]
+        def top(kind):
+            for n in names:
+                parts = n.split("/")
+                if kind in parts[:-1]:
+                    return "/".join(parts[:parts.index(kind) + 1]) + "/"
+            return None
+        for kind, dest in (("Shaders", p["installPath"] or ".\\" + reshade_setup.EFFECTS_DIR),
+                           ("Textures", p["textureInstallPath"] or ".\\" + reshade_setup.TEXTURES_DIR)):
+            pre = top(kind)
+            if not pre:
+                continue
+            dest_rel = dest.replace("\\", "/").lstrip("./")
+            for n in names:
+                if not n.startswith(pre):
+                    continue
+                if p["deny"] and n.split("/")[-1] in p["deny"]:
+                    continue
+                rel = "/".join(x for x in (dest_rel, n[len(pre):]) if x)
+                if not _safe_rel_path(rel):
+                    continue
+                dst = os.path.join(base, *rel.split("/"))
+                if os.path.exists(dst):
+                    continue
+                _makedirs_for(dst)
+                with open(dst, "wb") as f:
+                    f.write(z.read(n))
+                added.append("/".join(x for x in (exe_rel, rel) if x))
+        fetched.append(p["name"])
+    settings = _load_settings()
+    rec = settings.setdefault("reshade", {}).setdefault(game_domain, {})
+    rec["files"] = sorted(set(rec.get("files") or []) | set(added))
+    _save_settings(settings)
+    have = set()
+    for cur, _d, names in os.walk(shaders):
+        have |= {n.lower() for n in names}
+    return fetched, sorted(e for e in effects if e.lower() not in have)
+
+
+def _install_reshade_preset(scratch: str, rel_files: list, presets: list, game: dict,
+                            game_domain: str, base_record: dict) -> str:
+    """A ReShade preset beside the game's exe, the effects it uses fetched,
+    and made the preset ReShade starts with."""
+    root, exe_rel = _reshade_dirs(game)
+    base = os.path.join(root, *exe_rel.split("/")) if exe_rel else root
+    files = [f.replace("\\", "/") for f in rel_files if f and not f.endswith("/")]
+    # One wrapper folder around the preset (MyPreset/MyPreset.ini) comes off.
+    tops = {f.split("/")[0] for f in files}
+    strip = 1 if len(tops) == 1 and all("/" in f for f in files) else 0
+    docs = (".txt", ".md", ".url", ".jpg", ".jpeg", ".pdf", ".html", ".htm", ".rtf", ".webp", ".gif")
+    placed, backups = [], []
+    settings = _load_settings()
+    key = _safe_name(base_record.get("name") or "preset")
+    prev = (settings.get("installed", {}).get(game_domain) or {}).get(key) or {}
+    owned = {r.lower() for r in prev.get("files") or []}
+    for f in files:
+        rest = "/".join(f.split("/")[strip:])
+        if not rest or (rest.lower().endswith(docs) and "reshade-shaders/" not in rest.lower()):
+            continue
+        if rest.split("/")[-1].lower() == "reshade.ini" or not _safe_rel_path(rest):
+            continue
+        dst = os.path.join(base, *rest.split("/"))
+        _makedirs_for(dst)
+        if os.path.isfile(dst) and rest.lower() not in owned:
+            if not os.path.exists(dst + ".nexusbak"):
+                os.replace(dst, dst + ".nexusbak")
+                backups.append(rest)
+        shutil.copyfile(os.path.join(scratch, *f.split("/")), dst)
+        placed.append(rest)
+    effects = set()
+    for p in presets:
+        try:
+            with open(os.path.join(scratch, *p.split("/")), encoding="utf-8", errors="replace") as fh:
+                effects |= reshade_setup.preset_effects(fh.read())
+        except OSError:
+            pass
+    _force_rmtree(scratch)
+    fetched, missing = _reshade_add_effects(game_domain, effects)
+    first = "/".join(presets[0].split("/")[strip:]) if presets else ""
+    ini = os.path.join(base, "ReShade.ini")
+    try:
+        with open(ini, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        text = ""
+    with open(ini, "w", encoding="utf-8") as fh:
+        fh.write(reshade_setup.reshade_ini(text, first))
+    note = f"Preset {first.split('/')[-1]} is the one ReShade starts with (Home key in game to change)."
+    if fetched:
+        note += f" Fetched the effects it uses: {', '.join(fetched)}."
+    if missing:
+        note += f" Not found in ReShade's effect list: {', '.join(missing[:6])}."
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    installed[key] = _merge_install_record(prev or None, {
+        **base_record, "mode": "files", "target": ".", "base": base, "files": placed,
+        "backups": sorted(set(prev.get("backups") or []) | set(backups)), "warning": note,
+    })
+    _save_settings(settings)
+    decky.logger.info(f"ReShade preset {first!r} for {game_domain}: {len(placed)} files; packs {fetched}; missing {missing}")
+    return key
+
+
+async def _reshade_setup(game: dict) -> dict:
+    domain = game.get("nexusDomain") or ""
+    root, exe_rel = _reshade_dirs(game)
+    exe = os.path.join(root, *(game.get("processName") or "").replace("\\", "/").split("/"))
+    if not os.path.isfile(exe):
+        return {"ok": False, "error": "The game's exe wasn't found"}
+    if await _process_running(os.path.basename(exe)):
+        return {"ok": False, "error": "Close the game first."}
+    with open(exe, "rb") as f:
+        is64, imports = reloaded_ii.pe_info(f.read())
+    api = reshade_setup.api_for(imports)
+    if not api:
+        return {"ok": False, "error": (
+            "This game doesn't load DirectX 9-12, OpenGL or DirectDraw directly (Vulkan or D3D8), "
+            "so ReShade can't be set up from here.")}
+    try:
+        home = (await asyncio.to_thread(_http_get, reshade_setup.HOME_URL, 60)).decode("utf-8", "replace")
+        found = reshade_setup.setup_url(home)
+        if not found:
+            return {"ok": False, "error": "Couldn't find ReShade's download on reshade.me"}
+        version, url = found
+        blob = await asyncio.to_thread(_http_get, url, 300)
+        module = reshade_setup.module_from_setup(blob, is64)
+    except (OSError, ValueError, KeyError) as e:
+        return {"ok": False, "error": f"Couldn't download ReShade: {e}"}
+    base = os.path.dirname(exe)
+    dll_rel = "/".join(x for x in (exe_rel, api[1]) if x)
+    dll = os.path.join(base, api[1])
+    files, backups = [dll_rel], []
+    if os.path.isfile(dll):
+        with open(dll, "rb") as f:
+            if not reshade_setup.is_reshade_module(f.read()) and not os.path.exists(dll + ".nexusbak"):
+                os.replace(dll, dll + ".nexusbak")
+                backups.append(dll_rel)
+    with open(dll, "wb") as f:
+        f.write(module)
+    ini = os.path.join(base, "ReShade.ini")
+    if not os.path.isfile(ini):
+        files.append("/".join(x for x in (exe_rel, "ReShade.ini") if x))
+    try:
+        with open(ini, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    with open(ini, "w", encoding="utf-8") as f:
+        f.write(reshade_setup.reshade_ini(text))
+    settings = _load_settings()
+    rec = settings.setdefault("reshade", {}).setdefault(domain, {})
+    rec.update({"version": version, "api": api[0], "dll": dll_rel,
+                "files": sorted(set(rec.get("files") or []) | set(files)),
+                "backups": sorted(set(rec.get("backups") or []) | set(backups)),
+                "install_dir": game.get("installDirName") or ""})
+    _save_settings(settings)
+    fetched, _missing = await asyncio.to_thread(_reshade_add_effects, domain, set())
+    decky.logger.info(f"ReShade {version} for {domain}: {dll_rel} ({api[0]}), packs {fetched}")
+    return {"ok": True, "version": version, "api": api[0], "dll": api[1]}
+
+
+def _reshade_remove(game: dict) -> int:
+    domain = game.get("nexusDomain") or ""
+    settings = _load_settings()
+    rec = (settings.get("reshade") or {}).pop(domain, None)
+    if not rec:
+        return 0
+    root = _game_dir(rec.get("install_dir") or game.get("installDirName") or "")
+    removed = 0
+    for rel in sorted(rec.get("files") or [], key=len, reverse=True):
+        if not _safe_rel_path(rel):
+            continue
+        p = os.path.join(root, *rel.split("/"))
+        try:
+            os.remove(p)
+            removed += 1
+        except OSError:
+            pass
+        d = os.path.dirname(p)
+        while len(d) > len(root):
+            try:
+                os.rmdir(d)
+            except OSError:
+                break
+            d = os.path.dirname(d)
+    _restore_backups(root, rec.get("backups"))
+    _save_settings(settings)
+    return removed
 
 
 # ---- Save-file mods -----------------------------------------------------------
@@ -33764,6 +34021,28 @@ query CollectionInstructions($slug: String!) {
         settings = _load_settings()
         settings.setdefault("experimental_games", {})[str(int(game["appId"]))] = game
         _save_settings(settings)
+
+    async def install_reshade(self, app_id: int) -> dict:
+        """Set up ReShade for an experimental game (from reshade.me)."""
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        result = await _reshade_setup(game)
+        if result.get("ok"):
+            game["reshadeSetup"] = True
+            self._exp_save(game)
+        else:
+            decky.logger.warning(f"ReShade for {game.get('nexusDomain')}: {result.get('error')}")
+        return result
+
+    async def remove_reshade(self, app_id: int) -> dict:
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        removed = await asyncio.to_thread(_reshade_remove, game)
+        game.pop("reshadeSetup", None)
+        self._exp_save(game)
+        return {"ok": True, "removed": removed}
 
     async def set_experimental_focus(self, app_id: int, on: bool) -> dict:
         """Bring this game's window to the front after it starts."""

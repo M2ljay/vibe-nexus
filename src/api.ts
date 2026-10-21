@@ -2413,6 +2413,16 @@ export const experimentalFolderOptions = callable<
   { ok: boolean; error?: string; current?: string; options?: string[] }
 >("experimental_folder_options");
 
+export const installReshade = callable<
+  [app_id: number],
+  { ok: boolean; version?: string; api?: string; dll?: string; error?: string }
+>("install_reshade");
+
+export const removeReshade = callable<
+  [app_id: number],
+  { ok: boolean; removed?: number; error?: string }
+>("remove_reshade");
+
 export const setExperimentalFocus = callable<
   [app_id: number, on: boolean],
   { ok: boolean; error?: string; game?: SupportedGame }

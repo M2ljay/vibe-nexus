@@ -28,6 +28,8 @@ import {
   setExperimentalFramework,
   setExperimentalModsFolder,
   setExperimentalFocus,
+  installReshade,
+  removeReshade,
   findExperimentalGame,
   getExperimentalState,
   removeExperimentalFramework,
@@ -583,6 +585,40 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
           </ButtonItem>
         </PanelSectionRow>
       )}
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          disabled={busy}
+          description={
+            game.reshadeSetup
+              ? "Takes ReShade, its effects and its settings out of the game folder. Presets you installed stay until you uninstall them."
+              : "Downloads ReShade from reshade.me into the game folder, so ReShade presets from Nexus install with the effects they use. Press Home in game for its menu. Online games with anti-cheat may object to it."
+          }
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = game.reshadeSetup
+                ? await removeReshade(game.appId)
+                : await installReshade(game.appId);
+              toaster.toast(
+                r.ok
+                  ? {
+                      title: game.reshadeSetup ? "ReShade removed" : "ReShade set up",
+                      body: game.reshadeSetup
+                        ? "Your game is back to how it looked"
+                        : "Install ReShade presets for this game now. Press Home in game for its menu.",
+                    }
+                  : { title: "ReShade didn't work", body: r.error ?? "" }
+              );
+              await loadExperimentalState();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {game.reshadeSetup ? "Remove ReShade" : "Set up ReShade"}
+        </ButtonItem>
+      </PanelSectionRow>
       <PanelSectionRow>
         <ToggleField
           label="Bring to front after launch"

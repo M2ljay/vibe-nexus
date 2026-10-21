@@ -309,6 +309,8 @@ export interface SupportedGame {
   toolApply?: "overstrike" | "reloaded" | "xv2ins";
   /** Experimental: bring the game's window to the front after launch. */
   focusAfterLaunch?: boolean;
+  /** Experimental: ReShade has been set up for this game. */
+  reshadeSetup?: boolean;
   /** Shown as a banner at the top of the QAM panel: support for this game
    * is real but rough. Honest signposting beats silent rough edges. */
   underConstruction?: string;

@@ -1026,13 +1026,14 @@ VERDICTS = {
     "ue_config": "is a settings tweak (Engine.ini), placed in the game's config folder",
     "save_file": "is a save file - goes into the game's save folder (yours are backed up first)",
     "cheat_table": "is a Cheat Engine table - used from the desktop, not installed",
-    "reshade_preset": "is a ReShade preset - needs ReShade installed first",
+    "reshade_preset": "is a ReShade preset - set up ReShade for this game first",
+    "reshade_ready": "is a ReShade preset - installs beside the game, with the effects it uses",
     "unknown": "has no published file list to check",
 }
 
 
 WORKING_VERDICTS = ("mods_folder", "game_folder", "wizard", "tool_managed",
-                    "loader", "ue_config", "save_file")
+                    "loader", "ue_config", "save_file", "reshade_ready")
 
 UE_CONFIG_NAMES = {"engine.ini", "gameusersettings.ini", "game.ini", "input.ini",
                    "scalability.ini", "deviceprofiles.ini"}
@@ -1085,7 +1086,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon64"))
                            or "reshade-shaders/" in f for f in payload_low) \
             and not any(f.split("/")[-1] in PROXY_DLLS for f in low):
-        return "reshade_preset"
+        return "reshade_ready" if game.get("reshadeSetup") else "reshade_preset"
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
