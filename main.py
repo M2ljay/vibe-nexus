@@ -9699,6 +9699,78 @@ def _sr2_restore_exe(root: str) -> bool:
     return True
 
 
+TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader")
+
+
+def _doom_framework() -> dict:
+    fw = generic_loaders.framework_entry("doommodloader", "")
+    fw["warning"] = (
+        "DOOM (2016) mods are zips that DOOMModLoader builds into the game. Step 1 "
+        "downloads it from its GitHub releases; after each install, uninstall or switch "
+        "the plugin runs it for you (it also patches the game so mods load without "
+        "developer mode). Multiplayer with mods isn't supported by the game.")
+    return fw
+
+
+def _doom_run_loader(root: str) -> tuple:
+    import subprocess
+    exe = os.path.join(root, "DOOMModLoader.exe")
+    proc = subprocess.run(
+        [exe, "-nocheckforupdates", "-nolaunchgame", "-noverbose"], cwd=root, env=_host_env(),
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, **_NO_WINDOW)
+    out = (proc.stdout or b"").decode("utf-8", "replace") + (proc.stderr or b"").decode("utf-8", "replace")
+    return proc.returncode, out
+
+
+async def _doom_apply(game: dict) -> dict:
+    """Run DOOMModLoader over what is in Mods/ (it skips its questions when
+    nobody can answer them: no console window, input redirected)."""
+    tool = "DOOMModLoader"
+    root = _game_dir(game.get("installDirName") or "")
+    if not os.path.isfile(os.path.join(root, "DOOMModLoader.exe")):
+        return {"ok": False, "tool": tool, "error": "DOOMModLoader isn't installed - run Step 1 first."}
+    if await _process_running("DOOMx64.exe") or await _process_running("DOOMx64vk.exe"):
+        return {"ok": False, "tool": tool, "error": "Close the game first."}
+    try:
+        rc, out = await asyncio.to_thread(_doom_run_loader, root)
+    except (OSError, ValueError) as e:
+        return {"ok": False, "tool": tool, "error": f"Couldn't run DOOMModLoader: {e}"}
+    try:
+        count = len([n for n in os.listdir(os.path.join(root, "Mods")) if n.lower().endswith(".zip")])
+    except OSError:
+        count = 0
+    tail = " ".join(l.strip() for l in out.strip().splitlines()[-4:])
+    decky.logger.info(f"DOOMModLoader exit {rc}: {out.strip()[-1500:]}")
+    if rc != 0:
+        return {"ok": False, "tool": tool, "error": tail[:300] or f"DOOMModLoader stopped (code {rc})"}
+    return {"ok": True, "tool": tool, "count": count}
+
+
+def _doom_zip_mod(scratch: str, mod_name: str) -> list:
+    """DOOM mods go into Mods/ as zips. A download that has zips inside
+    gives those; one that IS the mod's files is zipped back up whole."""
+    import zipfile
+    zips = [os.path.join(r, n) for r, _d, ns in os.walk(scratch) for n in ns if n.lower().endswith(".zip")]
+    if zips:
+        return zips
+    files = [os.path.join(r, n) for r, _d, ns in os.walk(scratch) for n in ns]
+    if not files or any(f.lower().endswith((".exe", ".dll", ".asi")) for f in files):
+        return []  # a program or a dll mod: not something the loader builds
+    # A single wrapper folder (MyMod/...) comes off, as the loader expects
+    # the mod's own folders at the zip's top.
+    tops = {os.path.relpath(f, scratch).split(os.sep)[0] for f in files}
+    base = scratch
+    if len(tops) == 1 and os.path.isdir(os.path.join(scratch, next(iter(tops)))):
+        base = os.path.join(scratch, next(iter(tops)))
+    out = os.path.join(scratch, (_safe_name(mod_name) or "mod") + ".zip")
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in files:
+            rel = os.path.relpath(f, base).replace(os.sep, "/")
+            if not rel.startswith(".."):
+                z.write(f, rel)
+    return [out]
+
+
 def _sr2_framework() -> dict:
     fw = generic_loaders.framework_entry("sr2juiced", "")
     fw["warning"] = (
@@ -9717,6 +9789,8 @@ async def _tool_apply(game: dict) -> dict:
         return await _reloaded_apply(game)
     if kind == "xv2ins":
         return await _xv2_apply(game)
+    if kind == "doommodloader":
+        return await _doom_apply(game)
     result = await _overstrike_apply(game)
     result.setdefault("tool", "Overstrike")
     return result
@@ -9966,7 +10040,7 @@ def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
     """Re-apply a tool-managed game's mods shortly after the last change,
     so a collection of 40 installs runs the tool once, not 40 times."""
     game = _experimental_game_for(game_domain)
-    if not game or game.get("toolApply") not in ("overstrike", "reloaded", "xv2ins"):
+    if not game or game.get("toolApply") not in TOOL_KINDS:
         return
     old = _TOOL_APPLY_TASKS.get(game_domain)
     if old and not old.done():
@@ -24416,6 +24490,8 @@ query Link($slug: String!, $domainName: String!) {
                             flat.append(os.path.join(root, n))
                     elif n.lower().endswith(exts):
                         flat.append(os.path.join(root, n))
+            if game_domain == experimental_games.DOOM_DOMAIN and _experimental_game_for(game_domain):
+                flat = await asyncio.to_thread(_doom_zip_mod, scratch, mod_name)
             # Special K textures, which NieR gets converted into its own
             # files rather than refused.
             sk_textures = (_sk_texture_files(scratch)
@@ -33402,7 +33478,9 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") == xenoverse2.DOMAIN
                              and g.get("toolApply") != "xv2ins")
                          or (g.get("nexusDomain") == experimental_games.SR2_DOMAIN
-                             and g.get("engine") != "sr2"))]
+                             and g.get("engine") != "sr2")
+                         or (g.get("nexusDomain") == experimental_games.DOOM_DOMAIN
+                             and g.get("toolApply") != "doommodloader"))]
         if unchecked and not getattr(self, "_exp_checking", False):
             self._exp_checking = True
             asyncio.get_running_loop().create_task(
@@ -33602,6 +33680,11 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
+        if experimental_games.apply_doom_profile(game, _doom_framework()):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: DOOMModLoader")
             return
         if experimental_games.apply_sr2_profile(game, _sr2_framework()):
             game["frameworkChecked"] = True
@@ -33901,7 +33984,7 @@ query CollectionInstructions($slug: String!) {
     async def apply_experimental_tool(self, app_id: int) -> dict:
         """Run a tool-managed game's mod tool now (the panel's Apply button)."""
         game = (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
-        if not game or game.get("toolApply") not in ("overstrike", "reloaded", "xv2ins"):
+        if not game or game.get("toolApply") not in TOOL_KINDS:
             return {"ok": False, "error": "This game has no mod tool to run"}
         result = await _tool_apply(game)
         if result.get("ok") and await _process_running(
@@ -34090,7 +34173,7 @@ query CollectionInstructions($slug: String!) {
                 row.get("nexusName") or row["name"], inspection)
             rule = _vortex_rules().get(row["domain"])
             if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
-                    game, _sr2_framework()):
+                    game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()):
                 rule = None
             if rule:
                 try:

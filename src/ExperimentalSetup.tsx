@@ -568,7 +568,9 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
             description={
               game.toolApply === "reloaded"
                 ? "Updates Reloaded-II's mod list for this game from what is installed here, and fetches libraries the mods need. Happens by itself after each change; use this if that failed."
-                : game.toolApply === "xv2ins"
+                : game.toolApply === "doommodloader"
+                  ? "Runs DOOMModLoader over the zips in Mods. Happens by itself after each change; use this after a game update or if that failed. Close the game first."
+                  : game.toolApply === "xv2ins"
                   ? "Installs new .x2m mods with XV2 Mods Installer, and opens its window on the desktop for any you removed. Happens by itself after each change; use this if that failed. Close the game first."
                   : "Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
             }

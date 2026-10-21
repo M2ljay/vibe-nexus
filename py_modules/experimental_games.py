@@ -780,6 +780,31 @@ BETHESDA_GAMES = {
 }
 
 
+# DOOM (2016): mods are zips in Mods/, built into the game by DOOMModLoader
+# (ZwipZwapZapony/DOOMModLoader, "Place mod zips into a Mods folder ...
+# without extracting them, and run DOOMModLoader").
+DOOM_DOMAIN = "doom"
+
+
+def apply_doom_profile(game: dict, framework: dict) -> bool:
+    if game.get("nexusDomain") != DOOM_DOMAIN:
+        return False
+    game["engine"] = "idtech6"
+    game["modsSubdir"] = "Mods"
+    game["flatModExtensions"] = [".zip"]
+    game["toolApply"] = "doommodloader"
+    if not str(game.get("processName") or "").lower().startswith("doomx64"):
+        game["processName"] = "DOOMx64vk.exe"
+    game.pop("mergeInto", None)
+    game.pop("mergeBase", None)
+    game["framework"] = framework
+    game["underConstruction"] = (
+        "Experimental generic support. DOOM (2016) mods go into its Mods folder as zips, "
+        "and DOOMModLoader (Step 1) builds them into the game: the plugin runs it after "
+        "every install, uninstall or switch.")
+    return True
+
+
 # Saints Row 2: loose files (tables, textures, models) load from the game's
 # mods folder once the community Juiced Patch is in (its loose.txt lists
 # "mods", one folder deep). Packfiles replace the game's own in its root.
@@ -1117,6 +1142,9 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
         return "tool_managed"
+    if game.get("toolApply") == "doommodloader" and payload_low and not any(
+            f.endswith((".exe", ".dll", ".asi")) for f in payload_low):
+        return "tool_managed"  # zipped into Mods/ for DOOMModLoader
     if game.get("nexusDomain") == SR2_DOMAIN and gotr_base(files) is not None:
         return "mods_folder"
     if game.get("nexusDomain") == SR2_DOMAIN and sr2_builder(files):

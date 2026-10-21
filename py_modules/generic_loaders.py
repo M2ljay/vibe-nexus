@@ -71,6 +71,17 @@ LOADERS = {
         "detect": "",  # the proxy dll's name depends on the game
         "url": "https://github.com/ThirteenAG/Ultimate-ASI-Loader",
     },
+    "doommodloader": {
+        "name": "DOOMModLoader",
+        "repo": "ZwipZwapZapony/DOOMModLoader",
+        "tag": r".",
+        "asset64": r"^DOOMModLoader-Windows-x64\.zip$",
+        "asset32": None,
+        "prerelease": False,
+        "target": "root",
+        "detect": "DOOMModLoader.exe",
+        "url": "https://github.com/ZwipZwapZapony/DOOMModLoader",
+    },
     "sr2juiced": {
         "name": "Juiced Patch",
         # The project's releases live here; Clippy95's repo is the source mirror.

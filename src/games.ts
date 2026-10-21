@@ -306,7 +306,7 @@ export interface SupportedGame {
   /** Experimental tool-managed games: the backend applies installed mods
    * with this tool after every change (Insomniac ports: Overstrike;
    * Persona and friends: Reloaded-II). */
-  toolApply?: "overstrike" | "reloaded" | "xv2ins";
+  toolApply?: "overstrike" | "reloaded" | "xv2ins" | "doommodloader";
   /** Experimental: bring the game's window to the front after launch. */
   focusAfterLaunch?: boolean;
   /** Experimental: ReShade has been set up for this game. */
@@ -1940,5 +1940,6 @@ export function isTrackedLoader(kind?: string): boolean {
 
 /** The display name of a tool-managed game's mod tool. */
 export function toolName(kind?: string): string {
-  return kind === "reloaded" ? "Reloaded-II" : kind === "xv2ins" ? "XV2 Mods Installer" : "Overstrike";
+  return kind === "reloaded" ? "Reloaded-II" : kind === "xv2ins" ? "XV2 Mods Installer"
+    : kind === "doommodloader" ? "DOOMModLoader" : "Overstrike";
 }
