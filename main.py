@@ -9012,6 +9012,76 @@ def _sr2_juiced_defaults(root: str) -> list:
     return changed
 
 
+STASH_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "stash")
+
+
+def _same_file(a: str, b: str) -> bool:
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+    except OSError:
+        return False
+    return _md5(a) == _md5(b)
+
+
+def _replaced_files(settings: dict) -> list:
+    """[(domain, base folder, relative path)] for every game file an
+    experimental mod or loader replaced (and kept aside as .nexusbak),
+    while that mod or loader is switched on."""
+    out = []
+    games = {g.get("nexusDomain"): g for g in (settings.get("experimental_games") or {}).values()
+             if isinstance(g, dict) and g.get("nexusDomain")}
+    for domain, game in games.items():
+        root = _game_dir(game.get("installDirName") or "")
+        for rec in (settings.get("installed", {}).get(domain) or {}).values():
+            if not isinstance(rec, dict) or rec.get("mode") != "files" or rec.get("enabled") is False:
+                continue
+            target = rec.get("target") or "."
+            base = (rec.get("base") or root) if target in (".", "") else os.path.join(root, *target.split("/"))
+            out += [(domain, base, r) for r in rec.get("backups") or [] if _safe_rel_path(r)]
+        for key, rec in (settings.get("experimental_frameworks") or {}).items():
+            if key.split("/")[0] != domain or not isinstance(rec, dict):
+                continue
+            base = _game_dir(rec.get("install_dir") or game.get("installDirName") or "")
+            out += [(domain, base, r) for r in rec.get("backups") or [] if _safe_rel_path(r)]
+    return out
+
+
+def _heal_replaced_files() -> list:
+    """Steam's "verify files" (and some updates) put the game's own copy
+    back over a file a mod replaced; the mod then silently stops working
+    (Saints Row 2's DFEngine.dll, 2026-10-21). Keep a copy of each replaced
+    file as the mod left it, and put it back when the game's original
+    shows up in its place. Returns the files put back."""
+    healed = []
+    seen = set()
+    for domain, base, rel in _replaced_files(_load_settings()):
+        cur = os.path.join(base, *rel.split("/"))
+        if cur.lower() in seen:
+            continue
+        seen.add(cur.lower())
+        bak = cur + ".nexusbak"
+        keep = os.path.join(STASH_DIR, domain, *rel.split("/"))
+        if os.path.exists(cur + ".nexusoff") or not os.path.isfile(bak):
+            continue  # switched off, or nothing to compare with
+        if not os.path.isfile(cur):
+            if os.path.isfile(keep):
+                shutil.copyfile(keep, cur)
+                healed.append(f"{domain}: {rel}")
+            continue
+        if _same_file(cur, bak):
+            # The game's own file is back where the mod's was.
+            if os.path.isfile(keep) and not _same_file(keep, bak):
+                shutil.copyfile(keep, cur)
+                healed.append(f"{domain}: {rel}")
+            continue
+        if not os.path.isfile(keep) or not _same_file(keep, cur):
+            # The mod's file as it is now (first look, or a mod update).
+            _makedirs_for(keep)
+            shutil.copyfile(cur, keep)
+    return healed
+
+
 def _sr2_restore_exe(root: str) -> bool:
     orig = os.path.join(root, SR2_UNPATCHED)
     if not os.path.isfile(orig):
@@ -9126,6 +9196,16 @@ async def _watch_tool_games() -> None:
     a file verify undid - unless the game is running right now."""
     while True:
         try:
+            running = set()
+            for game in (_load_settings().get("experimental_games") or {}).values():
+                exe = os.path.basename((game or {}).get("processName") or "") if isinstance(game, dict) else ""
+                if exe and await _process_running(exe):
+                    running.add(exe)
+            if not running:
+                healed = await asyncio.to_thread(_heal_replaced_files)
+                if healed:
+                    decky.logger.info(f"put back mod files Steam had restored: {healed}")
+                    await decky.emit("mod_files_healed", healed)
             for game in list((_load_settings().get("experimental_games") or {}).values()):
                 if (isinstance(game, dict) and game.get("nexusDomain") == experimental_games.SR2_DOMAIN
                         and not await _process_running(SR2_EXE)):
