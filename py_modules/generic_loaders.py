@@ -73,14 +73,15 @@ LOADERS = {
     },
     "sr2juiced": {
         "name": "Juiced Patch",
-        "repo": "Clippy95/Saints-Row-2-Juiced-Patch",
+        # The project's releases live here; Clippy95's repo is the source mirror.
+        "repo": "kobraworksmodding/Saints-Row-2-Juiced-Patch",
         "tag": r".",
-        "asset64": r"^SR2_JUICED[\w.-]*\.zip$",
-        "asset32": r"^SR2_JUICED[\w.-]*\.zip$",
+        "asset64": r"^SR2_JUICED\.zip$",
+        "asset32": r"^SR2_JUICED\.zip$",
         "prerelease": False,
         "target": "root",
         "detect": "juiced.ini",
-        "url": "https://github.com/Clippy95/Saints-Row-2-Juiced-Patch",
+        "url": "https://github.com/kobraworksmodding/Saints-Row-2-Juiced-Patch",
     },
 }
 
