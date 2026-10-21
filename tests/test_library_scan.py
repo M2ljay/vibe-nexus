@@ -114,10 +114,28 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(eg.vortex_outside_dir(rule), "Electronic Arts/The Sims 4/Mods/Vortex Mods")
         docs = tempfile.mkdtemp()
         try:
-            self.assertEqual(eg.pick_outside_base(eg.vortex_outside_dir(rule), [docs]), "")
+            # Not made yet: an EA game's folder goes in Documents anyway.
+            self.assertEqual(eg.pick_outside_base(eg.vortex_outside_dir(rule), [docs]), docs)
+            self.assertEqual(eg.pick_outside_base("Some Studio/Game/Mods", [docs]), "")
             os.makedirs(os.path.join(docs, "Electronic Arts", "The Sims 4", "Mods"))
             self.assertEqual(eg.pick_outside_base(eg.vortex_outside_dir(rule), ["", docs]), docs)
         finally:
             shutil.rmtree(docs)
         g = {"mergeInto": "Electronic Arts/The Sims 4/Mods", "mergeBase": "C:/Docs"}
         self.assertEqual(eg.classify_mod(["CAS/hair.package"], g, set(), {}), "mods_folder")
+
+
+class ExeFromRuleTests(unittest.TestCase):
+    def test_exe(self):
+        d = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(d, "SinglePlayer", "Binaries", "Win32"))
+            open(os.path.join(d, "SinglePlayer", "Binaries", "Win32", "BatmanOrigins.exe"), "w").close()
+            rule = {"executable": "SinglePlayer\\Binaries\\Win32\\BatmanOrigins.exe"}
+            self.assertEqual(eg.exe_from_rule(rule, d), "SinglePlayer/Binaries/Win32/BatmanOrigins.exe")
+            self.assertEqual(eg.exe_from_rule({"executable": "gamelaunchhelper.exe"}, d), "")
+            self.assertEqual(eg.exe_from_rule({"executable": "Missing.exe"}, d), "")
+            self.assertEqual(eg.content_root({"processName": "SinglePlayer/Binaries/Win32/BatmanOrigins.exe"}),
+                             "SinglePlayer")
+        finally:
+            shutil.rmtree(d)

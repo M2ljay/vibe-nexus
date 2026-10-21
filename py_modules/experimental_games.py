@@ -1414,4 +1414,26 @@ def pick_outside_base(rel: str, bases: list) -> str:
     for b in bases:
         if b and os.path.isdir(os.path.join(b, *parent.split("/"))):
             return b
+    # The game hasn't made its folder yet (never started, or started before
+    # its mods folder existed): the publisher folder will do, and folders
+    # games keep in Documents can simply be made there.
+    top = rel.split("/")[0]
+    for b in bases:
+        if b and len(rel.split("/")) > 2 and os.path.isdir(os.path.join(b, top)):
+            return b
+    if bases and top.lower() in ("electronic arts", "my games", "rockstar games", "paradox interactive"):
+        return bases[0]
     return ""
+
+
+def exe_from_rule(rule: dict, install_path: str) -> str:
+    """The game exe a Vortex rule names, game-relative with "/", when it
+    exists (and isn't a launcher helper) - for games whose exe sits deeper
+    than the folder scan looks (SinglePlayer/Binaries/Win32/BatmanOrigins.exe)."""
+    raw = (rule or {}).get("executable")
+    if not isinstance(raw, str) or not raw:
+        return ""
+    rel = _norm_rel(raw)
+    if rel.split("/")[-1].lower() in ("gamelaunchhelper.exe", "launcher.exe") or ".." in rel.split("/"):
+        return ""
+    return rel if os.path.isfile(os.path.join(install_path, *rel.split("/"))) else ""

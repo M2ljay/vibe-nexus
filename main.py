@@ -24849,7 +24849,9 @@ query Link($slug: String!, $domainName: String!) {
                                 pass
             # Before scratch goes: whatever is still in it did not go in,
             # and the user should hear what that was.
-            skip_note = "" if hd2_layout else _flat_skip_note(scratch, placed)
+            # (DOOM's zip carries its files; what's left in scratch is the unzipped copy.)
+            skip_note = "" if hd2_layout or game_domain == experimental_games.DOOM_DOMAIN \
+                else _flat_skip_note(scratch, placed)
             skip_note = " ".join(n for n in (convert_note, skip_note,
                                              _clash_note(*flat_clash) if any(flat_clash) else "") if n)
             _force_rmtree(scratch)
@@ -33480,7 +33482,9 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") == experimental_games.SR2_DOMAIN
                              and g.get("engine") != "sr2")
                          or (g.get("nexusDomain") == experimental_games.DOOM_DOMAIN
-                             and g.get("toolApply") != "doommodloader"))]
+                             and g.get("toolApply") != "doommodloader")
+                         or (not g.get("processName")
+                             and (_vortex_rules().get(g.get("nexusDomain") or "") or {}).get("executable")))]
         if unchecked and not getattr(self, "_exp_checking", False):
             self._exp_checking = True
             asyncio.get_running_loop().create_task(
@@ -33716,8 +33720,14 @@ query CollectionInstructions($slug: String!) {
         game.pop("vortexRule", None)
         rule = _vortex_rules().get(domain)
         if rule:
+            gdir = _game_dir(game.get("installDirName") or "")
+            exe = experimental_games.exe_from_rule(rule, gdir)
+            proc = (game.get("processName") or "").replace("\\", "/")
+            if exe and (not proc or not os.path.isfile(os.path.join(gdir, *proc.split("/")))):
+                game["processName"] = exe
+                decky.logger.info(f"experimental {domain}: exe from Vortex rule {exe}")
             try:
-                root_entries = set(os.listdir(_game_dir(game.get("installDirName") or "")))
+                root_entries = set(os.listdir(gdir))
             except OSError:
                 root_entries = set()
             outside = experimental_games.vortex_outside_dir(rule)
@@ -34176,6 +34186,9 @@ query CollectionInstructions($slug: String!) {
                     game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()):
                 rule = None
             if rule:
+                exe = experimental_games.exe_from_rule(rule, path)
+                if exe and not game.get("processName"):
+                    game["processName"] = exe
                 try:
                     roots = set(os.listdir(path))
                 except OSError:
