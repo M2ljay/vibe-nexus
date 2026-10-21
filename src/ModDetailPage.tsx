@@ -41,7 +41,7 @@ import { PayloadChoiceModal } from "./ChoiceModal";
 import { EndorsePill } from "./EndorseButton";
 import { popOurPage, pushOurPage } from "./Tabs";
 import { getCompatHint, getStrandingWarning } from "./compat";
-import { frameworkModIds, modeParams } from "./games";
+import { frameworkModIds, frameworkNames, modeParams } from "./games";
 import { managedRequirementNote } from "./mergeSupport";
 import {
   finishFomod,
@@ -351,7 +351,13 @@ export function ModDetailPage() {
             m.name && req.modName && norm(m.name) === norm(req.modName)
           )
       ) ||
-        (fwInstalled && fwIds.includes(req.modId)));
+        (fwInstalled &&
+          (fwIds.includes(req.modId) ||
+            frameworkNames(game).some((n) => {
+              const a = norm(n);
+              const b = norm(req.modName ?? "");
+              return a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a));
+            }))));
     const optional = !have && /optional/i.test(req.notes ?? "");
     return { external, have, optional };
   };
@@ -398,6 +404,28 @@ export function ModDetailPage() {
     } finally {
       setReqBatchBusy(false);
     }
+  };
+
+  /** After an install: the mod's required mods that aren't here yet, asked
+   * about once instead of left for the user to notice on the page. */
+  const offerMissingRequirements = () => {
+    const missing = (requirements ?? []).filter((r) => {
+      const c = classifyRequirement(r);
+      if ((game.heroExcludeModIds ?? []).includes(r.modId)) return false;
+      return !c.external && !c.have && !c.optional;
+    });
+    if (missing.length === 0) return;
+    showModal(
+      <ConfirmModal
+        strTitle={`${mod.name} needs ${missing.length} other mod${missing.length > 1 ? "s" : ""}`}
+        strDescription={`Its page lists ${missing
+          .map((r) => r.modName || `mod ${r.modId}`)
+          .join(", ")} as required. Install ${missing.length > 1 ? "them" : "it"} now?`}
+        strOKButtonText="Install"
+        strCancelButtonText="Not now"
+        onOK={() => void installMissingRequirements()}
+      />
+    );
   };
 
   const openRequirement = async (req: ModRequirement) => {
@@ -542,9 +570,11 @@ export function ModDetailPage() {
         // running'". A toast that says "it will load next time" must not
         // start anything when tapped.
         const running = isGameRunning(game.appId);
+        offerMissingRequirements();
         toaster.toast({
-          title:
-            extra.installed.length > 0
+          title: result.unverified
+            ? `${mod.name} installed - but check it`
+            : extra.installed.length > 0
               ? `${mod.name} installed, with ${extra.installed.length} required extra`
               : `${mod.name} installed`,
           body: running

@@ -24,6 +24,14 @@ export function stalenessExemptModIds(game: SupportedGame): number[] {
   return [...frameworkModIds(game), ...(game.me3?.loaderModIds ?? [])];
 }
 
+/** Names of the game's Step 1 loaders - any-game loaders come from GitHub
+ * and have no Nexus id to match a requirement by. */
+export function frameworkNames(game: SupportedGame): string[] {
+  return [game.framework?.name, ...(game.extraFrameworks ?? []).map((fw) => fw.name)].filter(
+    (n): n is string => typeof n === "string" && n.length > 0
+  );
+}
+
 export function frameworkModIds(game: SupportedGame): number[] {
   return [
     game.framework?.nexusModId,

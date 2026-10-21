@@ -9871,6 +9871,21 @@ async def _kh_apply(game: dict) -> dict:
     by_kind = {}
     for p in todo:
         by_kind.setdefault(kingdom_hearts.patch_kind(p), []).append(os.path.join(pdir, p))
+    # Each patched game's data is written anew beside the old (which moves to
+    # backup/): running out of space half way leaves that game unplayable
+    # until Steam's verify. So check first.
+    image = _kh_image_dir(root)
+    need = 1 << 30
+    for kind in by_kind:
+        need += kingdom_hearts.pkg_bytes(image, kind)
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        free = None
+    if image and free is not None and free < need:
+        return {"ok": False, "tool": tool, "error": (
+            f"Patching needs about {need / (1 << 30):.0f} GB free on the game's drive and there's "
+            f"{free / (1 << 30):.1f} GB. Free some space, then press Apply.")}
     for kind, paths in by_kind.items():
         try:
             rc, out = await asyncio.to_thread(_kh_run_patcher, root, paths)
@@ -22021,6 +22036,10 @@ query Link($slug: String!, $domainName: String!) {
             return {"ok": False, "error": "Invalid collection slug"}
         api_key = _load_settings().get("api_key")
         _install_path, data_path, _unused = _game_paths(install_dir, mods_subdir)
+        if not os.path.isdir(data_path) and _experimental_game_for(game_domain) and os.path.isdir(_install_path):
+            # Any-game mode: the mods folder is the plugin's own choice and is
+            # only made by the first install - a collection can be that one.
+            os.makedirs(data_path, exist_ok=True)
         if not os.path.isdir(data_path):
             return {"ok": False, "error": f"{mods_subdir} not found"}
         scratch = None
@@ -34839,6 +34858,7 @@ query CollectionInstructions($slug: String!) {
     async def _main(self):
         decky.logger.info("Nexus Mods plugin loaded")
         self._tool_watcher = asyncio.get_running_loop().create_task(_watch_tool_games())
+        self._reapply_watcher = asyncio.get_running_loop().create_task(_watch_reapply())
         self._focus_watcher = asyncio.get_running_loop().create_task(_watch_focus())
         self._vortex_fetch = asyncio.get_running_loop().create_task(_watch_vortex_fetch_request())
 
@@ -35087,3 +35107,644 @@ async def _set_mod_option(self, game_domain: str, folder: str, choice: str) -> d
 
 Plugin.get_mod_options = _get_mod_options
 Plugin.set_mod_option = _set_mod_option
+
+
+# ==== Across every game: did it take, vanilla, setups, overlaps, space, ======
+# ==== backups of a setup, problem reports ====================================
+MIN_GAME_DRIVE_FREE = 2 << 30
+
+
+def _report_dir() -> str:
+    d = _user_downloads_dir()
+    return d if d and os.path.isdir(d) else DOWNLOADS_DIR
+
+
+def _dir_bytes(path: str, cap: int = 200000) -> int:
+    total, n = 0, 0
+    for root, _dirs, names in os.walk(path):
+        for name in names:
+            n += 1
+            if n > cap:
+                return total
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return total
+
+
+def _record_is_on(rec: dict) -> bool:
+    return rec.get("enabled", True) is not False and not rec.get("parked")
+
+
+def _verify_record(game_domain: str, key: str) -> str:
+    """Why a just-installed mod may not have landed, or "": every file its
+    record lists should be where the record says (a mod that "installed"
+    with nothing in place is the worst kind of failure - it looks fine)."""
+    settings = _load_settings()
+    rec = (settings.get("installed", {}).get(game_domain) or {}).get(key)
+    game = _experimental_game_for(game_domain)
+    if not rec or not game or not _record_is_on(rec):
+        return ""
+    root = _game_dir(game.get("installDirName") or "")
+    if rec.get("mode") == "files":
+        _base, paths = _files_record_paths(rec, root)
+        if not paths:
+            return "The archive installed no files - it may be empty or for another game."
+        missing = sorted(p for p in paths if not os.path.isfile(p))
+        if missing:
+            names = ", ".join(os.path.basename(p) for p in missing[:3])
+            return (f"{len(missing)} of {len(paths)} files aren't in place ({names}"
+                    f"{', ...' if len(missing) > 3 else ''}). Reinstall it; if that happens again, "
+                    "save a problem report from the plugin's settings.")
+        return ""
+    if rec.get("mode") == "folder" and not rec.get("target"):
+        _r, mods_path, _d = _game_paths(game.get("installDirName") or "", game.get("modsSubdir") or "")
+        folder = os.path.join(mods_path, key)
+        if os.path.isdir(folder) and not any(os.scandir(folder)):
+            return "Its folder is empty - the archive may not have unpacked. Reinstall it."
+    return ""
+
+
+def _wrap_install_checks() -> None:
+    """Experimental games: refuse an install with the game's drive nearly
+    full, and check afterwards that the mod's files really landed."""
+    original = Plugin.install_mod
+
+    @functools.wraps(original)
+    async def wrapper(self, game_domain, *args, **kwargs):
+        game = _experimental_game_for(game_domain) if game_domain else None
+        if game:
+            try:
+                free = shutil.disk_usage(_game_dir(game.get("installDirName") or "")).free
+            except OSError:
+                free = None
+            if free is not None and free < MIN_GAME_DRIVE_FREE:
+                return {"ok": False, "error": (
+                    f"Only {free / (1 << 30):.1f} GB free on the game's drive. Free some space "
+                    "first (Settings > Storage in the plugin shows what it keeps).")}
+        result = await original(self, game_domain, *args, **kwargs)
+        if game and isinstance(result, dict) and result.get("ok") and result.get("folder"):
+            note = await asyncio.to_thread(_verify_record, game_domain, result["folder"])
+            if note:
+                decky.logger.warning(f"install check {game_domain}/{result['folder']}: {note}")
+                settings = _load_settings()
+                rec = (settings.get("installed", {}).get(game_domain) or {}).get(result["folder"])
+                if rec is not None:
+                    rec["warning"] = " ".join(x for x in (rec.get("warning"), note) if x)
+                    _save_settings(settings)
+                result["warning"] = " ".join(x for x in (result.get("warning"), note) if x)
+                result["unverified"] = True
+        return result
+
+    Plugin.install_mod = wrapper
+
+
+_wrap_install_checks()
+
+
+# ---- Re-apply after a game update ---------------------------------------------
+# Overstrike records its own state (build id + toc). The other tools that
+# write into the game's own files record theirs here after each apply.
+REAPPLY_KINDS = ("khpatch", "doommodloader")
+
+
+def _tool_fingerprint(game: dict) -> dict:
+    root = _game_dir(game.get("installDirName") or "")
+    if game.get("toolApply") == "khpatch":
+        return _kh_hed_state(root)
+    return {}
+
+
+def _record_tool_state(game: dict, result: dict) -> None:
+    if game.get("toolApply") not in REAPPLY_KINDS or not result.get("ok"):
+        return
+    settings = _load_settings()
+    settings.setdefault("tool_apply_state", {})[game.get("nexusDomain") or ""] = {
+        "buildid": _steam_build_id(int(game.get("appId") or 0)),
+        "fp": _tool_fingerprint(game), "count": int(result.get("count") or 0),
+        "kind": game.get("toolApply")}
+    _save_settings(settings)
+
+
+def _generic_reapply_reason(game: dict) -> str:
+    state = (_load_settings().get("tool_apply_state") or {}).get(game.get("nexusDomain") or "")
+    if not state or not state.get("count") or state.get("kind") != game.get("toolApply"):
+        return ""
+    build = _steam_build_id(int(game.get("appId") or 0))
+    if state.get("buildid") and build and build != state["buildid"]:
+        return "the game updated"
+    if state.get("fp") and _tool_fingerprint(game) != state["fp"]:
+        return "Steam restored the game's files"
+    return ""
+
+
+def _wrap_tool_apply_state() -> None:
+    global _tool_apply
+    original = _tool_apply
+
+    async def wrapped(game: dict) -> dict:
+        result = await original(game)
+        if isinstance(result, dict):
+            await asyncio.to_thread(_record_tool_state, game, result)
+        return result
+
+    _tool_apply = wrapped
+
+
+_wrap_tool_apply_state()
+
+
+async def _watch_reapply() -> None:
+    """Every few minutes: a game update (or a verify) undoes patch-style
+    mods silently, so apply them again - never while the game runs."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            for game in list((_load_settings().get("experimental_games") or {}).values()):
+                if not isinstance(game, dict) or game.get("toolApply") not in REAPPLY_KINDS:
+                    continue
+                reason = await asyncio.to_thread(_generic_reapply_reason, game)
+                if not reason:
+                    continue
+                exes = ({g["exe"] for g in kingdom_hearts.GAMES.values()} if game.get("toolApply") == "khpatch"
+                        else {os.path.basename(game.get("processName") or "")})
+                if any([await _process_running(e) for e in exes if e]):
+                    continue
+                decky.logger.info(f"re-applying {game.get('nexusDomain')} because {reason}")
+                await decky.emit("experimental_tool_reapply", game.get("nexusDomain"), reason)
+                _schedule_tool_apply(game["nexusDomain"], delay=0.5)
+        except Exception:  # noqa: BLE001 - a watcher must never die
+            decky.logger.exception("reapply watcher failed")
+        await asyncio.sleep(300)
+
+
+# ---- Vanilla mode and saved setups ---------------------------------------------
+async def _mods_now(self, a: dict) -> list:
+    r = await self.get_installed_mods(a["game_domain"], a["install_dir"], a["mods_subdir"],
+                                      a["install_mode"], a["app_id"], a["plugins_subpath"],
+                                      a["plugins_style"])
+    return [m for m in (r.get("mods") or []) if isinstance(m, dict) and m.get("folder")
+            and m.get("togglable") is not False]
+
+
+async def _apply_enabled_set(self, a: dict, want, reason: str = "") -> dict:
+    """Switch mods so exactly `want` (folders) are on; None means all."""
+    moved, errors = 0, []
+    mods = await _mods_now(self, a)
+    # Off first, then on: a mod switched on switches off whatever it clashes
+    # with, which must not undo a choice made a moment earlier.
+    for target in (False, True):
+        for m in mods:
+            on = want is None or m["folder"] in want
+            if on != target or bool(m.get("enabled")) == on:
+                continue
+            r = await self.set_mod_enabled(a["install_dir"], a["mods_subdir"], m["folder"], on,
+                                           a["install_mode"], a["game_domain"], a["app_id"],
+                                           a["plugins_subpath"], a["plugins_style"],
+                                           reason if not on else "")
+            if isinstance(r, dict) and r.get("ok"):
+                moved += 1
+            else:
+                errors.append(f"{m.get('name') or m['folder']}: {(r or {}).get('error') or 'failed'}")
+    missing = sorted(set(want or ()) - {m["folder"] for m in mods})
+    if a["game_domain"]:
+        _schedule_tool_apply(a["game_domain"])
+    return {"ok": True, "moved": moved, "errors": errors, "missing": missing}
+
+
+def _setup_args(install_dir, mods_subdir, install_mode, game_domain, app_id,
+                plugins_subpath, plugins_style) -> dict:
+    return {"install_dir": install_dir, "mods_subdir": mods_subdir,
+            "install_mode": install_mode or "folder", "game_domain": game_domain,
+            "app_id": int(app_id or 0), "plugins_subpath": plugins_subpath or "",
+            "plugins_style": plugins_style or "starred"}
+
+
+VANILLA_REASON = "Play vanilla is on - Enable all puts it back"
+
+
+def _wrap_vanilla() -> None:
+    """'Disable all (play vanilla)' remembers what was on, and 'Enable all'
+    puts back exactly that - not every mod, including ones that were off
+    for a reason. Experimental games go mod by mod, because their mods
+    aren't all folders in one place (game-folder files, patches)."""
+    original = Plugin.set_all_mods_enabled
+
+    @functools.wraps(original)
+    async def wrapper(self, install_dir, mods_subdir, enabled, install_mode="folder",
+                      game_domain="", app_id=0, plugins_subpath="", plugins_style="starred"):
+        if not re.fullmatch(r"[a-z0-9_-]+", game_domain or ""):
+            return await original(self, install_dir, mods_subdir, enabled, install_mode,
+                                  game_domain, app_id, plugins_subpath, plugins_style)
+        a = _setup_args(install_dir, mods_subdir, install_mode, game_domain, app_id,
+                        plugins_subpath, plugins_style)
+        exp = _experimental_game_for(game_domain) is not None
+        settings = _load_settings()
+        saved = (settings.get("vanilla_saved") or {}).get(game_domain)
+        if not enabled:
+            on = {m["folder"] for m in await _mods_now(self, a) if m.get("enabled")}
+            settings.setdefault("vanilla_saved", {})[game_domain] = sorted(on | set(saved or ()))
+            _save_settings(settings)
+            if exp:
+                return await _apply_enabled_set(self, a, set(), VANILLA_REASON)
+            return await original(self, install_dir, mods_subdir, enabled, install_mode,
+                                  game_domain, app_id, plugins_subpath, plugins_style)
+        if saved is not None:
+            if not exp:
+                await original(self, install_dir, mods_subdir, True, install_mode,
+                               game_domain, app_id, plugins_subpath, plugins_style)
+            result = await _apply_enabled_set(self, a, set(saved))
+            settings = _load_settings()
+            (settings.get("vanilla_saved") or {}).pop(game_domain, None)
+            _save_settings(settings)
+            return result
+        if exp:
+            return await _apply_enabled_set(self, a, None)
+        return await original(self, install_dir, mods_subdir, enabled, install_mode,
+                              game_domain, app_id, plugins_subpath, plugins_style)
+
+    Plugin.set_all_mods_enabled = wrapper
+
+
+_wrap_vanilla()
+
+
+def _clean_setup_name(name: str) -> str:
+    return re.sub(r"\s+", " ", str(name or "")).strip()[:40]
+
+
+async def _get_mod_setups(self, game_domain: str) -> dict:
+    setups = (_load_settings().get("mod_setups") or {}).get(game_domain) or {}
+    return {"ok": True, "setups": [{"name": n, "count": len(v.get("on") or []), "at": v.get("at", 0)}
+                                   for n, v in sorted(setups.items())],
+            "vanilla": (_load_settings().get("vanilla_saved") or {}).get(game_domain) is not None}
+
+
+async def _save_mod_setup(self, install_dir: str, mods_subdir: str, install_mode: str, game_domain: str,
+                          app_id: int, plugins_subpath: str, plugins_style: str, name: str) -> dict:
+    name = _clean_setup_name(name)
+    if not name or not re.fullmatch(r"[a-z0-9_-]+", game_domain or ""):
+        return {"ok": False, "error": "Give the setup a name"}
+    a = _setup_args(install_dir, mods_subdir, install_mode, game_domain, app_id, plugins_subpath, plugins_style)
+    on = sorted(m["folder"] for m in await _mods_now(self, a) if m.get("enabled"))
+    settings = _load_settings()
+    settings.setdefault("mod_setups", {}).setdefault(game_domain, {})[name] = {"on": on, "at": int(time.time())}
+    _save_settings(settings)
+    return {"ok": True, "count": len(on)}
+
+
+async def _delete_mod_setup(self, game_domain: str, name: str) -> dict:
+    settings = _load_settings()
+    (settings.get("mod_setups") or {}).get(game_domain, {}).pop(name, None)
+    _save_settings(settings)
+    return {"ok": True}
+
+
+async def _apply_mod_setup(self, install_dir: str, mods_subdir: str, install_mode: str, game_domain: str,
+                           app_id: int, plugins_subpath: str, plugins_style: str, name: str) -> dict:
+    setup = ((_load_settings().get("mod_setups") or {}).get(game_domain) or {}).get(name)
+    if not setup:
+        return {"ok": False, "error": "That setup is gone"}
+    a = _setup_args(install_dir, mods_subdir, install_mode, game_domain, app_id, plugins_subpath, plugins_style)
+    result = await _apply_enabled_set(self, a, set(setup.get("on") or []), f"Not in the setup \"{name}\"")
+    settings = _load_settings()
+    (settings.get("vanilla_saved") or {}).pop(game_domain, None)
+    _save_settings(settings)
+    return result
+
+
+Plugin.get_mod_setups = _get_mod_setups
+Plugin.save_mod_setup = _save_mod_setup
+Plugin.delete_mod_setup = _delete_mod_setup
+Plugin.apply_mod_setup = _apply_mod_setup
+
+
+# ---- Which mods overwrite which files ------------------------------------------
+def _mod_overlaps(game_domain: str) -> dict:
+    game = _experimental_game_for(game_domain)
+    if not game:
+        return {"ok": False, "error": "Only for games set up in any-game mode"}
+    root = _game_dir(game.get("installDirName") or "")
+    records = _load_settings().get("installed", {}).get(game_domain) or {}
+    owners, shown = {}, {}
+    replaces = []
+    for key, rec in records.items():
+        if not isinstance(rec, dict) or rec.get("mode") != "files":
+            continue
+        base, paths = _files_record_paths(rec, root)
+        for p in paths:
+            owners.setdefault(p, []).append(key)
+            shown.setdefault(p, os.path.relpath(p, base).replace(os.sep, "/") if p.startswith(
+                os.path.normcase(base)) else os.path.basename(p))
+        if rec.get("backups"):
+            replaces.append({"name": rec.get("name") or key, "files": len(rec["backups"]),
+                             "on": _record_is_on(rec)})
+    # Mod folders in the mods folder: files at the same place inside two of
+    # them. Which one the game reads is the game's call (often load order).
+    _r, mods_path, _d = _game_paths(game.get("installDirName") or "", game.get("modsSubdir") or "")
+    folder_files = {}
+    if game.get("modsSubdir") and os.path.isdir(mods_path):
+        for entry in os.scandir(mods_path):
+            if not entry.is_dir() or entry.name not in records:
+                continue
+            n = 0
+            for dp, _ds, names in os.walk(entry.path):
+                for nm in names:
+                    n += 1
+                    if n > 20000:
+                        break
+                    rel = os.path.relpath(os.path.join(dp, nm), entry.path).replace(os.sep, "/").lower()
+                    if rel.endswith((".txt", ".md", ".json", ".ini", ".png", ".jpg")) and "/" not in rel:
+                        continue  # readmes and manifests every mod has
+                    folder_files.setdefault(rel, []).append(entry.name)
+    groups = {}
+    for p, keys in owners.items():
+        if len(set(keys)) > 1:
+            g = groups.setdefault(tuple(sorted(set(keys))), {"files": [], "kind": "game"})
+            g["files"].append(shown[p])
+    for rel, keys in folder_files.items():
+        if len(set(keys)) > 1:
+            g = groups.setdefault(tuple(sorted(set(keys))), {"files": [], "kind": "folder"})
+            g["files"].append(rel)
+    out = []
+    for keys, g in groups.items():
+        recs = [(k, records.get(k) or {}) for k in keys]
+        on = [(r.get("install_seq") or 0, r.get("name") or k) for k, r in recs if _record_is_on(r)]
+        active = max(on)[1] if (on and g["kind"] == "game") else None
+        out.append({"mods": [r.get("name") or k for k, r in recs], "files": len(g["files"]),
+                    "examples": sorted(g["files"])[:4], "active": active, "kind": g["kind"],
+                    "allOn": len(on) == len(recs)})
+    out.sort(key=lambda o: -o["files"])
+    return {"ok": True, "overlaps": out[:60], "replaces": sorted(replaces, key=lambda r: -r["files"])}
+
+
+async def _get_mod_overlaps(self, game_domain: str) -> dict:
+    return await asyncio.to_thread(_mod_overlaps, game_domain)
+
+
+Plugin.get_mod_overlaps = _get_mod_overlaps
+
+
+# ---- What the plugin keeps on disk -----------------------------------------------
+def _space_items(game_domain: str) -> list:
+    items = [
+        {"id": "kept_versions", "label": "Kept mod archives (Change version)", "path": OPTIONS_DIR,
+         "clearable": True, "note": "Change version needs a reinstall afterwards."},
+        {"id": "kept_installers", "label": "Kept mod installers (Run installer)", "path": PROGRAMS_DIR,
+         "clearable": True, "note": "Run installer needs a reinstall afterwards."},
+        {"id": "heal_stash", "label": "Copies of mod files Steam may restore over", "path": STASH_DIR,
+         "clearable": True, "note": "After a Steam verify, those mods need reinstalling."},
+        {"id": "reshade_cache", "label": "ReShade downloads", "path": RESHADE_CACHE, "clearable": True,
+         "note": "Downloaded again next time it's needed."},
+        {"id": "save_backups", "label": "Save backups (kept, never cleared here)", "path": SAVE_BACKUPS,
+         "clearable": False, "note": ""},
+    ]
+    game = _experimental_game_for(game_domain) if game_domain else None
+    if game and kingdom_hearts.is_kh(game):
+        img = _kh_image_dir(_game_dir(game.get("installDirName") or ""))
+        if img:
+            items.append({"id": "kh_backup", "label": "KHPCPatchManager's older game data",
+                          "path": os.path.join(img, "backup"), "clearable": True,
+                          "note": "Not needed to remove patches - Steam's verify does that."})
+    return items
+
+
+def _space_report(game_domain: str) -> dict:
+    out = []
+    for it in _space_items(game_domain):
+        size = _dir_bytes(it["path"]) if os.path.isdir(it["path"]) else 0
+        out.append({k: it[k] for k in ("id", "label", "clearable", "note")} | {"bytes": size})
+    game = _experimental_game_for(game_domain) if game_domain else None
+    free = None
+    if game:
+        try:
+            free = shutil.disk_usage(_game_dir(game.get("installDirName") or "")).free
+        except OSError:
+            pass
+    return {"ok": True, "items": out, "game_free": free}
+
+
+async def _get_space_report(self, game_domain: str = "") -> dict:
+    return await asyncio.to_thread(_space_report, game_domain)
+
+
+async def _clear_space_item(self, game_domain: str, item_id: str) -> dict:
+    item = next((i for i in _space_items(game_domain) if i["id"] == item_id), None)
+    if not item or not item["clearable"]:
+        return {"ok": False, "error": "That can't be cleared here"}
+    if item_id == "kh_backup":
+        for e in kingdom_hearts.GAMES.values():
+            if await _process_running(e["exe"]):
+                return {"ok": False, "error": "Close the game first."}
+    freed = await asyncio.to_thread(_dir_bytes, item["path"])
+    await asyncio.to_thread(_force_rmtree, item["path"])
+    decky.logger.info(f"cleared {item_id} ({freed} bytes)")
+    return {"ok": True, "freed": freed}
+
+
+Plugin.get_space_report = _get_space_report
+Plugin.clear_space_item = _clear_space_item
+
+
+# ---- A game's mod setup, saved to a file and back --------------------------------
+def _setup_backup_name(game_domain: str) -> str:
+    return f"Nexus Mods setup - {game_domain} - {time.strftime('%Y-%m-%d %H%M')}.json"
+
+
+async def _export_mod_setup(self, game_domain: str) -> dict:
+    if not re.fullmatch(r"[a-z0-9_-]+", game_domain or ""):
+        return {"ok": False, "error": "Invalid game domain"}
+    settings = _load_settings()
+    records = settings.get("installed", {}).get(game_domain) or {}
+    mods = []
+    for key, rec in sorted(records.items(), key=lambda kv: kv[1].get("install_seq") or 0):
+        if not isinstance(rec, dict) or not rec.get("mod_id"):
+            continue
+        mods.append({"key": key, "name": rec.get("name") or key, "mod_id": rec.get("mod_id"),
+                     "file_id": rec.get("file_id"), "file_name": rec.get("file_name") or "",
+                     "version": rec.get("version") or "", "enabled": _record_is_on(rec),
+                     "choice": rec.get("payload_choice") or rec.get("choice") or ""})
+    data = {"kind": "nexus-mods-setup", "version": 1, "plugin": APP_VERSION, "game": game_domain,
+            "at": int(time.time()), "mods": mods,
+            "setups": (settings.get("mod_setups") or {}).get(game_domain) or {}}
+    game = _experimental_game_for(game_domain)
+    if game:
+        data["experimental"] = {k: game.get(k) for k in ("appId", "nexusDomain", "modsSubdir",
+                                                         "focusAfterLaunch") if k in game}
+    path = os.path.join(_report_dir(), _setup_backup_name(game_domain))
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1)
+    decky.logger.info(f"saved {len(mods)} mods of {game_domain} to {path}")
+    return {"ok": True, "path": path, "count": len(mods)}
+
+
+async def _list_setup_backups(self, game_domain: str) -> dict:
+    out = []
+    d = _report_dir()
+    try:
+        names = os.listdir(d)
+    except OSError:
+        names = []
+    for n in names:
+        if not (n.startswith("Nexus Mods setup - ") and n.endswith(".json")):
+            continue
+        p = os.path.join(d, n)
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if data.get("kind") == "nexus-mods-setup" and data.get("game") == game_domain:
+            out.append({"file": n, "at": data.get("at", 0), "count": len(data.get("mods") or [])})
+    out.sort(key=lambda b: -b["at"])
+    return {"ok": True, "backups": out}
+
+
+async def _read_setup_backup(self, game_domain: str, file: str) -> dict:
+    if os.path.basename(file) != file or not file.endswith(".json"):
+        return {"ok": False, "error": "Not a setup file"}
+    try:
+        with open(os.path.join(_report_dir(), file), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        return {"ok": False, "error": f"Couldn't read it: {e}"}
+    if data.get("kind") != "nexus-mods-setup" or data.get("game") != game_domain:
+        return {"ok": False, "error": "That file is for another game"}
+    records = _load_settings().get("installed", {}).get(game_domain) or {}
+    have = {(r.get("mod_id"), r.get("file_id")) for r in records.values() if isinstance(r, dict)}
+    mods = [dict(m, installed=(m.get("mod_id"), m.get("file_id")) in have) for m in data.get("mods") or []]
+    if data.get("setups"):
+        settings = _load_settings()
+        mine = settings.setdefault("mod_setups", {}).setdefault(game_domain, {})
+        for k, v in data["setups"].items():
+            mine.setdefault(k, v)
+        _save_settings(settings)
+    return {"ok": True, "mods": mods}
+
+
+Plugin.export_mod_setup = _export_mod_setup
+Plugin.list_setup_backups = _list_setup_backups
+Plugin.read_setup_backup = _read_setup_backup
+
+
+# ---- Problem report ---------------------------------------------------------------
+def _scrub(text: str, secrets: list) -> str:
+    for s in secrets:
+        if s and len(s) >= 8:
+            text = text.replace(s, "[removed]")
+    text = re.sub(r"(?i)((?:api[_-]?key|apikey|token|password|secret|authorization)[\"']?\s*[:=]\s*[\"']?)"
+                  r"[A-Za-z0-9+/=_.-]{8,}", r"\1[removed]", text)
+    return text
+
+
+def _log_dir() -> str:
+    d = getattr(decky, "DECKY_PLUGIN_LOG_DIR", "") or ""
+    return d if os.path.isdir(d) else os.path.join(os.path.expanduser("~"), "homebrew", "logs",
+                                                   decky.DECKY_PLUGIN_NAME)
+
+
+def _recent_logs(limit: int = 600 << 10) -> str:
+    d = _log_dir()
+    try:
+        logs = sorted((n for n in os.listdir(d) if n.endswith(".log")),
+                      key=lambda n: os.path.getmtime(os.path.join(d, n)))[-4:]
+    except OSError:
+        return "(no logs found)"
+    parts, left = [], limit
+    for n in reversed(logs):
+        try:
+            with open(os.path.join(d, n), encoding="utf-8", errors="replace") as f:
+                body = f.read()
+        except OSError:
+            continue
+        body = body[-left:]
+        parts.insert(0, f"===== {n} =====\n{body}")
+        left -= len(body)
+        if left <= 0:
+            break
+    return "\n".join(parts)
+
+
+async def _save_problem_report(self, game_domain: str = "", app_id: int = 0, what: str = "") -> dict:
+    settings = _load_settings()
+    secrets = [str(settings.get(k) or "") for k in ("api_key", "apikey", "nexus_api_key")]
+    lines = [f"Nexus Mods plugin {APP_VERSION} problem report - {time.strftime('%Y-%m-%d %H:%M')}",
+             f"What happened: {what or '(not given)'}", ""]
+    if game_domain and re.fullmatch(r"[a-z0-9_-]+", game_domain):
+        try:
+            rep = await self.build_report(game_domain, int(app_id or 0))
+            lines += ["--- game report ---", rep.get("body") or "", ""]
+        except Exception as e:  # noqa: BLE001 - a report must still come out
+            lines.append(f"(game report failed: {e})")
+        game = _experimental_game_for(game_domain)
+        if game:
+            lines += ["--- any-game setup ---", json.dumps(game, indent=1, default=str)[:20000], ""]
+        lines += ["--- last tool run ---",
+                  json.dumps((settings.get("tool_apply_last") or {}).get(game_domain), default=str), "",
+                  "--- installed records ---",
+                  json.dumps(settings.get("installed", {}).get(game_domain), indent=1, default=str)[:60000], ""]
+    lines += ["--- plugin logs ---", await asyncio.to_thread(_recent_logs)]
+    text = _scrub("\n".join(lines), secrets)
+    path = os.path.join(_report_dir(), f"Nexus Mods report - {time.strftime('%Y-%m-%d %H%M%S')}.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    decky.logger.info(f"problem report saved: {path}")
+    return {"ok": True, "path": path}
+
+
+Plugin.save_problem_report = _save_problem_report
+
+
+# ---- Updates come from the fork -------------------------------------------------
+# This build is a fork: the store's newer upstream build would replace it
+# (and every any-game feature with it). So updates come from the fork's
+# "release" branch, which holds the zip and an update.json beside it.
+FORK_REPO = "M2ljay/vibe-nexus"
+FORK_RAW = f"https://raw.githubusercontent.com/{FORK_REPO}/release/"
+FORK_UPDATE_URL = FORK_RAW + "update.json"
+
+
+async def _fetch_fork_update(force: bool = False) -> dict:
+    now = time.time()
+    if not force and _ForkUpdateCache.data is not None and now - _ForkUpdateCache.at < PLUGIN_UPDATE_TTL:
+        return _ForkUpdateCache.data
+    try:
+        raw = await _fetch_bytes(FORK_UPDATE_URL + f"?t={int(now)}", 30)
+        data = json.loads(raw)
+        out = {"version": str(data["version"]), "hash": str(data["hash"]),
+               "artifact": str(data["artifact"]), "notes": str(data.get("notes") or "")}
+    except Exception:  # noqa: BLE001 - no answer is simply no update
+        return {}
+    if not out["artifact"].startswith(FORK_RAW) or not re.fullmatch(r"[0-9a-f]{64}", out["hash"]):
+        return {}
+    _ForkUpdateCache.at, _ForkUpdateCache.data = now, out
+    return out
+
+
+class _ForkUpdateCache:
+    at = 0.0
+    data = None
+
+
+def _wrap_plugin_update() -> None:
+    """A fork build takes its updates from the fork, never the store."""
+    global _fetch_plugin_update, _fetch_plugin_release_notes
+    store, store_notes = _fetch_plugin_update, _fetch_plugin_release_notes
+
+    async def fetch(force: bool = False) -> dict:
+        if "anygame" not in APP_VERSION:
+            return await store(force)
+        newest = await _fetch_fork_update(force)
+        return {k: newest[k] for k in ("version", "hash", "artifact")} if newest else {}
+
+    async def notes(version: str) -> str:
+        fork = _ForkUpdateCache.data
+        if "anygame" not in APP_VERSION or not fork or fork.get("version") != version:
+            return await store_notes(version)
+        return fork.get("notes") or ""
+
+    _fetch_plugin_update, _fetch_plugin_release_notes = fetch, notes
+
+
+_wrap_plugin_update()

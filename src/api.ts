@@ -85,6 +85,8 @@ export interface FilesResult {
 }
 
 export interface InstallResult {
+  /** Installed, but its files were not all found in place afterwards. */
+  unverified?: boolean;
   ok: boolean;
   folder?: string;
   error?: string;
@@ -2492,3 +2494,104 @@ export const startLibraryCheck = callable<
 >("start_library_check");
 
 export const cancelLibraryCheck = callable<[], { ok: boolean }>("cancel_library_check");
+
+// ---- Across every game: setups, overlaps, storage, backups, reports ----
+
+export interface SetupApplyResult {
+  ok: boolean;
+  error?: string;
+  moved?: number;
+  errors?: string[];
+  missing?: string[];
+}
+
+export const getModSetups = callable<
+  [game_domain: string],
+  { ok: boolean; setups: { name: string; count: number; at: number }[]; vanilla: boolean }
+>("get_mod_setups");
+export const saveModSetup = callable<[
+    install_dir: string,
+    mods_subdir: string,
+    install_mode: InstallMode,
+    game_domain: string,
+    app_id: number,
+    plugins_subpath: string,
+    plugins_style: "starred" | "listed",
+    name: string
+  ], { ok: boolean; error?: string; count?: number }>(
+  "save_mod_setup"
+);
+export const deleteModSetup = callable<[game_domain: string, name: string], { ok: boolean }>("delete_mod_setup");
+export const applyModSetup = callable<[
+    install_dir: string,
+    mods_subdir: string,
+    install_mode: InstallMode,
+    game_domain: string,
+    app_id: number,
+    plugins_subpath: string,
+    plugins_style: "starred" | "listed",
+    name: string
+  ], SetupApplyResult>("apply_mod_setup");
+
+export interface ModOverlap {
+  mods: string[];
+  files: number;
+  examples: string[];
+  active: string | null;
+  kind: "game" | "folder";
+  allOn: boolean;
+}
+export const getModOverlaps = callable<
+  [game_domain: string],
+  {
+    ok: boolean;
+    error?: string;
+    overlaps?: ModOverlap[];
+    replaces?: { name: string; files: number; on: boolean }[];
+  }
+>("get_mod_overlaps");
+
+export interface SpaceItem {
+  id: string;
+  label: string;
+  clearable: boolean;
+  note: string;
+  bytes: number;
+}
+export const getSpaceReport = callable<
+  [game_domain: string],
+  { ok: boolean; items: SpaceItem[]; game_free: number | null }
+>("get_space_report");
+export const clearSpaceItem = callable<
+  [game_domain: string, item_id: string],
+  { ok: boolean; error?: string; freed?: number }
+>("clear_space_item");
+
+export interface SetupBackupMod {
+  key: string;
+  name: string;
+  mod_id: number;
+  file_id?: number;
+  file_name?: string;
+  version?: string;
+  enabled: boolean;
+  choice?: string;
+  installed: boolean;
+}
+export const exportModSetup = callable<
+  [game_domain: string],
+  { ok: boolean; error?: string; path?: string; count?: number }
+>("export_mod_setup");
+export const listSetupBackups = callable<
+  [game_domain: string],
+  { ok: boolean; backups: { file: string; at: number; count: number }[] }
+>("list_setup_backups");
+export const readSetupBackup = callable<
+  [game_domain: string, file: string],
+  { ok: boolean; error?: string; mods?: SetupBackupMod[] }
+>("read_setup_backup");
+
+export const saveProblemReport = callable<
+  [game_domain: string, app_id: number, what: string],
+  { ok: boolean; error?: string; path?: string }
+>("save_problem_report");

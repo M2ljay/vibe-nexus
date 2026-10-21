@@ -110,6 +110,22 @@ def kh_plan(rel_files: list, game_id: str) -> list:
     return out
 
 
+PKG_PREFIX = {".kh1pcpatch": "kh1_", ".kh2pcpatch": "kh2_", ".compcpatch": "recom", ".bbspcpatch": "bbs_"}
+
+
+def pkg_bytes(image_dir: str, kind: str) -> int:
+    """Size of the game data one kind of patch rewrites (all its .pkg)."""
+    pre = PKG_PREFIX.get(kind, "")
+    total = 0
+    try:
+        for n in os.listdir(image_dir):
+            if pre and n.lower().startswith(pre) and n.lower().endswith(".pkg"):
+                total += os.path.getsize(os.path.join(image_dir, n))
+    except OSError:
+        pass
+    return total
+
+
 def patch_kind(name: str) -> str:
     low = name.lower()
     for g in GAMES.values():

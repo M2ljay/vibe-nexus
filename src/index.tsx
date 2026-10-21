@@ -25,6 +25,7 @@ import {
   toaster,
 } from "@decky/api";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { ModToolsRows } from "./ModTools";
 
 /** The hunt outlives the panel: closing the QAM unmounts the component
  * but not the async loop driving it. Keeping the stop flag and the
@@ -3183,6 +3184,7 @@ function InstalledModsSection() {
           </ButtonItem>
         </PanelSectionRow>
       )}
+      {game && <ModToolsRows game={game} onChanged={refresh} />}
       {/* Uninstalls moved to the full-screen My Mods page (v0.43.0):
           the QAM picker outgrew collection-scale libraries. */}
       {(mods?.length ?? 0) > 0 && (
@@ -4694,6 +4696,14 @@ export default definePlugin(() => {
   const toolListener = addEventListener<
     [domain: string, result: { ok: boolean; count?: number; error?: string; tool?: string; fetched?: string[]; missing?: string[]; restart?: boolean }]
   >("experimental_tool_applied", toolAppliedToast);
+  const reapplyListener = addEventListener<[domain: string, reason: string]>(
+    "experimental_tool_reapply",
+    (domain, reason) =>
+      toaster.toast({
+        title: "Putting mods back",
+        body: `${domain}: ${reason}, so the plugin is applying its patch mods again. Wait before playing.`,
+      })
+  );
   const toolStartListener = addEventListener(
     "experimental_tool_applying",
     toolApplyingToast
@@ -4852,6 +4862,7 @@ export default definePlugin(() => {
       removeEventListener("experimental_changed", experimentalListener);
       removeEventListener("experimental_tool_applied", toolListener);
       removeEventListener("experimental_tool_applying", toolStartListener);
+      removeEventListener("experimental_tool_reapply", reapplyListener);
       removeEventListener("mod_files_healed", healedListener);
       removeEventListener("mod_program_done", programListener);
       lifetime?.unregister();
