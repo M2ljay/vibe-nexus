@@ -4698,6 +4698,21 @@ export default definePlugin(() => {
     "experimental_tool_applying",
     toolApplyingToast
   );
+  // Steam's "verify files" put a game's own file back over a mod's; the
+  // backend put the mod's back and says which.
+  const healedListener = addEventListener<[healed: string[], lost?: string[]]>(
+    "mod_files_healed",
+    (healed, lost) => {
+      toaster.toast({
+        title: healed.length
+          ? `Put back ${healed.length} mod file${healed.length === 1 ? "" : "s"} Steam replaced`
+          : "Steam replaced mod files",
+        body: lost?.length
+          ? `Too big to keep a copy of - reinstall the mod that changed: ${lost.join(", ")}`
+          : healed.slice(0, 3).join(", ") + (healed.length > 3 ? "…" : ""),
+      });
+    }
+  );
 
   routerHook.addRoute(BROWSE_ROUTE, BrowsePage, { exact: true });
   routerHook.addRoute(DETAIL_ROUTE, ModDetailPage, { exact: true });
@@ -4822,6 +4837,7 @@ export default definePlugin(() => {
       removeEventListener("experimental_changed", experimentalListener);
       removeEventListener("experimental_tool_applied", toolListener);
       removeEventListener("experimental_tool_applying", toolStartListener);
+      removeEventListener("mod_files_healed", healedListener);
       lifetime?.unregister();
     },
   };

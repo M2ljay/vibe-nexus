@@ -9047,7 +9047,15 @@ def _replaced_files(settings: dict) -> list:
     return out
 
 
-def _heal_replaced_files() -> list:
+# Replaced files bigger than this aren't copied aside (a 2 GB pak twice
+# over is too much disk); if Steam restores one, the mod is named instead.
+STASH_MAX_BYTES = 1 << 30
+# (path) -> (size, mtime_ns) of the mod's file when last seen in place:
+# unchanged means nothing to hash this round.
+_HEAL_SEEN: dict = {}
+
+
+def _heal_replaced_files(lost: list = None) -> list:
     """Steam's "verify files" (and some updates) put the game's own copy
     back over a file a mod replaced; the mod then silently stops working
     (Saints Row 2's DFEngine.dll, 2026-10-21). Keep a copy of each replaced
@@ -9055,6 +9063,7 @@ def _heal_replaced_files() -> list:
     shows up in its place. Returns the files put back."""
     healed = []
     seen = set()
+    wanted = set()
     for domain, base, rel in _replaced_files(_load_settings()):
         cur = os.path.join(base, *rel.split("/"))
         if cur.lower() in seen:
@@ -9062,8 +9071,22 @@ def _heal_replaced_files() -> list:
         seen.add(cur.lower())
         bak = cur + ".nexusbak"
         keep = os.path.join(STASH_DIR, domain, *rel.split("/"))
+        wanted.add(os.path.normcase(keep))
         if os.path.exists(cur + ".nexusoff") or not os.path.isfile(bak):
             continue  # switched off, or nothing to compare with
+        try:
+            st = os.stat(cur)
+            sig = (st.st_size, st.st_mtime_ns)
+        except OSError:
+            sig = None
+        if sig and _HEAL_SEEN.get(cur) == sig:
+            continue  # the mod's file, untouched since the last look
+        if sig and sig[0] > STASH_MAX_BYTES:
+            if _same_file(cur, bak) and lost is not None:
+                lost.append(f"{domain}: {rel}")
+            else:
+                _HEAL_SEEN[cur] = sig
+            continue
         if not os.path.isfile(cur):
             if os.path.isfile(keep):
                 shutil.copyfile(keep, cur)
@@ -9079,6 +9102,20 @@ def _heal_replaced_files() -> list:
             # The mod's file as it is now (first look, or a mod update).
             _makedirs_for(keep)
             shutil.copyfile(cur, keep)
+        try:
+            st = os.stat(cur)
+            _HEAL_SEEN[cur] = (st.st_size, st.st_mtime_ns)
+        except OSError:
+            pass
+    # Copies for mods since uninstalled go.
+    for root_dir, _d, names in os.walk(STASH_DIR):
+        for n in names:
+            p = os.path.join(root_dir, n)
+            if os.path.normcase(p) not in wanted:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
     return healed
 
 
@@ -9202,10 +9239,11 @@ async def _watch_tool_games() -> None:
                 if exe and await _process_running(exe):
                     running.add(exe)
             if not running:
-                healed = await asyncio.to_thread(_heal_replaced_files)
-                if healed:
-                    decky.logger.info(f"put back mod files Steam had restored: {healed}")
-                    await decky.emit("mod_files_healed", healed)
+                lost = []
+                healed = await asyncio.to_thread(_heal_replaced_files, lost)
+                if healed or lost:
+                    decky.logger.info(f"put back mod files Steam had restored: {healed}; too big to keep: {lost}")
+                    await decky.emit("mod_files_healed", healed, sorted(lost))
             for game in list((_load_settings().get("experimental_games") or {}).values()):
                 if (isinstance(game, dict) and game.get("nexusDomain") == experimental_games.SR2_DOMAIN
                         and not await _process_running(SR2_EXE)):

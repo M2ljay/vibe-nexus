@@ -10,6 +10,7 @@ from test_backend import main
 
 class HealTests(unittest.TestCase):
     def setUp(self):
+        main._HEAL_SEEN.clear()
         self.root = main._game_dir("Heal Game")
         shutil.rmtree(self.root, ignore_errors=True)
         os.makedirs(os.path.join(self.root, "bin"))
@@ -74,3 +75,24 @@ class HealTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HealExtraTests(HealTests):
+    def test_big_files_are_named_not_copied(self):
+        with unittest.mock.patch.object(main, "STASH_MAX_BYTES", 4):
+            lost = []
+            main._heal_replaced_files(lost)
+            self.assertEqual(lost, [])
+            shutil.copyfile(os.path.join(self.root, "patch.pak.nexusbak"), os.path.join(self.root, "patch.pak"))
+            main._HEAL_SEEN.clear()
+            main._heal_replaced_files(lost)
+            self.assertIn("healgame: patch.pak", lost)
+
+    def test_uninstalled_copies_go(self):
+        main._heal_replaced_files()
+        self.assertTrue(os.path.isfile(os.path.join(self.stash, "healgame", "patch.pak")))
+        s = main._load_settings()
+        s["installed"]["healgame"].pop("Mod")
+        main._save_settings(s)
+        main._heal_replaced_files()
+        self.assertFalse(os.path.isfile(os.path.join(self.stash, "healgame", "patch.pak")))
