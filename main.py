@@ -35756,7 +35756,8 @@ _wrap_plugin_update()
 
 
 # ---- What's in an archive Nexus has no listing for -------------------------------
-PEEK_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "archive-listings.json")
+# v2: v1 had every RAR down as unreadable.
+PEEK_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "archive-listings-2.json")
 _PEEK_LOCK = threading.Lock()
 
 
@@ -35787,6 +35788,8 @@ def _peek_cache_put(file_id: int, paths: list) -> None:
 def _ranged_listing(uri: str):
     """Paths inside the archive at `uri`, read with HTTP Range requests."""
     import urllib.request
+    # Nexus's CDN links carry the file's name as is, spaces and all.
+    uri = urllib.parse.quote(uri, safe=":/?#[]@!$&'()*+,;=%~")
 
     def get(start: int, length: int) -> tuple:
         req = urllib.request.Request(uri, headers={"Range": f"bytes={start}-{start + length - 1}",

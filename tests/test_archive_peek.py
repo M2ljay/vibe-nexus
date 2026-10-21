@@ -22,8 +22,14 @@ class PeekTests(unittest.TestCase):
             data = base64.b64decode(blob)
             self.assertEqual(sorted(ap.listing(reader(data), len(data))), WANT)
 
+    def test_rar(self):
+        d4 = base64.b64decode(fx.RAR4)
+        self.assertEqual(ap.listing(reader(d4), len(d4)), ["test.txt", "testlink", "testdir/test.txt"])
+        d5 = base64.b64decode(fx.RAR5)
+        self.assertEqual(ap.listing(reader(d5), len(d5)), [f"test{i}.bin" for i in range(1, 5)])
+
     def test_not_archives(self):
-        self.assertIsNone(ap.listing(reader(b"Rar!\x1a\x07\x01\x00" + b"\x00" * 100), 108))
+        self.assertIsNone(ap.listing(reader(b"Rar!\x1a\x07\x01\x00" + b"\xff" * 100), 108))
         self.assertIsNone(ap.listing(reader(b""), 0))
         data = base64.b64decode(fx.T_7Z)[:40]
         self.assertIsNone(ap.listing(reader(data), len(data)))  # truncated

@@ -33,8 +33,10 @@ class RangeReader(io.RawIOBase):
 
     BLOCK = 64 << 10
 
-    def __init__(self, fetch, size: int):
+    def __init__(self, fetch, size: int, block: int = 0):
         self._fetch, self._size, self._pos = fetch, size, 0
+        if block:
+            self.BLOCK = block
         self._blocks: dict = {}
         self.fetched = 0
 
@@ -302,6 +304,109 @@ def seven_listing(fetch_abs, size: int) -> list:
     return []
 
 
+# ---- RAR ---------------------------------------------------------------------
+# A header sits before each file, and each says how much data follows it, so
+# the headers can be visited one by one, skipping the data between them.
+RAR5_SIG = b"Rar!\x1a\x07\x01\x00"
+RAR4_SIG = b"Rar!\x1a\x07\x00"
+MAX_RAR_BLOCKS = 4000
+
+
+def _vint(b: bytes, i: int) -> tuple:
+    value, shift = 0, 0
+    while True:
+        if i >= len(b):
+            raise ValueError("rar: header cut short")
+        c = b[i]
+        i += 1
+        value |= (c & 0x7F) << shift
+        if not c & 0x80:
+            return value, i
+        shift += 7
+        if shift > 63:
+            raise ValueError("rar: bad number")
+
+
+def rar5_listing(read_at, size: int) -> list:
+    out, pos = [], len(RAR5_SIG)
+    for _ in range(MAX_RAR_BLOCKS):
+        if pos + 7 > size:
+            break
+        head = read_at(pos, 16)
+        hsize, i = _vint(head, 4)
+        if hsize <= 0 or hsize > 1 << 21:
+            raise ValueError("rar: bad header size")
+        start = i  # header data begins after CRC and the size field
+        block = read_at(pos + start, hsize)
+        htype, j = _vint(block, 0)
+        hflags, j = _vint(block, j)
+        if htype == 4:
+            raise ValueError("rar: encrypted headers")
+        if hflags & 0x01:
+            _extra, j = _vint(block, j)
+        data_size = 0
+        if hflags & 0x02:
+            data_size, j = _vint(block, j)
+        if htype == 2:  # file
+            fflags, j = _vint(block, j)
+            _unp, j = _vint(block, j)
+            _attr, j = _vint(block, j)
+            if fflags & 0x02:
+                j += 4
+            if fflags & 0x04:
+                j += 4
+            _comp, j = _vint(block, j)
+            _host, j = _vint(block, j)
+            nlen, j = _vint(block, j)
+            name = block[j:j + nlen].decode("utf-8", "replace")
+            if not fflags & 0x01:  # not a directory
+                out.append(name.replace("\\", "/"))
+        elif htype == 5:  # end of archive
+            break
+        pos = pos + start + hsize + data_size
+    else:
+        raise TooMuch()
+    return out
+
+
+def rar4_listing(read_at, size: int) -> list:
+    out, pos = [], len(RAR4_SIG)
+    for _ in range(MAX_RAR_BLOCKS):
+        if pos + 7 > size:
+            break
+        head = read_at(pos, 7)
+        _crc, htype, flags, hsize = struct.unpack("<HBHH", head)
+        if hsize < 7:
+            raise ValueError("rar: bad header")
+        add = 0
+        if htype == 0x73 and flags & 0x80:
+            raise ValueError("rar: encrypted headers")
+        if htype == 0x74:  # file
+            block = read_at(pos, hsize)
+            pack, _unp, _host, _crc2, _time, _ver, _meth, nlen, _attr = struct.unpack(
+                "<IIBIIBBHI", block[7:32])
+            off = 32
+            if flags & 0x100:
+                pack |= struct.unpack("<I", block[32:36])[0] << 32
+                off = 40
+            raw = block[off:off + nlen].split(b"\x00")[0]
+            try:
+                name = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                name = raw.decode("cp437")
+            if (flags & 0xE0) != 0xE0:
+                out.append(name.replace("\\", "/"))
+            add = pack
+        elif flags & 0x8000:
+            add = struct.unpack("<I", read_at(pos + 7, 4))[0]
+        if htype == 0x7B:
+            break
+        pos += hsize + add
+    else:
+        raise TooMuch()
+    return out
+
+
 def listing(fetch, size: int):
     """Every file path in the archive, or None when it can't be read this way."""
     if size <= 0:
@@ -316,6 +421,13 @@ def listing(fetch, size: int):
             return seven_listing(fetch_abs, size)
         if head[:2] == ZIP_SIG:
             return zip_listing(reader)
+        if head[:7] == RAR4_SIG or head[:8] == RAR5_SIG:
+            small = RangeReader(fetch, size, block=8 << 10)
+
+            def read_at(o, n):
+                small.seek(o)
+                return small.read(n)
+            return (rar5_listing if head[:8] == RAR5_SIG else rar4_listing)(read_at, size)
     except (TooMuch, ValueError, zipfile.BadZipFile, lzma.LZMAError, struct.error,
             IndexError, UnicodeDecodeError, EOFError, OSError):
         return None
