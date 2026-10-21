@@ -8981,6 +8981,37 @@ def _sr2_gotr_view(rec: dict) -> list:
     return out
 
 
+# Juiced settings that stopped start-up freezes on 2026-10-21 (the game hung
+# right after setting up graphics, before the controller): Windows' own
+# XInput instead of SDL (which grabs Steam's virtual controller), and no
+# rumble (Juiced's readme: fixes load and save crashes).
+SR2_JUICED_INI = {"SDL": "0", "ForceDisableVibration": "1"}
+
+
+def _sr2_juiced_defaults(root: str) -> list:
+    """Apply SR2_JUICED_INI to juiced.ini. Returns the keys changed."""
+    path = os.path.join(root, "juiced.ini")
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return []
+    changed = []
+    out = []
+    for line in raw.split(b"\n"):
+        key = line.split(b"=", 1)[0].strip().decode(errors="replace") if b"=" in line else ""
+        if key in SR2_JUICED_INI and not line.lstrip().startswith(b";"):
+            want = f"{key}={SR2_JUICED_INI[key]}".encode()
+            if line.rstrip(b"\r") != want:
+                changed.append(key)
+                line = want + (b"\r" if line.endswith(b"\r") else b"")
+        out.append(line)
+    if changed:
+        with open(path, "wb") as f:
+            f.write(b"\n".join(out))
+    return changed
+
+
 def _sr2_restore_exe(root: str) -> bool:
     orig = os.path.join(root, SR2_UNPATCHED)
     if not os.path.isfile(orig):
@@ -24866,6 +24897,9 @@ query Link($slug: String!, $domainName: String!) {
             if result.get("ok") and game_domain == experimental_games.SR2_DOMAIN:
                 err = await asyncio.to_thread(_sr2_patch_exe, result["install_path"])
                 await asyncio.to_thread(_sr2_keep_juiced, result["install_path"])
+                set_ini = await asyncio.to_thread(_sr2_juiced_defaults, result["install_path"])
+                if set_ini:
+                    decky.logger.info(f"Juiced settings set: {set_ini}")
                 decky.logger.info(f"Juiced exe patch: {err or 'applied'}")
                 if err:
                     result["warning"] = (

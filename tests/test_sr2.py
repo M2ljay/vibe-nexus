@@ -250,5 +250,21 @@ class GotRTests(unittest.TestCase):
             shutil.rmtree(root, ignore_errors=True)
 
 
+
+class JuicedIniTests(unittest.TestCase):
+    def test_defaults(self):
+        root = tempfile.mkdtemp()
+        try:
+            p = os.path.join(root, "juiced.ini")
+            with open(p, "wb") as f:
+                f.write(b"[Input]\r\n; Swaps xinput with SDL\r\nSDL=1\r\n[Debug]\r\nForceDisableVibration=0\r\nX=1\r\n")
+            self.assertEqual(sorted(main._sr2_juiced_defaults(root)), ["ForceDisableVibration", "SDL"])
+            with open(p, "rb") as f:
+                self.assertEqual(f.read(), b"[Input]\r\n; Swaps xinput with SDL\r\nSDL=0\r\n[Debug]\r\nForceDisableVibration=1\r\nX=1\r\n")
+            self.assertEqual(main._sr2_juiced_defaults(root), [])
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
