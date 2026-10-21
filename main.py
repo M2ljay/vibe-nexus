@@ -7458,6 +7458,11 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
+    saves = experimental_games.save_files(rel_files)
+    if saves:
+        key = _install_save_mod(scratch, saves, game, game_domain, base_record)
+        if key:
+            return key
     try:
         root_entries = set(os.listdir(install_path))
     except OSError:
@@ -7637,6 +7642,101 @@ def _clash_note(off: list, over: list) -> str:
     if over:
         parts.append(f"Replaced some files from {', '.join(over)}.")
     return " ".join(parts)
+
+
+# ---- Save-file mods -----------------------------------------------------------
+SAVE_BACKUPS = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "save-backups")
+_SAVE_SKIP = {"microsoft", "packages", "google", "mozilla", "temp", "nvidia", "amd", "intel",
+              "discord", "spotify", "steam", "node_modules", "cache", "crashdumps", "d3dscache",
+              "programs", "comms", "connecteddevicesplatform", "pip", "npm", "jetbrains",
+              "decky", "homebrew", "claude", "electron", "code"}
+
+
+def _save_roots(game: dict) -> list:
+    home = os.path.expanduser("~")
+    docs = _documents_dir()
+    roots = [docs, os.path.join(home, "Saved Games"),
+             os.environ.get("APPDATA", ""), os.environ.get("LOCALAPPDATA", ""),
+             os.path.join(os.path.dirname(os.environ.get("LOCALAPPDATA", "") or ""), "LocalLow")]
+    # Steam Cloud games keep saves in Steam's userdata/<account>/<appid>.
+    gdir = _game_dir(game.get("installDirName") or "")
+    steam = os.path.dirname(os.path.dirname(os.path.dirname(gdir)))
+    users = os.path.join(steam, "userdata")
+    try:
+        for acct in os.listdir(users):
+            p = os.path.join(users, acct, str(int(game.get("appId") or 0)))
+            if os.path.isdir(p):
+                roots.append(p)
+    except (OSError, ValueError):
+        pass
+    roots.append(gdir)
+    return [r for r in roots if r and os.path.isdir(r)]
+
+
+def _find_save_dir(game: dict, save_names: list) -> str:
+    """The folder where this game keeps saves like the ones a mod brings,
+    found by looking for the same files on this PC. "" if none."""
+    best, best_score, seen = "", 0, 0
+    for root in _save_roots(game):
+        for cur, dirs, names in os.walk(root):
+            depth = cur[len(root):].count(os.sep)
+            dirs[:] = [d for d in dirs if d.lower() not in _SAVE_SKIP and not d.startswith(".")] \
+                if depth < 5 else []
+            seen += 1
+            if seen > 60000:
+                break
+            score = experimental_games.score_save_dir(
+                cur, {n.lower() for n in names}, save_names, game.get("displayName") or "")
+            if score > best_score:
+                best, best_score = cur, score
+    return best
+
+
+def _install_save_mod(scratch: str, saves: list, game: dict, game_domain: str,
+                      base_record: dict) -> str:
+    """Put a save-file mod's saves where the game keeps its own, after
+    zipping that folder up. Uninstalling puts your own saves back."""
+    target = _find_save_dir(game, saves)
+    if not target:
+        decky.logger.info(f"save mod {base_record.get('name')!r}: no save folder found for {saves[:3]}")
+        return ""
+    import zipfile
+    os.makedirs(os.path.join(SAVE_BACKUPS, game_domain), exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup = os.path.join(SAVE_BACKUPS, game_domain, f"{stamp}.zip")
+    with zipfile.ZipFile(backup, "w", zipfile.ZIP_DEFLATED) as z:
+        for cur, _d, names in os.walk(target):
+            for n in names:
+                p = os.path.join(cur, n)
+                z.write(p, os.path.relpath(p, target))
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(base_record.get("name") or "save")
+    prev = installed.get(key) or {}
+    owned = {r.lower() for r in prev.get("files") or []}
+    files, backups = [], list(prev.get("backups") or [])
+    for src in saves:
+        name = src.split("/")[-1]
+        dst = os.path.join(target, name)
+        if os.path.isfile(dst):
+            if name.lower() not in owned and not os.path.exists(dst + ".nexusbak"):
+                os.replace(dst, dst + ".nexusbak")
+                backups.append(name)
+            else:
+                os.remove(dst)
+        shutil.copyfile(os.path.join(scratch, *src.split("/")), dst)
+        files.append(name)
+    _force_rmtree(scratch)
+    installed[key] = _merge_install_record(prev or None, {
+        **base_record, "mode": "files", "target": ".", "base": target, "files": files,
+        "backups": backups, "saveMod": True,
+        "warning": (f"Saves copied into {target}. Your own were backed up first ({backup}) and "
+                    "come back when you uninstall this. If the game syncs saves with Steam Cloud, "
+                    "say 'keep local' if it asks."),
+    })
+    _save_settings(settings)
+    decky.logger.info(f"save mod {base_record.get('name')!r}: {files} -> {target}, backup {backup}")
+    return key
 
 
 def _refresh_experimental_inspection(game_domain: str) -> bool:
@@ -9113,8 +9213,9 @@ def _replaced_files(settings: dict) -> list:
     for domain, game in games.items():
         root = _game_dir(game.get("installDirName") or "")
         for rec in (settings.get("installed", {}).get(domain) or {}).values():
-            if not isinstance(rec, dict) or rec.get("mode") != "files" or rec.get("enabled") is False:
-                continue
+            if not isinstance(rec, dict) or rec.get("mode") != "files" or rec.get("enabled") is False \
+                    or rec.get("saveMod"):
+                continue  # (the game rewrites its saves itself)
             target = rec.get("target") or "."
             base = (rec.get("base") or root) if target in (".", "") else os.path.join(root, *target.split("/"))
             out += [(domain, base, r) for r in rec.get("backups") or [] if _safe_rel_path(r)]

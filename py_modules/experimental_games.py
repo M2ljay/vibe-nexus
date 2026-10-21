@@ -929,6 +929,34 @@ def loose_without_gotr(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def save_files(rel_files: list) -> list:
+    """The save files of an archive made only of saves (and readmes), else []."""
+    files = [f.replace("\\", "/") for f in rel_files or [] if f and not f.endswith("/")]
+    payload = [f for f in files if not f.lower().endswith(_DOC_EXTS)]
+    if payload and all(any(h in f.lower().split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f.lower()
+                       for f in payload):
+        return payload
+    return []
+
+
+_NAME_WORDS = re.compile(r"[a-z0-9]+")
+
+
+def score_save_dir(path: str, names: set, save_names: list, game_name: str) -> int:
+    """How likely `path` (holding files `names`, lower-case) is where this
+    game keeps the saves an archive brings: the same file names count most,
+    the same kind of file next, the game's name in the path breaks ties."""
+    want = {n.split("/")[-1].lower() for n in save_names}
+    exts = {os.path.splitext(n)[1] for n in want if os.path.splitext(n)[1]}
+    exact = len(want & names)
+    kind = sum(1 for n in names if os.path.splitext(n)[1] in exts and exts - {".dat"})
+    if not exact and not kind:
+        return 0
+    words = set(_NAME_WORDS.findall((game_name or "").lower())) - {"the", "of", "and", "edition"}
+    in_path = sum(1 for w in words if w in path.lower())
+    return exact * 100 + min(kind, 20) * 5 + in_path
+
+
 def flat_variants(flat_rel: list) -> dict:
     """Mods that ship alternatives (Optional/Darker Nights/x.xtbl beside
     The Mod/x.xtbl): {folder: [files]} for every folder holding a file
@@ -996,7 +1024,7 @@ VERDICTS = {
     "program": "is a program you run on the desktop",
     "no_target": "has no clear place to go - would land in the mods folder unused",
     "ue_config": "is a settings tweak (Engine.ini), placed in the game's config folder",
-    "save_file": "is a save file - copy it yourself if you want it",
+    "save_file": "is a save file - goes into the game's save folder (yours are backed up first)",
     "cheat_table": "is a Cheat Engine table - used from the desktop, not installed",
     "reshade_preset": "is a ReShade preset - needs ReShade installed first",
     "unknown": "has no published file list to check",
@@ -1004,7 +1032,7 @@ VERDICTS = {
 
 
 WORKING_VERDICTS = ("mods_folder", "game_folder", "wizard", "tool_managed",
-                    "loader", "ue_config")
+                    "loader", "ue_config", "save_file")
 
 UE_CONFIG_NAMES = {"engine.ini", "gameusersettings.ini", "game.ini", "input.ini",
                    "scalability.ini", "deviceprofiles.ini"}
