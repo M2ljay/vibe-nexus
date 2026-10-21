@@ -27,6 +27,7 @@ import decky
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "py_modules"))
 import experimental_games  # noqa: E402 - needs the py_modules path above
 import reloaded_ii  # noqa: E402
+import xenoverse2  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7461,6 +7462,8 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     base = install_path
     plan = None
     merge = game.get("mergeInto")
+    if merge and experimental_games.only_programs(rel_files):
+        return ""  # an installer program: refused as one, not merged
     if merge:
         merge_root = merge.split("/")[0].lower() if merge != "." else ""
         tops = {f.split("/")[0].lower() for f in rel_files}
@@ -8329,10 +8332,429 @@ async def _reloaded_apply(game: dict) -> dict:
     return out
 
 
+# ---- Dragon Ball Xenoverse 2: XV2 Patcher + XV2 Mods Installer -------------------
+
+XV2_TOOLS_DIR = os.path.join(DOWNLOADS_DIR, "xv2tools")
+_BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+
+
+def _known_folder(guid_text: str, fallback: str) -> str:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import uuid
+            guid = uuid.UUID(guid_text)
+            buf = ctypes.c_wchar_p()
+            gbytes = (ctypes.c_byte * 16).from_buffer_copy(guid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(
+                    ctypes.byref(gbytes), 0, None, ctypes.byref(buf)) == 0:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                if path:
+                    return path
+        except Exception:  # noqa: BLE001 - fall back to the usual place
+            pass
+    return os.path.join(os.path.expanduser("~"), fallback)
+
+
+def _user_downloads_dir() -> str:
+    return _known_folder("374DE290-123F-4565-9164-39C4925E467B", "Downloads")
+
+
+def _xv2_search_dirs() -> list:
+    downloads = _user_downloads_dir()
+    return [d for d in (XV2_TOOLS_DIR, downloads, os.path.join(downloads, "Eternity Tools")) if d]
+
+
+async def _xv2_locate_tools(work: str) -> dict:
+    """Find the patcher and the installer: folders someone already
+    extracted under Downloads, then archives there or in our own cache."""
+    found = {}
+    for d in _xv2_search_dirs():
+        try:
+            subs = [os.path.join(d, n) for n in os.listdir(d)
+                    if os.path.isdir(os.path.join(d, n))
+                    and re.search(r"eternity|xv2|xenoverse", n, re.I)]
+        except OSError:
+            continue
+        for sub in subs:
+            for k, v in (await asyncio.to_thread(xenoverse2.find_tools, sub)).items():
+                found.setdefault(k, v)
+    if "patcher" in found and "installer" in found:
+        return found
+    for i, archive in enumerate(xenoverse2.candidate_archives(_xv2_search_dirs())[:6]):
+        dest = os.path.join(work, str(i))
+        _force_rmtree(dest)
+        os.makedirs(dest, exist_ok=True)
+        err = await _extract_archive(archive, dest)
+        if err:
+            decky.logger.info(f"XV2 tools: could not unpack {archive}: {err[:120]}")
+            continue
+        for k, v in (await asyncio.to_thread(xenoverse2.find_tools, dest)).items():
+            if k not in found:
+                found[k] = v
+                decky.logger.info(f"XV2 tools: {k} found in {archive}")
+        if "patcher" in found and "installer" in found:
+            break
+    return found
+
+
+async def _xv2_fetch_tools() -> str:
+    """Try to download Eternity Tools from its videogamemods.com page into
+    XV2_TOOLS_DIR. Returns the saved archive, or ""."""
+    headers = {"User-Agent": _BROWSER_UA, "Accept": "*/*"}
+    tried = []
+    try:
+        async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=600, sock_connect=30),
+                headers=headers) as session:
+            async def get(url):
+                async with session.get(url, ssl=SSL_CONTEXT, allow_redirects=True) as resp:
+                    return resp.status, str(resp.url), resp.headers.get("Content-Disposition", ""), await resp.read()
+
+            status, base, _cd, body = await get(xenoverse2.TOOLS_PAGE)
+            if status != 200:
+                decky.logger.info(f"XV2 tools page: HTTP {status}")
+                return ""
+            queue = xenoverse2.download_links(body.decode("utf-8", "replace"), base)
+            depth = {u: 0 for u in queue}
+            while queue and len(tried) < 8:
+                url = queue.pop(0)
+                tried.append(url)
+                try:
+                    status, final, cd, blob = await get(url)
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    decky.logger.info(f"XV2 tools: {url}: {e!r}")
+                    continue
+                if status == 200 and xenoverse2.looks_like_archive(blob):
+                    m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)', cd or "")
+                    name = os.path.basename((m.group(1) if m else final.split("?")[0]).strip())
+                    if not name.lower().endswith((".zip", ".7z", ".rar")):
+                        ext = ".7z" if blob[:2] == b"7z" else ".rar" if blob[:3] == b"Rar" else ".zip"
+                        name = "Eternity Tools" + ext
+                    if not re.search(r"eternity|xv2|xenoverse", name, re.I):
+                        name = "Eternity Tools - " + name
+                    os.makedirs(XV2_TOOLS_DIR, exist_ok=True)
+                    path = os.path.join(XV2_TOOLS_DIR, _safe_name(name) or "Eternity Tools.zip")
+                    with open(path, "wb") as f:
+                        f.write(blob)
+                    decky.logger.info(f"XV2 tools: downloaded {len(blob)} bytes from {final} as {path}")
+                    return path
+                if status == 200 and depth.get(url, 0) < 1:
+                    for nxt in xenoverse2.download_links(blob[:400000].decode("utf-8", "replace"), final):
+                        if nxt not in depth:
+                            depth[nxt] = depth.get(url, 0) + 1
+                            queue.append(nxt)
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
+        decky.logger.info(f"XV2 tools download failed: {e!r}")
+    decky.logger.info(f"XV2 tools: no download found; tried {tried}")
+    return ""
+
+
+def _xv2_installer_ini_path() -> str:
+    return os.path.join(os.environ.get("APPDATA", ""), "XV2INS", "xv2ins.ini")
+
+
+def _xv2_copy_tools(root: str, found: dict) -> tuple:
+    files, backups = [], []
+    plan = (xenoverse2.patcher_files(found["patcher"])
+            + xenoverse2.installer_files(found["installer"]))
+    for src, rel in plan:
+        if not _safe_rel_path(rel):
+            continue
+        rel = _case_merge_rel(root, rel)
+        dst = os.path.join(root, *rel.split("/"))
+        if rel.lower() == xenoverse2.PATCHER_INI.lower() and os.path.isfile(dst):
+            continue  # someone's own patcher settings stay
+        _makedirs_for(dst)
+        if os.path.isfile(dst) and not os.path.exists(dst + ".nexusbak"):
+            os.replace(dst, dst + ".nexusbak")
+            backups.append(rel)
+        shutil.copyfile(src, dst)
+        files.append(rel)
+    ini = os.path.join(root, *xenoverse2.PATCHER_INI.split("/"))
+    try:
+        with open(ini, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    with open(ini, "w", encoding="utf-8") as f:
+        f.write(xenoverse2.patcher_ini(text))
+    os.makedirs(os.path.join(root, "data"), exist_ok=True)
+    cfg = _xv2_installer_ini_path()
+    try:
+        with open(cfg, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    _makedirs_for(cfg)
+    with open(cfg, "w", encoding="utf-8") as f:
+        f.write(xenoverse2.installer_ini(text, root))
+    return files, backups
+
+
+async def _xv2_setup(game_domain: str) -> dict:
+    """Step 1 for Xenoverse 2: XV2 Patcher and XV2 Mods Installer into the
+    game folder, both configured so they ask nothing on first use."""
+    game = _experimental_game_for(game_domain)
+    if not game or not xenoverse2.is_xv2_game(game):
+        return {"ok": False, "error": "Not Xenoverse 2"}
+    root = _game_dir(game.get("installDirName") or "")
+    if not os.path.isfile(os.path.join(root, *xenoverse2.EXE.split("/"))):
+        return {"ok": False, "error": "DBXV2.exe wasn't found in the game folder"}
+    if await _process_running("DBXV2.exe"):
+        return {"ok": False, "error": "Close the game first."}
+    if await _process_running(xenoverse2.INSTALLER_EXE):
+        return {"ok": False, "error": "Close XV2 Mods Installer first."}
+    work = os.path.join(DOWNLOADS_DIR, "xv2tools-work")
+    _force_rmtree(work)
+    os.makedirs(work, exist_ok=True)
+    try:
+        found = await _xv2_locate_tools(work)
+        if not ("patcher" in found and "installer" in found):
+            if await _xv2_fetch_tools():
+                found = await _xv2_locate_tools(work)
+        if not ("patcher" in found and "installer" in found):
+            missing = " and ".join(n for k, n in (("patcher", "XV2 Patcher"),
+                                                  ("installer", "XV2 Mods Installer"))
+                                   if k not in found)
+            if sys.platform == "win32":
+                try:
+                    os.startfile(xenoverse2.TOOLS_PAGE)  # noqa: S606 - the person's own browser
+                except OSError:
+                    pass
+            return {"ok": False, "openUrl": xenoverse2.TOOLS_PAGE, "error": (
+                f"Couldn't get {missing} automatically. The Eternity Tools page "
+                f"({xenoverse2.TOOLS_PAGE}) is open in your browser on the desktop: "
+                "press Download Mod, leave the download in your Downloads folder, "
+                "then press Step 1 again.")}
+        files, backups = await asyncio.to_thread(_xv2_copy_tools, root, found)
+    finally:
+        _force_rmtree(work)
+    try:
+        with open(os.path.join(root, *xenoverse2.PATCHER_DLL.split("/")), "rb") as f:
+            version = xenoverse2.patcher_version(f.read())
+    except OSError:
+        version = -1.0
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
+        "install_dir": game.get("installDirName") or "",
+        "files": files,
+        "backups": backups,
+        "tool": "xv2",
+        "version": str(version),
+    }
+    _save_settings(settings)
+    decky.logger.info(
+        f"XV2 tools installed for {game_domain}: patcher {version}, {len(files)} files, "
+        f"kept aside {backups}")
+    out = {"ok": True, "install_path": root, "files": len(files)}
+    if 0 <= version < xenoverse2.MIN_PATCHER:
+        out["warning"] = (f"This XV2 Patcher is version {version}; XV2 Mods Installer "
+                          f"needs {xenoverse2.MIN_PATCHER} or newer.")
+    return out
+
+
+def _xv2_windows(pid: int) -> list:
+    """[(hwnd, title)] of the visible top-level windows of a process."""
+    if sys.platform != "win32":
+        return []
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    out = []
+    proto = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(hwnd, _lp):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid and user32.IsWindowVisible(hwnd):
+            n = user32.GetWindowTextLengthW(hwnd)
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hwnd, buf, n + 1)
+            out.append((hwnd, buf.value))
+        return True
+
+    user32.EnumWindows(proto(cb), 0)
+    return out
+
+
+def _xv2_press_enter(hwnd, force: bool = False) -> None:
+    """Enter on a dialog: posted to its window, or - when that has not
+    closed it - with the window brought to the front."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    user32 = ctypes.windll.user32
+    if not force:
+        user32.PostMessageW(hwnd, 0x0100, 0x0D, 0x001C0001)  # WM_KEYDOWN VK_RETURN
+        user32.PostMessageW(hwnd, 0x0101, 0x0D, 0xC01C0001)  # WM_KEYUP
+        return
+    user32.ShowWindow(hwnd, 5)
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.2)
+    if user32.GetForegroundWindow() == hwnd:
+        user32.keybd_event(0x0D, 0x1C, 0, 0)
+        user32.keybd_event(0x0D, 0x1C, 2, 0)
+
+
+def _xv2_run_installer(exe: str, args: list, timeout: float) -> dict:
+    """Run xv2ins with .x2m paths, answering the dialogs that are safe to
+    answer (xenoverse2.auto_answer) and leaving any other for the person."""
+    import subprocess
+    try:
+        proc = subprocess.Popen([exe, *args], cwd=os.path.dirname(exe), env=_host_env())
+    except OSError as e:
+        if getattr(e, "winerror", None) == 740:  # needs elevation
+            rc = _run_elevated(exe, args, timeout)
+            return {"rc": rc, "elevated": True, "timeout": rc is None}
+        raise
+    pressed = {}
+    waiting = set()
+    t0 = time.monotonic()
+    while proc.poll() is None:
+        if time.monotonic() - t0 > timeout:
+            return {"rc": None, "timeout": True, "waiting": sorted(waiting)}
+        now = time.monotonic()
+        current = set()
+        for hwnd, title in _xv2_windows(proc.pid):
+            current.add(title)
+            if not xenoverse2.auto_answer(title):
+                if title:
+                    waiting.add(title)
+                continue
+            first, count = pressed.get(hwnd, (0.0, 0))
+            if now - first >= 1.5:
+                _xv2_press_enter(hwnd, force=count >= 2)
+                pressed[hwnd] = (now, count + 1)
+        waiting &= current
+        time.sleep(0.4)
+    return {"rc": proc.returncode, "answered": sum(c for _t, c in pressed.values())}
+
+
+def _xv2_installed_guids(root: str) -> set:
+    try:
+        names = os.listdir(os.path.join(root, *xenoverse2.INSTALL_DATA.split("/")))
+    except OSError:
+        names = []
+    return xenoverse2.installed_guids(names)
+
+
+def _xv2_open_installer(exe: str) -> bool:
+    import subprocess
+    try:
+        subprocess.Popen([exe], cwd=os.path.dirname(exe), env=_host_env())
+        return True
+    except OSError as e:
+        if getattr(e, "winerror", None) == 740 and sys.platform == "win32":
+            import ctypes
+            return ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", exe, None, os.path.dirname(exe), 1) > 32
+        decky.logger.warning(f"could not open xv2ins: {e!r}")
+        return False
+
+
+async def _xv2_apply(game: dict) -> dict:
+    """Bring xv2ins in line with the .x2m mods installed here: new or
+    changed ones are installed through it; ones removed or switched off
+    are listed for uninstalling in its window, which is opened for that."""
+    tool = "XV2 Mods Installer"
+    domain = game.get("nexusDomain") or ""
+    root = _game_dir(game.get("installDirName") or "")
+    exe = os.path.join(root, xenoverse2.INSTALLER_EXE)
+    store = os.path.join(root, xenoverse2.X2M_STORE)
+    present = {}
+    try:
+        for n in sorted(os.listdir(store)):
+            p = os.path.join(store, n)
+            if n.lower().endswith(xenoverse2.X2M_EXT) and os.path.isfile(p):
+                st = os.stat(p)
+                present[n] = f"{st.st_size}-{int(st.st_mtime)}"
+    except OSError:
+        pass
+    settings = _load_settings()
+    applied = dict((settings.get("xv2_applied") or {}).get(domain) or {})
+    pending = list((settings.get("xv2_pending") or {}).get(domain) or [])
+    if not present and not applied and not pending:
+        return {"ok": True, "tool": tool, "count": 0}
+    if not os.path.isfile(exe):
+        return {"ok": False, "tool": tool,
+                "error": "XV2 Mods Installer isn't in the game folder - run Step 1 first."}
+    if await _process_running("DBXV2.exe"):
+        return {"ok": False, "tool": tool,
+                "error": "Close the game first: the installer edits files the game has open."}
+    if await _process_running(xenoverse2.INSTALLER_EXE):
+        return {"ok": False, "tool": tool,
+                "error": "XV2 Mods Installer is open on the desktop - close it, then press Apply."}
+    to_install, gone = xenoverse2.plan_x2m(present, applied)
+    guids = await asyncio.to_thread(_xv2_installed_guids, root)
+    # Anything xv2ins no longer lists was uninstalled there: done with it.
+    pending = [p for p in pending if p.get("guid") and p["guid"] in guids]
+    for g in gone:
+        applied.pop(g["path"], None)
+        if g.get("guid") and g["guid"] in guids and not any(
+                p.get("guid") == g["guid"] for p in pending):
+            pending.append({"name": g.get("name") or g["path"], "guid": g["guid"]})
+    failed, result = [], {}
+    if to_install:
+        infos = {n: await asyncio.to_thread(xenoverse2.x2m_info, os.path.join(store, n))
+                 for n in to_install}
+        try:
+            result = await asyncio.to_thread(
+                _xv2_run_installer, exe,
+                xenoverse2.installer_args([os.path.join(store, n) for n in to_install]),
+                900)
+        except OSError as e:
+            return {"ok": False, "tool": tool, "error": f"Couldn't start XV2 Mods Installer: {e}"}
+        after = await asyncio.to_thread(_xv2_installed_guids, root)
+        new = after - guids
+        unknown = [n for n in to_install if not infos[n]["guid"]]
+        if len(unknown) == 1 and len(new) == 1:
+            # x2m.xml unreadable: the one record xv2ins just added is it.
+            infos[unknown[0]] = {**infos[unknown[0]], "guid": next(iter(new))}
+        for n in to_install:
+            info = infos[n]
+            ok = (info["guid"] in after) if info["guid"] else (result.get("rc") == 0)
+            if ok:
+                applied[n] = {"fp": present[n], "name": info["name"] or n, "guid": info["guid"]}
+                pending = [p for p in pending if p.get("guid") != info["guid"]]
+            else:
+                failed.append(info["name"] or n)
+        decky.logger.info(f"xv2ins run for {domain}: {result}, failed {failed}")
+    settings = _load_settings()
+    settings.setdefault("xv2_applied", {})[domain] = applied
+    settings.setdefault("xv2_pending", {})[domain] = pending
+    _save_settings(settings)
+    notes = []
+    if result.get("timeout"):
+        waiting = ", ".join(result.get("waiting") or [])
+        notes.append("XV2 Mods Installer is still waiting on the desktop"
+                     + (f" ({waiting})" if waiting else "") + " - answer it there.")
+    elif failed:
+        notes.append(f"Not installed: {', '.join(failed)}. Open XV2 Mods Installer on the "
+                     "desktop to see why.")
+    if pending and not result.get("timeout"):
+        opened = await asyncio.to_thread(_xv2_open_installer, exe)
+        names = ", ".join(p.get("name") or "?" for p in pending)
+        notes.append(
+            (f"XV2 Mods Installer is open on the desktop: select {names} and press Uninstall."
+             if opened else f"Uninstall {names} in XV2 Mods Installer (xv2ins.exe in the game folder)."))
+    out = {"ok": not result.get("timeout") and not failed, "tool": tool,
+           "count": len(applied)}
+    if notes:
+        out["note" if out["ok"] else "error"] = " ".join(notes)
+    if pending:
+        out["pendingUninstall"] = [p.get("name") for p in pending]
+    return out
+
+
 async def _tool_apply(game: dict) -> dict:
     kind = game.get("toolApply")
     if kind == "reloaded":
         return await _reloaded_apply(game)
+    if kind == "xv2ins":
+        return await _xv2_apply(game)
     result = await _overstrike_apply(game)
     result.setdefault("tool", "Overstrike")
     return result
@@ -8459,7 +8881,7 @@ def _schedule_tool_apply(game_domain: str, delay: float = 2.0) -> None:
     """Re-apply a tool-managed game's mods shortly after the last change,
     so a collection of 40 installs runs the tool once, not 40 times."""
     game = _experimental_game_for(game_domain)
-    if not game or game.get("toolApply") not in ("overstrike", "reloaded"):
+    if not game or game.get("toolApply") not in ("overstrike", "reloaded", "xv2ins"):
         return
     old = _TOOL_APPLY_TASKS.get(game_domain)
     if old and not old.done():
@@ -15994,6 +16416,15 @@ def _extractor_order(archive_path: str) -> tuple:
 async def _extract_archive(archive_path: str, dest_dir: str) -> str:
     """Extract an archive into dest_dir, trying each available extractor
     until one succeeds. Returns '' on success, error text otherwise."""
+    if archive_path.lower().endswith(xenoverse2.X2M_EXT):
+        # An .x2m is a zip, but it is the mod itself: XV2 Mods Installer
+        # reads it whole. Keep it as one file.
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.copyfile(archive_path, os.path.join(dest_dir, os.path.basename(archive_path)))
+            return ""
+        except OSError as e:
+            return f"copy: {e}"
     errors = []
     for name, build in _extractor_order(archive_path):
         argv = build(archive_path, dest_dir)
@@ -24090,6 +24521,12 @@ query Link($slug: String!, $domainName: String!) {
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
             return result
+        if install_kind == "xv2tools":
+            # Eternity Tools come from videogamemods.com, not Nexus.
+            result = await _xv2_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"XV2 Step 1 for {game_domain}: {result.get('error')}")
+            return result
         if install_kind == "reloaded2":
             # Reloaded-II comes from its own GitHub releases, not Nexus.
             result = await _reloaded_setup(game_domain)
@@ -31769,7 +32206,9 @@ query CollectionInstructions($slug: String!) {
         unchecked = [int(k) for k, g in games.items()
                      if isinstance(g, dict) and (
                          "frameworkChecked" not in g
-                         or g.get("profileVersion") != experimental_games.PROFILE_VERSION)]
+                         or g.get("profileVersion") != experimental_games.PROFILE_VERSION
+                         or (g.get("nexusDomain") == xenoverse2.DOMAIN
+                             and g.get("toolApply") != "xv2ins"))]
         if unchecked and not getattr(self, "_exp_checking", False):
             self._exp_checking = True
             asyncio.get_running_loop().create_task(
@@ -31969,6 +32408,11 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
+        if xenoverse2.apply_xv2_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: XV2 Patcher + xv2ins")
             return
         if reloaded_ii.apply_reloaded_profile(game):
             game["frameworkChecked"] = True
@@ -32203,7 +32647,7 @@ query CollectionInstructions($slug: String!) {
     async def apply_experimental_tool(self, app_id: int) -> dict:
         """Run a tool-managed game's mod tool now (the panel's Apply button)."""
         game = (_load_settings().get("experimental_games") or {}).get(str(int(app_id)))
-        if not game or game.get("toolApply") not in ("overstrike", "reloaded"):
+        if not game or game.get("toolApply") not in ("overstrike", "reloaded", "xv2ins"):
             return {"ok": False, "error": "This game has no mod tool to run"}
         result = await _tool_apply(game)
         if result.get("ok") and await _process_running(
@@ -32391,6 +32835,8 @@ query CollectionInstructions($slug: String!) {
                 int(row["appId"]), row["name"], row["installDir"], row["domain"],
                 row.get("nexusName") or row["name"], inspection)
             rule = _vortex_rules().get(row["domain"])
+            if xenoverse2.apply_xv2_profile(game):
+                rule = None
             if rule:
                 try:
                     roots = set(os.listdir(path))

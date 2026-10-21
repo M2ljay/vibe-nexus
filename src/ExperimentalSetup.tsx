@@ -52,10 +52,11 @@ export function toolAppliedToast(
     tool?: string;
     fetched?: string[];
     missing?: string[];
+    note?: string;
   }
 ): void {
   const tool = result.tool ?? "Overstrike";
-  const reloaded = tool === "Reloaded-II";
+  const reloaded = tool === "Reloaded-II" || tool === "XV2 Mods Installer";
   const what = reloaded ? "mod" : "mod file";
   const extra = [
     result.fetched?.length
@@ -64,6 +65,7 @@ export function toolAppliedToast(
     result.missing?.length
       ? `Still needed (not on Reloaded's feed - install from Nexus or GameBanana): ${result.missing.join(", ")}`
       : "",
+    result.note ?? "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -475,7 +477,9 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
             description={
               game.toolApply === "reloaded"
                 ? "Updates Reloaded-II's mod list for this game from what is installed here, and fetches libraries the mods need. Happens by itself after each change; use this if that failed."
-                : "Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
+                : game.toolApply === "xv2ins"
+                  ? "Installs new .x2m mods with XV2 Mods Installer, and opens its window on the desktop for any you removed. Happens by itself after each change; use this if that failed. Close the game first."
+                  : "Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
             }
             onClick={async () => {
               setBusy(true);

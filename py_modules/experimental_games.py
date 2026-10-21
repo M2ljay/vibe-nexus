@@ -874,7 +874,11 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
+    if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
+        return "tool_managed"
     merge = game.get("mergeInto")
+    if merge and only_programs(files):
+        return "program"
     if merge and payload_low and game.get("mergeBase"):
         return "mods_folder"
     if merge and payload_low and merge != ".":
@@ -1028,6 +1032,14 @@ def apply_vortex_rule(game: dict, rule: dict, root_entries: set) -> bool:
     if "Vortex" not in uc:
         game["underConstruction"] = (uc + " " + note).strip()
     return True
+
+
+def only_programs(rel_files: list) -> bool:
+    """An archive that is just an installer program (and its readme): it
+    has to be run, so merging it into a mod folder would only litter it."""
+    payload = [f.replace("\\", "/").lower() for f in rel_files or []
+               if f and not f.lower().endswith(_DOC_EXTS + (".installinfo",))]
+    return bool(payload) and all(f.endswith(_EXE_OR_INSTALLER) for f in payload)
 
 
 def plan_merge(rel_files: list, merge_rel: str, merge_entries: set) -> list:
