@@ -71,6 +71,17 @@ LOADERS = {
         "detect": "",  # the proxy dll's name depends on the game
         "url": "https://github.com/ThirteenAG/Ultimate-ASI-Loader",
     },
+    "sr2juiced": {
+        "name": "Juiced Patch",
+        "repo": "Clippy95/Saints-Row-2-Juiced-Patch",
+        "tag": r".",
+        "asset64": r"^SR2_JUICED[\w.-]*\.zip$",
+        "asset32": r"^SR2_JUICED[\w.-]*\.zip$",
+        "prerelease": False,
+        "target": "root",
+        "detect": "juiced.ini",
+        "url": "https://github.com/Clippy95/Saints-Row-2-Juiced-Patch",
+    },
 }
 
 # Names Ultimate ASI Loader works under, most broadly useful first.

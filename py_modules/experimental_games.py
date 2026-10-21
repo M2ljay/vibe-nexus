@@ -766,6 +766,58 @@ BETHESDA_GAMES = {
 }
 
 
+# Saints Row 2: loose files (tables, textures, models) load from the game's
+# mods folder once the community Juiced Patch is in (its loose.txt lists
+# "mods", one folder deep). Packfiles replace the game's own in its root.
+SR2_DOMAIN = "saintsrow2"
+SR2_LOOSE_EXTS = [".xtbl", ".tbl", ".cvtf", ".lua", ".le_strings", "_pc"]
+SR2_ROOT_FILES = (".vpp_pc", "shaders_pc")
+
+
+def apply_sr2_profile(game: dict, framework: dict) -> bool:
+    if game.get("nexusDomain") != SR2_DOMAIN:
+        return False
+    game["engine"] = "sr2"
+    game["modsSubdir"] = "mods"
+    game["flatModExtensions"] = list(SR2_LOOSE_EXTS)
+    game.pop("mergeInto", None)
+    game.pop("mergeBase", None)
+    game["framework"] = framework
+    game["underConstruction"] = (
+        "Experimental generic support. Saints Row 2 mods are loose game files: "
+        "they go flat into the game's mods folder, which the Juiced Patch "
+        "(Step 1) makes the game read. Replacement packfiles (patch.vpp_pc) "
+        "go beside the game, with its own kept aside. Mods with several "
+        "versions inside ask which one to install. Save files and ReShade "
+        "presets are not installed."
+    )
+    return True
+
+
+def flat_variants(flat_rel: list) -> dict:
+    """Mods that ship alternatives (Optional/Darker Nights/x.xtbl beside
+    The Mod/x.xtbl): {folder: [files]} for every folder holding a file
+    whose name another folder also has; {} when no names clash."""
+    by_name = {}
+    for f in flat_rel:
+        f = f.replace("\\", "/")
+        by_name.setdefault(f.split("/")[-1].lower(), set()).add(f.rsplit("/", 1)[0] if "/" in f else "")
+    clashing = {d for dirs in by_name.values() if len(dirs) > 1 for d in dirs}
+    if not clashing:
+        return {}
+    return {d: sorted(f for f in flat_rel if (f.rsplit("/", 1)[0] if "/" in f else "") == d)
+            for d in sorted(clashing)}
+
+
+def pick_flat_variant(flat_rel: list, chosen: str) -> list:
+    """Every file once: the chosen folder's version wins a clash; other
+    clashes go to the first folder in name order."""
+    picked = {}
+    for f in sorted(flat_rel, key=lambda x: (not (x.rsplit("/", 1)[0] if "/" in x else "") == chosen, x)):
+        picked.setdefault(f.split("/")[-1].lower(), f)
+    return sorted(picked.values())
+
+
 def apply_bethesda_profile(game: dict) -> bool:
     """dataDir install settings for a known Bethesda domain. False if the
     domain is not one of BETHESDA_GAMES."""
@@ -822,7 +874,7 @@ WORKING_VERDICTS = ("mods_folder", "game_folder", "wizard", "tool_managed",
 UE_CONFIG_NAMES = {"engine.ini", "gameusersettings.ini", "game.ini", "input.ini",
                    "scalability.ini", "deviceprofiles.ini"}
 _SAVE_HINTS = (".sav", ".save", "savedata", "savegame", "slot0", "slot1", "slot2",
-               "gta3sf", "gtavcsf", "gtasasf")
+               "gta3sf", "gtavcsf", "gtasasf", ".bbsave", "profile.dat")
 
 
 def ue_config_plan(rel_files: list):

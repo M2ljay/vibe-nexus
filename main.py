@@ -8417,7 +8417,14 @@ async def _xv2_fetch_tools() -> str:
             if status != 200:
                 decky.logger.info(f"XV2 tools page: HTTP {status}")
                 return ""
-            queue = xenoverse2.download_links(body.decode("utf-8", "replace"), base)
+            page = body.decode("utf-8", "replace")
+            queue = xenoverse2.download_links(page, base)
+            if not queue:
+                # For the next look: what the page's download button is made of.
+                at = page.lower().find("download")
+                decky.logger.info(
+                    f"XV2 tools page: {len(page)} chars, no download link; around "
+                    f"'download': {page[max(0, at - 600):at + 900]!r}")
             depth = {u: 0 for u in queue}
             while queue and len(tried) < 8:
                 url = queue.pop(0)
@@ -8747,6 +8754,18 @@ async def _xv2_apply(game: dict) -> dict:
     if pending:
         out["pendingUninstall"] = [p.get("name") for p in pending]
     return out
+
+
+def _sr2_framework() -> dict:
+    fw = generic_loaders.framework_entry("sr2juiced", "")
+    fw["warning"] = (
+        "Saints Row 2's loose-file mods need the community Juiced Patch, which "
+        "also fixes much of the PC port. Step 1 downloads it from its GitHub "
+        "releases into the game folder; the first launch afterwards patches "
+        "the game's exe (if it sits on a black screen, wait 30 seconds, quit "
+        "and start again). If the game won't start, install Microsoft's "
+        "Visual C++ 2010 and 2015-2022 runtimes. Remove takes it out again.")
+    return fw
 
 
 async def _tool_apply(game: dict) -> dict:
@@ -23460,6 +23479,32 @@ query Link($slug: String!, $domainName: String!) {
                     "error": _flat_refusal_reason(
                         leftover, flat_extensions or [], mod_name),
                 }
+            if not hd2_layout and game_domain == experimental_games.SR2_DOMAIN:
+                rel_flat = [os.path.relpath(f, scratch).replace(os.sep, "/") for f in flat]
+                alts = experimental_games.flat_variants(rel_flat)
+                if alts and payload_choice == "*":
+                    flat = [os.path.join(scratch, *r.split("/")) for r in
+                            experimental_games.pick_flat_variant(rel_flat, "")]
+                elif alts and payload_choice:
+                    if payload_choice not in alts:
+                        _force_rmtree(scratch)
+                        return {"ok": False, "error": "That option wasn't in the archive"}
+                    flat = [os.path.join(scratch, *r.split("/")) for r in
+                            experimental_games.pick_flat_variant(rel_flat, payload_choice)]
+                elif alts:
+                    options = sorted(alts)
+                    _force_rmtree(scratch)
+                    try:
+                        os.remove(archive_path)
+                    except OSError:
+                        pass
+                    await _emit_progress(mod_id, "error", 0, "choose a version")
+                    return {
+                        "ok": False,
+                        "needs_choice": True,
+                        "options": options,
+                        "option_labels": _payload_choice_labels(options),
+                    }
             if hd2_layout:
                 variants = _hd2_variant_groups(flat)
                 if variants:
@@ -23513,6 +23558,7 @@ query Link($slug: String!, $domainName: String!) {
             os.makedirs(mods_path, exist_ok=True)
             moved = []
             placed = {}
+            sr2_root_files, sr2_root_backups = [], []
             if hd2_layout:
                 # Renumber per archive hash instead of overwriting: HD2
                 # loads <hash>.patch_0, patch_1, ... in sequence, so two
@@ -23542,6 +23588,20 @@ query Link($slug: String!, $domainName: String!) {
                 for src in flat:
                     name = os.path.basename(src)
                     rel = name
+                    if (game_domain == experimental_games.SR2_DOMAIN
+                            and name.lower().endswith(experimental_games.SR2_ROOT_FILES)):
+                        # A replacement packfile: the game reads it from its
+                        # own folder, in place of the one it ships.
+                        dst = os.path.join(install_path, name)
+                        if os.path.isfile(dst) and not os.path.exists(dst + ".nexusbak"):
+                            os.replace(dst, dst + ".nexusbak")
+                            sr2_root_backups.append(name)
+                        elif os.path.isfile(dst):
+                            os.remove(dst)
+                        shutil.move(src, dst)
+                        sr2_root_files.append(name)
+                        placed[src] = name
+                        continue
                     if game_domain == "nierautomata":
                         # NieR reads a loose file only at the path its own
                         # archives keep it under (data/pl/pl000d.dat), so
@@ -23632,6 +23692,14 @@ query Link($slug: String!, $domainName: String!) {
                 # note an older one left.
                 "warning": skip_note,
             }
+            if sr2_root_files:
+                # Packfiles beside the game as well: one record from the
+                # game folder, so uninstall takes both and restores its own.
+                _new_record["target"] = "."
+                _new_record["files"] = [f"{mods_subdir}/{m}" for m in moved] + sr2_root_files
+                _new_record["backups"] = sorted(
+                    set((installed.get(record_key) or {}).get("backups") or [])
+                    | set(sr2_root_backups))
             installed[record_key] = _merge_install_record(
                 installed.get(record_key), _new_record
             )
@@ -32208,7 +32276,9 @@ query CollectionInstructions($slug: String!) {
                          "frameworkChecked" not in g
                          or g.get("profileVersion") != experimental_games.PROFILE_VERSION
                          or (g.get("nexusDomain") == xenoverse2.DOMAIN
-                             and g.get("toolApply") != "xv2ins"))]
+                             and g.get("toolApply") != "xv2ins")
+                         or (g.get("nexusDomain") == experimental_games.SR2_DOMAIN
+                             and g.get("engine") != "sr2"))]
         if unchecked and not getattr(self, "_exp_checking", False):
             self._exp_checking = True
             asyncio.get_running_loop().create_task(
@@ -32408,6 +32478,11 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
+        if experimental_games.apply_sr2_profile(game, _sr2_framework()):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: Saints Row 2 + Juiced Patch")
             return
         if xenoverse2.apply_xv2_profile(game):
             game["frameworkChecked"] = True
@@ -32835,7 +32910,8 @@ query CollectionInstructions($slug: String!) {
                 int(row["appId"]), row["name"], row["installDir"], row["domain"],
                 row.get("nexusName") or row["name"], inspection)
             rule = _vortex_rules().get(row["domain"])
-            if xenoverse2.apply_xv2_profile(game):
+            if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
+                    game, _sr2_framework()):
                 rule = None
             if rule:
                 try:
