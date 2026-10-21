@@ -8756,6 +8756,58 @@ async def _xv2_apply(game: dict) -> dict:
     return out
 
 
+SR2_EXE = "SR2_pc.exe"
+SR2_UNPATCHED = "sr2_pc_unpatched.exe"
+
+
+def _sr2_patch_exe(root: str) -> str:
+    """What JuicedSteamXDel.bat does, without its admin prompt: keep the
+    Steam exe as sr2_pc_unpatched.exe and build the decrypted one Juiced
+    needs with the xdelta3 it ships. Juiced runs that .bat itself on the
+    first launch, and on 2026-10-21 it stopped half way and left the
+    game with no SR2_pc.exe at all. Returns "" or what went wrong; the
+    game always ends with an exe."""
+    import subprocess
+    exe = os.path.join(root, SR2_EXE)
+    orig = os.path.join(root, SR2_UNPATCHED)
+    xd = os.path.join(root, "patches", "xdelta3.exe")
+    patch = os.path.join(root, "patches", "JuicedSteamXDel.vcdiff")
+    if not (os.path.isfile(xd) and os.path.isfile(patch)):
+        return "the Juiced download has no exe patch"
+    if not os.path.isfile(orig):
+        if not os.path.isfile(exe):
+            return f"{SR2_EXE} is missing - verify the game's files in Steam"
+        os.replace(exe, orig)
+    tmp = exe + ".new"
+    try:
+        proc = subprocess.run([xd, "-d", "-f", "-s", orig, patch, tmp], cwd=root,
+                              env=_host_env(), capture_output=True, timeout=180, **_NO_WINDOW)
+        ok = proc.returncode == 0 and os.path.isfile(tmp) and os.path.getsize(tmp) > 1 << 20
+        err = (proc.stderr or b"").decode(errors="replace").strip()[:200]
+    except (OSError, subprocess.SubprocessError) as e:
+        ok, err = False, str(e)
+    if ok:
+        os.replace(tmp, exe)
+        return ""
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    if not os.path.isfile(exe):
+        # Already patched by an earlier run, or an exe Juiced doesn't
+        # know: either way the game keeps one that starts.
+        shutil.copyfile(orig, exe)
+    return f"xdelta: {err or 'failed'}"
+
+
+def _sr2_restore_exe(root: str) -> bool:
+    orig = os.path.join(root, SR2_UNPATCHED)
+    if not os.path.isfile(orig):
+        return False
+    os.replace(orig, os.path.join(root, SR2_EXE))
+    return True
+
+
 def _sr2_framework() -> dict:
     fw = generic_loaders.framework_entry("sr2juiced", "")
     fw["warning"] = (
@@ -24586,6 +24638,13 @@ query Link($slug: String!, $domainName: String!) {
             )
         if install_kind == "githubLoader":
             result = await _github_loader_setup(game_domain)
+            if result.get("ok") and game_domain == experimental_games.SR2_DOMAIN:
+                err = await asyncio.to_thread(_sr2_patch_exe, result["install_path"])
+                decky.logger.info(f"Juiced exe patch: {err or 'applied'}")
+                if err:
+                    result["warning"] = (
+                        f"Juiced Patch is in, but its exe patch didn't apply ({err}). "
+                        "The game still starts; Juiced may ask to patch it on first launch.")
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
             return result
@@ -32714,6 +32773,10 @@ query CollectionInstructions($slug: String!) {
             removed = await asyncio.to_thread(
                 _remove_tracked_framework, game, fw.get("nexusModId"),
                 fw.get("installSubdir") or "")
+            if game.get("nexusDomain") == experimental_games.SR2_DOMAIN:
+                # Juiced's exe goes too: the Steam original comes back.
+                await asyncio.to_thread(
+                    _sr2_restore_exe, _game_dir(game.get("installDirName") or ""))
             return {"ok": True, "removed": removed}
         except Exception as e:  # noqa: BLE001
             decky.logger.exception("remove_experimental_framework crashed")

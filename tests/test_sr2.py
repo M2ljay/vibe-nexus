@@ -1,6 +1,9 @@
 """Saints Row 2: loose files into mods/ (Juiced Patch), packfiles beside the game."""
 import os
+import shutil
+import stat
 import sys
+import tempfile
 import unittest
 
 from test_backend import main  # stubs decky/aiohttp and imports main.py
@@ -54,6 +57,50 @@ class SR2Tests(unittest.TestCase):
         rel = [{"tag_name": "v8.0.1", "assets": [{"name": "Source.zip"},
                                                  {"name": "SR2_JUICED.zip", "browser_download_url": "u"}]}]
         self.assertEqual(gl.pick_asset(rel, spec, False), ("v8.0.1", "SR2_JUICED.zip", "u"))
+
+
+class ExePatchTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.root, "patches"))
+        with open(os.path.join(self.root, "SR2_pc.exe"), "wb") as f:
+            f.write(b"steam")
+        open(os.path.join(self.root, "patches", "JuicedSteamXDel.vcdiff"), "wb").close()
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _xdelta(self, works):
+        p = os.path.join(self.root, "patches", "xdelta3.exe")
+        body = ('python3 -c "import sys;open(sys.argv[1],\'wb\').write(b\'P\'*(2<<20))" "$6"\n'
+                if works else "exit 1\n")
+        with open(p, "w") as f:
+            f.write("#!/bin/sh\n" + body)
+        os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
+
+    def read(self, name):
+        with open(os.path.join(self.root, name), "rb") as f:
+            return f.read()
+
+    def test_patch_keeps_original_and_restores(self):
+        self._xdelta(True)
+        self.assertEqual(main._sr2_patch_exe(self.root), "")
+        self.assertEqual(self.read("sr2_pc_unpatched.exe"), b"steam")
+        self.assertEqual(len(self.read("SR2_pc.exe")), 2 << 20)
+        # Again (Step 1 pressed twice): still built from the original.
+        self.assertEqual(main._sr2_patch_exe(self.root), "")
+        self.assertEqual(self.read("sr2_pc_unpatched.exe"), b"steam")
+        self.assertTrue(main._sr2_restore_exe(self.root))
+        self.assertEqual(self.read("SR2_pc.exe"), b"steam")
+
+    def test_failed_patch_never_leaves_the_game_without_an_exe(self):
+        self._xdelta(False)
+        self.assertIn("xdelta", main._sr2_patch_exe(self.root))
+        self.assertEqual(self.read("SR2_pc.exe"), b"steam")
+        # The state Juiced's own .bat left on 2026-10-21: original renamed, no exe.
+        os.remove(os.path.join(self.root, "SR2_pc.exe"))
+        main._sr2_patch_exe(self.root)
+        self.assertEqual(self.read("SR2_pc.exe"), b"steam")
 
 
 if __name__ == "__main__":
