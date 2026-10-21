@@ -2341,6 +2341,11 @@ export const getGotrOptions = callable<
   { ok: boolean; options?: GotrOption[]; error?: string }
 >("get_gotr_options");
 
+export const setGotrAll = callable<
+  [enabled: boolean],
+  { ok: boolean; options?: GotrOption[]; error?: string }
+>("set_gotr_all");
+
 export const setGotrOption = callable<
   [name: string, enabled: boolean],
   { ok: boolean; options?: GotrOption[]; turnedOff?: string[]; restart?: boolean; error?: string }

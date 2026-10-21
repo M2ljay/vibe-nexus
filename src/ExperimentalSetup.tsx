@@ -20,6 +20,7 @@ import {
   ExperimentalCandidate,
   GotrOption,
   getGotrOptions,
+  setGotrAll,
   setGotrOption,
   applyExperimentalTool,
   checkExperimentalCoverage,
@@ -344,6 +345,29 @@ function GotrOptionsModal({ closeModal }: { closeModal?: () => void }) {
       </Field>
       {error && <Field label={error} />}
       {!options && !error && <Field label="Loading…" />}
+      {options && (
+        <>
+          {[false, true].map((on) => (
+            <ButtonItem
+              key={String(on)}
+              layout="below"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await setGotrAll(on);
+                  if (r.ok) setOptions(r.options ?? options);
+                  else toaster.toast({ title: "Couldn't switch them", body: r.error ?? "" });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {on ? "Switch all on (skipping overlaps)" : "Switch all off"}
+            </ButtonItem>
+          ))}
+        </>
+      )}
       {options?.map((o) => (
         <ToggleField
           key={o.name}

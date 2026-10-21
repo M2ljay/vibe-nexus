@@ -33015,6 +33015,23 @@ query CollectionInstructions($slug: String!) {
             return {"ok": False, "error": "Gentlemen of the Row isn't installed"}
         return {"ok": True, "options": _sr2_gotr_view(rec)}
 
+    async def set_gotr_all(self, enabled: bool) -> dict:
+        """Every GotR optional mod off, or on (minus ones that overlap an
+        earlier one, as at install)."""
+        settings = _load_settings()
+        key, rec = _sr2_gotr_record(settings)
+        if not rec:
+            return {"ok": False, "error": "Gentlemen of the Row isn't installed"}
+        opts = rec.get("gotrOptions") or {}
+        on = experimental_games.gotr_default_enabled(opts)[0] if enabled else []
+        rec["gotrEnabled"] = on
+        settings["installed"][experimental_games.SR2_DOMAIN][key] = rec
+        _save_settings(settings)
+        game = _experimental_game_for(experimental_games.SR2_DOMAIN) or {}
+        await asyncio.to_thread(_sr2_loose_gotr, _game_dir(game.get("installDirName") or ""), on)
+        decky.logger.info(f"GotR options all {'on' if enabled else 'off'}: {on}")
+        return {"ok": True, "options": _sr2_gotr_view(rec)}
+
     async def set_gotr_option(self, name: str, enabled: bool) -> dict:
         """Switch one GotR optional mod. Switching one on switches off any
         that change the same files. Takes effect at the next game start."""
