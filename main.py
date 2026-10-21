@@ -30,6 +30,7 @@ import experimental_games  # noqa: E402 - needs the py_modules path above
 import reloaded_ii  # noqa: E402
 import xenoverse2  # noqa: E402
 import reshade_setup  # noqa: E402
+import kingdom_hearts  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7460,6 +7461,10 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
+    if kingdom_hearts.is_kh(game):
+        key = _kh_install_mod(scratch, rel_files, game, game_domain, base_record)
+        if key:
+            return key
     tfc = experimental_games.tfc_mod_roots(rel_files) if game.get("tfcDir") else []
     if tfc:
         return _install_tfc_mod(scratch, rel_files, tfc, game, game_domain, base_record, choice)
@@ -9702,7 +9707,179 @@ def _sr2_restore_exe(root: str) -> bool:
     return True
 
 
-TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader", "tfcinstaller")
+TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader", "tfcinstaller", "khpatch")
+
+
+async def _gh_asset(spec: dict) -> tuple:
+    releases = json.loads(await _fetch_bytes(generic_loaders.GITHUB_API.format(repo=spec["repo"]), 60))
+    picked = generic_loaders.pick_asset(releases, spec, True)
+    if not picked:
+        raise RuntimeError(f"{spec['name']} has no release to install")
+    tag, _asset, url = picked
+    return tag, await _fetch_bytes(url, 600)
+
+
+async def _kh_setup(game_domain: str) -> dict:
+    """Step 1 for Kingdom Hearts: KHPCPatchManager (applies .kh?pcpatch mods)
+    and LuaBackend Hook (runs .lua mods), both from GitHub releases."""
+    import zipfile
+    game = _experimental_game_for(game_domain)
+    if not game or not kingdom_hearts.is_kh(game):
+        return {"ok": False, "error": "Not a Kingdom Hearts game"}
+    root = _game_dir(game.get("installDirName") or "")
+    for exe in {g["exe"] for g in kingdom_hearts.GAMES.values()}:
+        if await _process_running(exe):
+            return {"ok": False, "error": "Close the game first."}
+    try:
+        ptag, patcher = await _gh_asset(kingdom_hearts.PATCHER)
+        ltag, lua_zip = await _gh_asset(kingdom_hearts.LUABACKEND)
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError, OSError) as e:
+        return {"ok": False, "error": f"Couldn't download the Kingdom Hearts tools: {e}"}
+    files, backups = [], []
+    exe_rel = kingdom_hearts.TOOL_DIR + "/KHPCPatchManager.exe"
+    dst = os.path.join(root, *exe_rel.split("/"))
+    _makedirs_for(dst)
+    with open(dst, "wb") as f:
+        f.write(patcher)
+    files.append(exe_rel)
+    try:
+        z = zipfile.ZipFile(io.BytesIO(lua_zip))
+    except zipfile.BadZipFile:
+        return {"ok": False, "error": "LuaBackend's download wasn't a zip"}
+    for n in z.namelist():
+        base = n.split("/")[-1]
+        if base.lower() not in ("dbghelp.dll", "luabackend.toml"):
+            continue
+        p = os.path.join(root, base)
+        data = z.read(n)
+        if base.lower() == "luabackend.toml":
+            if os.path.isfile(p):
+                with open(p, encoding="utf-8", errors="replace") as fh:
+                    data = fh.read().encode()
+            data = kingdom_hearts.luabackend_toml(data.decode("utf-8", "replace"), root).encode()
+        elif os.path.isfile(p) and not os.path.exists(p + ".nexusbak"):
+            os.replace(p, p + ".nexusbak")
+            backups.append(base)
+        with open(p, "wb") as f:
+            f.write(data)
+        files.append(base)
+    for d in (kingdom_hearts.PATCH_DIR, kingdom_hearts.SCRIPTS_DIR):
+        os.makedirs(os.path.join(root, *d.split("/")), exist_ok=True)
+    settings = _load_settings()
+    for dom in kingdom_hearts.GAMES:
+        # One install serves all four games: each of their Step 1s is this one.
+        settings.setdefault("experimental_frameworks", {})[f"{dom}/0"] = {
+            "install_dir": game.get("installDirName") or "", "files": files, "backups": backups,
+            "tool": "kh", "version": f"KHPCPatchManager {ptag}, LuaBackend {ltag}"}
+    _save_settings(settings)
+    decky.logger.info(f"Kingdom Hearts tools: KHPCPatchManager {ptag}, LuaBackend {ltag}; kept aside {backups}")
+    return {"ok": True, "install_path": root, "files": len(files)}
+
+
+def _kh_hed_state(root: str) -> dict:
+    out = {}
+    for sub in ("en", "dt"):
+        d = os.path.join(root, "Image", sub)
+        try:
+            for n in os.listdir(d):
+                if n.lower().endswith(".hed"):
+                    st = os.stat(os.path.join(d, n))
+                    out[f"{sub}/{n}"] = [st.st_size, int(st.st_mtime)]
+        except OSError:
+            pass
+    return out
+
+
+def _kh_run_patcher(root: str, patches: list) -> tuple:
+    import subprocess
+    exe = os.path.join(root, *kingdom_hearts.TOOL_DIR.split("/"), "KHPCPatchManager.exe")
+    proc = subprocess.run([exe, *patches], cwd=os.path.dirname(exe), env=_host_env(),
+                          input=b"\n\n\n", capture_output=True, timeout=3600, **_NO_WINDOW)
+    out = (proc.stdout or b"").decode("utf-8", "replace") + (proc.stderr or b"").decode("utf-8", "replace")
+    return proc.returncode, out
+
+
+async def _kh_apply(game: dict) -> dict:
+    """Apply new .kh?pcpatch mods with KHPCPatchManager (one run per kind of
+    patch). Patches can't be undone: one that's gone needs Steam's verify,
+    after which everything still installed is applied again."""
+    tool = "KHPCPatchManager"
+    root = _game_dir(game.get("installDirName") or "")
+    exe = os.path.join(root, *kingdom_hearts.TOOL_DIR.split("/"), "KHPCPatchManager.exe")
+    pdir = os.path.join(root, *kingdom_hearts.PATCH_DIR.split("/"))
+    try:
+        present = sorted(n for n in os.listdir(pdir) if n.lower().endswith(kingdom_hearts.PATCH_EXTS))
+    except OSError:
+        present = []
+    settings = _load_settings()
+    st = settings.get("kh_patches") or {}
+    applied, after = st.get("applied") or [], st.get("heds") or {}
+    now = await asyncio.to_thread(_kh_hed_state, root)
+    reset = bool(applied) and now != after
+    todo, gone = kingdom_hearts.plan_patches(present, applied, reset)
+    if not todo and not gone:
+        return {"ok": True, "tool": tool, "count": len(present)}
+    if todo and not os.path.isfile(exe):
+        return {"ok": False, "tool": tool, "error": "KHPCPatchManager isn't installed - run Step 1 first."}
+    for e in {g["exe"] for g in kingdom_hearts.GAMES.values()}:
+        if await _process_running(e):
+            return {"ok": False, "tool": tool, "error": "Close the game first."}
+    failed = []
+    by_kind = {}
+    for p in todo:
+        by_kind.setdefault(kingdom_hearts.patch_kind(p), []).append(os.path.join(pdir, p))
+    for kind, paths in by_kind.items():
+        try:
+            rc, out = await asyncio.to_thread(_kh_run_patcher, root, paths)
+        except (OSError, ValueError) as e:
+            rc, out = -1, str(e)
+        decky.logger.info(f"KHPCPatchManager {kind} x{len(paths)}: exit {rc}: {out.strip()[-800:]}")
+        if rc != 0 or "Could not find any folder" in out:
+            failed += [os.path.basename(p) for p in paths]
+    done = [p for p in todo if p not in failed]
+    keep = sorted(set(done) if reset else (set(applied) - set(gone)) | set(done))
+    settings = _load_settings()
+    settings["kh_patches"] = {"applied": keep, "heds": await asyncio.to_thread(_kh_hed_state, root)}
+    _save_settings(settings)
+    notes = []
+    if gone:
+        notes.append(f"Patches stay in the game until it's restored: verify the game's files in Steam "
+                     f"(to take out {', '.join(gone)}), then press Apply here to put the others back.")
+    if failed:
+        return {"ok": False, "tool": tool, "error": f"Couldn't apply {', '.join(failed)} - see the plugin log."}
+    out = {"ok": True, "tool": tool, "count": len(present)}
+    if notes:
+        out["note"] = " ".join(notes)
+    return out
+
+
+def _kh_install_mod(scratch: str, rel_files: list, game: dict, game_domain: str, base_record: dict) -> str:
+    plan = kingdom_hearts.kh_plan(rel_files, game.get("khGame") or "kh1")
+    if not plan:
+        return ""
+    root = _game_dir(game.get("installDirName") or "")
+    files = []
+    for src, rel in plan:
+        if not _safe_rel_path(rel):
+            continue
+        dst = os.path.join(root, *rel.split("/"))
+        _makedirs_for(dst)
+        shutil.copyfile(os.path.join(scratch, *src.split("/")), dst)
+        files.append(rel)
+    _force_rmtree(scratch)
+    settings = _load_settings()
+    installed = settings.setdefault("installed", {}).setdefault(game_domain, {})
+    key = _safe_name(base_record.get("name") or "mod")
+    note = ""
+    if any(f.startswith(kingdom_hearts.PATCH_DIR) for f in files):
+        note = ("A game-data patch: KHPCPatchManager applies it after installing. To remove it later, "
+                "uninstall here, verify the game's files in Steam, then press Apply.")
+    installed[key] = _merge_install_record(installed.get(key), {
+        **base_record, "mode": "files", "target": ".", "files": files, "backups": [],
+        **({"warning": note} if note else {})})
+    _save_settings(settings)
+    decky.logger.info(f"Kingdom Hearts mod {key!r}: {files}")
+    return key
 
 
 async def _root_install_call(choice: str, *args):
@@ -9926,6 +10103,8 @@ async def _tool_apply(game: dict) -> dict:
         return await _doom_apply(game)
     if kind == "tfcinstaller":
         return await _tfc_apply(game)
+    if kind == "khpatch":
+        return await _kh_apply(game)
     result = await _overstrike_apply(game)
     result.setdefault("tool", "Overstrike")
     return result
@@ -25934,6 +26113,11 @@ query Link($slug: String!, $domainName: String!) {
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
             return result
+        if install_kind == "khTools":
+            result = await _kh_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"Kingdom Hearts Step 1: {result.get('error')}")
+            return result
         if install_kind == "tfcInstaller":
             result = await _tfc_setup(game_domain)
             if not result.get("ok"):
@@ -33631,6 +33815,7 @@ query CollectionInstructions($slug: String!) {
                              and g.get("engine") != "sr2")
                          or (g.get("nexusDomain") == experimental_games.DOOM_DOMAIN
                              and g.get("toolApply") != "doommodloader")
+                         or (g.get("nexusDomain") in kingdom_hearts.GAMES and g.get("toolApply") != "khpatch")
                          or (g.get("nexusDomain") in experimental_games.TFC_GAMES
                              and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
@@ -33834,6 +34019,11 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
+        if kingdom_hearts.apply_kh_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: Kingdom Hearts tools")
             return
         if experimental_games.apply_doom_profile(game, _doom_framework()):
             game["frameworkChecked"] = True
@@ -34339,7 +34529,8 @@ query CollectionInstructions($slug: String!) {
                 row.get("nexusName") or row["name"], inspection)
             rule = _vortex_rules().get(row["domain"])
             if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
-                    game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()):
+                    game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()) \
+                    or kingdom_hearts.apply_kh_profile(game):
                 rule = None
             if rule:
                 exe = experimental_games.exe_from_rule(rule, path)
@@ -34443,6 +34634,21 @@ query CollectionInstructions($slug: String!) {
         game.pop("reshadeSetup", None)
         self._exp_save(game)
         return {"ok": True, "removed": removed}
+
+    async def set_experimental_domain(self, app_id: int, domain: str) -> dict:
+        """Switch which Nexus game a multi-game install (the Kingdom Hearts
+        collection) is modded as. Mods installed for each stay theirs."""
+        game = self._exp_game(app_id)
+        if not game:
+            return {"ok": False, "error": "Set the game up first"}
+        allowed = {c.get("domain") for c in game.get("domainChoices") or []}
+        if domain not in allowed:
+            return {"ok": False, "error": "That game isn't part of this install"}
+        game["nexusDomain"] = domain
+        await self._experimental_framework(game)
+        self._exp_save(game)
+        decky.logger.info(f"experimental {app_id}: now modding as {domain}")
+        return {"ok": True, "game": game}
 
     async def set_experimental_focus(self, app_id: int, on: bool) -> dict:
         """Bring this game's window to the front after it starts."""

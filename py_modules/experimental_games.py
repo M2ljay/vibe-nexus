@@ -1193,6 +1193,9 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
         return "tool_managed"
+    if game.get("toolApply") == "khpatch" and any(
+            f.endswith((".kh1pcpatch", ".kh2pcpatch", ".compcpatch", ".bbspcpatch", ".lua")) for f in low):
+        return "tool_managed"
     if game.get("toolApply") == "tfcinstaller" and tfc_mod_roots(files):
         return "tool_managed"
     if game.get("toolApply") == "doommodloader" and payload_low and not any(

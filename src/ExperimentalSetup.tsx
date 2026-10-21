@@ -28,6 +28,7 @@ import {
   setExperimentalFramework,
   setExperimentalModsFolder,
   setExperimentalFocus,
+  setExperimentalDomain,
   installReshade,
   removeReshade,
   findExperimentalGame,
@@ -570,6 +571,10 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
                 ? "Updates Reloaded-II's mod list for this game from what is installed here, and fetches libraries the mods need. Happens by itself after each change; use this if that failed."
                 : game.toolApply === "doommodloader"
                   ? "Runs DOOMModLoader over the zips in Mods. Happens by itself after each change; use this after a game update or if that failed. Close the game first."
+                  : game.toolApply === "khpatch"
+                  ? "Applies new .kh1pcpatch / .kh2pcpatch / .compcpatch / .bbspcpatch mods with KHPCPatchManager. Happens by itself after each install; after removing a patch, verify the game's files in Steam and press this to put the rest back. Close the game first."
+                  : game.toolApply === "tfcinstaller"
+                  ? "Opens TFC Installer when the set of installed TFC mods changed: tick the mods there and press Install. Close the game first."
                   : game.toolApply === "xv2ins"
                   ? "Installs new .x2m mods with XV2 Mods Installer, and opens its window on the desktop for any you removed. Happens by itself after each change; use this if that failed. Close the game first."
                   : "Runs Overstrike now with every installed mod. Happens by itself after each install or uninstall; use this after a game update or if that failed. Close the game first."
@@ -632,6 +637,36 @@ export function ExperimentalGameRows({ game }: { game: SupportedGame }) {
           }}
         />
       </PanelSectionRow>
+      {(game.domainChoices?.length ?? 0) > 1 && (
+        <PanelSectionRow>
+          <Field
+            label="Mod this game as"
+            description="This install holds several games with their own Nexus pages. Pick which one Browse and installs use; each keeps its own mods."
+            childrenLayout="below"
+          >
+            {game.domainChoices!.map((c) => (
+              <ButtonItem
+                key={c.domain}
+                layout="below"
+                disabled={busy || c.domain === game.nexusDomain}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await setExperimentalDomain(game.appId, c.domain);
+                    if (!r.ok) toaster.toast({ title: "Nexus Mods", body: r.error ?? "Couldn't switch" });
+                    await loadExperimentalState();
+                    notifyGameStateChanged();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {c.domain === game.nexusDomain ? `✓ ${c.name}` : c.name}
+              </ButtonItem>
+            ))}
+          </Field>
+        </PanelSectionRow>
+      )}
       {game.nexusDomain === "saintsrow2" && (
         <PanelSectionRow>
           <ButtonItem
