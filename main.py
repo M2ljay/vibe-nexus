@@ -31,6 +31,7 @@ import reloaded_ii  # noqa: E402
 import xenoverse2  # noqa: E402
 import reshade_setup  # noqa: E402
 import kingdom_hearts  # noqa: E402
+import archive_peek  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -34454,6 +34455,10 @@ query CollectionInstructions($slug: String!) {
                         f"nexus-files-s3-meta/{game_id}/{mid}/"
                         f"{main_file.get('file_name')}.json")
                     paths = await _preview_paths(link)
+                    if not paths and main_file.get("file_id"):
+                        # No listing published: read the archive's own table
+                        # of contents from its end (a few KB, not the file).
+                        paths = await _peek_paths(domain, mid, int(main_file["file_id"]))
             verdict = experimental_games.classify_mod(
                 paths, game, roots, index, is_framework=(mid == fw_id),
                 file_index=file_index)
@@ -35748,3 +35753,87 @@ def _wrap_plugin_update() -> None:
 
 
 _wrap_plugin_update()
+
+
+# ---- What's in an archive Nexus has no listing for -------------------------------
+PEEK_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "archive-listings.json")
+_PEEK_LOCK = threading.Lock()
+
+
+def _peek_cache_get(file_id: int):
+    try:
+        with open(PEEK_CACHE, encoding="utf-8") as f:
+            return json.load(f).get(str(file_id))
+    except (OSError, ValueError):
+        return None
+
+
+def _peek_cache_put(file_id: int, paths: list) -> None:
+    with _PEEK_LOCK:
+        try:
+            with open(PEEK_CACHE, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            data = {}
+        data[str(file_id)] = paths
+        if len(data) > 5000:
+            data = dict(list(data.items())[-4000:])
+        tmp = PEEK_CACHE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, PEEK_CACHE)
+
+
+def _ranged_listing(uri: str):
+    """Paths inside the archive at `uri`, read with HTTP Range requests."""
+    import urllib.request
+
+    def get(start: int, length: int) -> tuple:
+        req = urllib.request.Request(uri, headers={"Range": f"bytes={start}-{start + length - 1}",
+                                                   "User-Agent": "decky-nexus"})
+        with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as r:
+            if r.status != 206:
+                raise OSError("server ignores Range")
+            return r.read(length + 1)[:length], r.headers.get("Content-Range") or ""
+
+    _first, cr = get(0, 1)
+    try:
+        size = int(cr.rsplit("/", 1)[1])
+    except (IndexError, ValueError):
+        return None
+    return archive_peek.listing(lambda o, n: get(o, n)[0], size)
+
+
+async def _peek_paths(game_domain: str, mod_id: int, file_id: int):
+    cached = _peek_cache_get(file_id)
+    if cached is not None:
+        return cached or None
+    api_key = _load_settings().get("api_key")
+    if not api_key:
+        return None
+    url = (f"{NEXUS_API_BASE}/v1/games/{game_domain}/mods/{int(mod_id)}"
+           f"/files/{int(file_id)}/download_link.json")
+    try:
+        session = await _http_session()
+        async with session.get(url, headers=_api_headers(api_key),
+                               timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status != 200:
+                return None
+            links = await resp.json()
+        uri = next((l.get("URI") or l.get("uri") for l in links or [] if isinstance(l, dict)
+                    and (l.get("URI") or l.get("uri"))), None)
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, TypeError):
+        return None
+    if not uri:
+        return None
+    try:
+        paths = await asyncio.to_thread(_ranged_listing, uri)
+    except Exception as e:  # noqa: BLE001 - no listing is "cannot tell"
+        decky.logger.info(f"archive peek {game_domain}/{mod_id}: {type(e).__name__}: {e}")
+        return None
+    if paths is None:
+        _peek_cache_put(file_id, [])  # rar, encrypted: same answer next time
+        return None
+    _peek_cache_put(file_id, paths)
+    decky.logger.info(f"archive peek {game_domain}/{mod_id}: {len(paths)} files")
+    return paths or None
