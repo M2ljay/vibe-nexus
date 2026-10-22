@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.48",
- "hash": "0a9657e4d2a1e0a424fb4d3d43e1ef63a0b73a1430884950a8930bd3331f5b57",
+ "version": "1.21.32-anygame.49",
+ "hash": "a10e69a2ad38cc39cb62d9e5d7e74d3087f0b3ab0365d3d67773f3d92a7383f4",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "RE Engine games (RE2 and family) through REFramework."
+ "notes": "Mod pages say whether a mod will work before you install it."
 }
