@@ -156,3 +156,30 @@ class ToolsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerdictOnPageTests(unittest.TestCase):
+    def test_doubt_and_works(self):
+        root = main._game_dir("Verdict Game")
+        shutil.rmtree(root, ignore_errors=True)
+        os.makedirs(os.path.join(root, "Data"))
+        game = {"appId": 79, "nexusDomain": "verdictgame", "installDirName": "Verdict Game",
+                "processName": "Game.exe", "engine": "unknown", "modsSubdir": "mods"}
+        main._save_settings({"experimental_games": {"79": game}})
+        main._LAYOUT_CACHE.clear()
+        plugin = main.Plugin()
+
+        def listing(paths):
+            return mock.AsyncMock(return_value=[{"type": "file", "path": p} for p in paths])
+        with mock.patch.object(main, "_mod_file_listing", listing(["Suit.tpf"])):
+            r = run(plugin.get_install_block("verdictgame", 1, 2, "Suit"))
+        self.assertEqual(r["verdict"], "texmod")
+        self.assertIn("TexMod", r["doubt"])
+        with mock.patch.object(main, "_mod_file_listing", listing(["Data/hud.dat"])):
+            r = run(plugin.get_install_block("verdictgame", 1, 3, "Hud"))
+        self.assertEqual(r["verdict"], "game_folder")
+        self.assertIn("Should work", r["works"])
+        with mock.patch.object(main, "_mod_file_listing", listing(["Data/hud.dat"])):
+            r = run(plugin.get_install_block("notagame", 1, 3, "Hud"))
+        self.assertNotIn("verdict", r)
+        shutil.rmtree(root, ignore_errors=True)

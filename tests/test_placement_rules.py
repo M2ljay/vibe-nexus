@@ -129,6 +129,13 @@ class SmallFixes(unittest.TestCase):
         self.assertEqual(plan(["sentences.txt"], g, {"valve"}, {"valve": ["valve"]}, fidx),
                          [("sentences.txt", "valve/sound/sentences.txt")])
 
+    def test_notes_folder_beside_payload(self):
+        g = {"nexusDomain": "danganronpa2goodbyedespair", "engine": "unknown", "processName": "DR2_us.exe"}
+        fidx = {"dr2_data_us.wad": ["dr2_data_us.wad"], "dr2_data_keyboard_us.wad": ["dr2_data_keyboard_us.wad"]}
+        files = ["dr2_data_keyboard_us.wad", "dr2_data_us.wad", "Hangman/Chapter 1.txt", "Hangman/Chapter 2.txt"]
+        self.assertEqual(sorted(d for _s, d in plan(files, g, {"dr2_data_us.wad"}, {}, fidx)),
+                         ["dr2_data_keyboard_us.wad", "dr2_data_us.wad"])
+
     def test_docs_only(self):
         self.assertEqual(verdict(["Remaster 3.0.txt"], {"engine": "unknown"}, set(), {}, {}), "docs_only")
 

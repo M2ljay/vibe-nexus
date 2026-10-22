@@ -34616,6 +34616,9 @@ query CollectionInstructions($slug: String!) {
                         f"nexus-files-s3-meta/{game_id}/{mid}/"
                         f"{main_file.get('file_name')}.json")
                     paths = await _preview_paths(link)
+                    fname = str(main_file.get("file_name") or "")
+                    if not paths and fname.lower().endswith((".exe", ".msi")):
+                        paths = [fname]  # the download is the installer itself
                     if not paths and main_file.get("file_id"):
                         # No listing published: read the archive's own table
                         # of contents from its end (a few KB, not the file).
@@ -36185,3 +36188,74 @@ async def _reframework_setup(game_domain: str) -> dict:
     _save_settings(settings)
     decky.logger.info(f"REFramework for {game_domain}: {os.path.basename(url)} {rev}, loose files on")
     return {"ok": True, "install_path": root, "version": rev}
+
+
+# ---- Will it work? Said on the mod's page, before the install --------------------
+_LAYOUT_CACHE: dict = {}
+DOUBT_VERDICTS = ("texmod", "old_version", "docs_only", "cheat_table")
+NOTE_VERDICTS = ("no_target", "program", "reshade_preset")
+
+
+def _game_layout(game: dict) -> tuple:
+    """(root entries, dir index, file index) of a game folder, kept 10 min."""
+    root = _game_dir(game.get("installDirName") or "")
+    hit = _LAYOUT_CACHE.get(root)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    try:
+        roots = set(os.listdir(root))
+    except OSError:
+        roots = set()
+    layout = (roots, experimental_games.index_game_dirs(root),
+              experimental_games.index_game_files(root, game.get("modsSubdir") or ""))
+    _LAYOUT_CACHE[root] = (time.time(), layout)
+    return layout
+
+
+async def _mod_verdict(game_domain: str, mod_id: int, file_id: int) -> str:
+    game = _experimental_game_for(game_domain)
+    if not game:
+        return ""
+    children = await _mod_file_listing(game_domain, int(mod_id), int(file_id))
+    paths = _listing_paths(children) if children else None
+    if not paths:
+        paths = await _peek_paths(game_domain, int(mod_id), int(file_id))
+    if not paths:
+        return ""
+    roots, dirs, files = await asyncio.to_thread(_game_layout, game)
+    fw_id = int((game.get("framework") or {}).get("nexusModId") or 0)
+    return experimental_games.classify_mod(paths, game, roots, dirs, is_framework=(mod_id == fw_id),
+                                           file_index=files)
+
+
+def _wrap_install_block() -> None:
+    original = Plugin.get_install_block
+
+    @functools.wraps(original)
+    async def wrapper(self, game_domain, mod_id, file_id, mod_name, *args, **kwargs):
+        result = await original(self, game_domain, mod_id, file_id, mod_name, *args, **kwargs)
+        if not isinstance(result, dict) or result.get("blocked") or result.get("warning") \
+                or not _experimental_game_for(game_domain):
+            return result
+        try:
+            verdict = await _mod_verdict(game_domain, int(mod_id), int(file_id))
+        except Exception as e:  # noqa: BLE001 - a hint must never break the page
+            decky.logger.debug(f"mod verdict {game_domain}/{mod_id}: {e}")
+            return result
+        if not verdict:
+            return result
+        result["verdict"] = verdict
+        text = experimental_games.VERDICTS.get(verdict, "")
+        if verdict in DOUBT_VERDICTS:
+            result["doubt"] = f"This mod {text}. It can still be installed, but expect it to do nothing."
+            result["warning"] = result["doubt"]
+        elif verdict in NOTE_VERDICTS:
+            result["warning"] = f"This mod {text}."
+        else:
+            result["works"] = f"Should work: {text}."
+        return result
+
+    Plugin.get_install_block = wrapper
+
+
+_wrap_install_block()

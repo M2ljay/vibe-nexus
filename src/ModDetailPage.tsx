@@ -141,6 +141,9 @@ export function ModDetailPage() {
   // A refusal that needs explaining, kept on the page rather than in a
   // toast that truncates it and then leaves.
   const [blocked, setBlocked] = useState<string | undefined>();
+  /** Any-game mode: the mod check expects this to do nothing. */
+  const [doubt, setDoubt] = useState<string | undefined>();
+  const [works, setWorks] = useState<string | undefined>();
   // Installable, but built for an older build of the game. A warning, not
   // a refusal: a byte signature often survives a patch, and it is the
   // author's mod, not ours to veto.
@@ -246,6 +249,8 @@ export function ModDetailPage() {
     setImageFull(false);
     setBlocked(undefined);
     setStale(undefined);
+    setDoubt(undefined);
+    setWorks(undefined);
     setRefused({});
     getModFiles(s.game.nexusDomain, s.mod.modId).then((r) => {
       setFiles(r);
@@ -268,6 +273,8 @@ export function ModDetailPage() {
           setRefused((prev) => ({ ...prev, [first.file_id]: reason }));
         } else if (b.blocked && b.reason) setBlocked(b.reason);
         else if (b.warning) setStale(b.warning);
+        setDoubt(b.doubt);
+        setWorks(b.works);
       });
     });
     getModRequirements(
@@ -459,7 +466,19 @@ export function ModDetailPage() {
     return extra;
   };
 
-  const onInstall = async (file: ModFile, payloadChoice = "") => {
+  const onInstall = async (file: ModFile, payloadChoice = "", sure = false) => {
+    if (doubt && !sure) {
+      showModal(
+        <ConfirmModal
+          strTitle="This probably won't work"
+          strDescription={doubt}
+          strOKButtonText="Install anyway"
+          strCancelButtonText="Cancel"
+          onOK={() => void onInstall(file, payloadChoice, true)}
+        />
+      );
+      return;
+    }
     setInstallingFileId(file.file_id);
     setProgress(undefined);
     nameDownload(mod.modId, mod.name, game.appId);
@@ -1397,9 +1416,12 @@ export function ModDetailPage() {
       )}
       {!blocked && stale && (
         <WarningBox
-          title="Worth knowing"
+          title={doubt ? "Probably won't work" : "Worth knowing"}
           body={stale}
         />
+      )}
+      {!blocked && !stale && works && (
+        <div style={{ margin: "8px 0", fontSize: "12px", opacity: 0.8 }}>✓ {works}</div>
       )}
       {/* What the mod loader said about THIS mod last launch. Michael saw
           Unrestricted Portals' error in My Mods, then opened the mod and

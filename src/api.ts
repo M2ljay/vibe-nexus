@@ -386,6 +386,12 @@ export const getInstallBlock = callable<
     refused?: boolean;
     /** Installable, but built before the game's current patch. */
     warning?: string;
+    /** Any-game mode: what the mod check says about this file. */
+    verdict?: string;
+    /** It installs, but the check says it won't do anything: ask first. */
+    doubt?: string;
+    /** The check says it should work, and how. */
+    works?: string;
   }
 >("get_install_block");
 

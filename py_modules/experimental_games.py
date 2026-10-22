@@ -898,6 +898,8 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
                     homes = [h for h in homes if h.lower().split("/")[0] == prefer] or homes
                 if len(homes) == 1:
                     dst = (homes[0] + "/" + rel) if homes[0] else rel
+        if dst is None and rel.lower().endswith(_DOC_EXTS):
+            continue  # notes or screenshots in a folder of their own: left out
         if dst is None:
             return None
         plan.append((src, dst))
