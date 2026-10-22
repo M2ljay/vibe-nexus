@@ -7540,6 +7540,21 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         plan = memoria.plan(rel_files, _safe_name(base_record.get("name") or "mod")) or None
     if re_engine.is_re(game):
         plan = re_engine.plan(rel_files)
+        if _re_is_loader_copy(scratch, rel_files, game_domain):
+            # The collection's own REFramework: Step 1 already put in the
+            # current build for this game - an older copy would replace it.
+            settings = _load_settings()
+            key = _safe_name(base_record.get("name") or "REFramework")
+            settings.setdefault("installed", {}).setdefault(game_domain, {})[key] = _merge_install_record(
+                None, {**base_record, "mode": "files", "target": ".", "files": [], "backups": [],
+                       "warning": "Skipped: Step 1 already installed REFramework (the current build for "
+                                  "your game). Remove Step 1 first if you want this copy instead."})
+            _save_settings(settings)
+            _force_rmtree(scratch)
+            decky.logger.info(f"{base_record.get('name')!r}: REFramework copy skipped - Step 1's is installed")
+            return key
+        if not plan:
+            decky.logger.info(f"RE layout not recognised for {base_record.get('name')!r}: {rel_files[:25]}")
     if game.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN:
         plan = experimental_games.beatsaber_plan(rel_files, _safe_name(base_record.get("name") or "Song"))
         if plan and any(d.endswith(".zip") for _s, d in plan):
@@ -36483,3 +36498,24 @@ def _remove_orphan_reframework(game: dict) -> int:
             pass
     decky.logger.info(f"REFramework with no install record removed from {root}: {removed} file(s)")
     return removed
+
+
+def _re_is_loader_copy(scratch: str, rel_files: list, game_domain: str) -> bool:
+    """An RE mod that is REFramework itself (its dinput8.dll, maybe its
+    bundled scripts), while Step 1's REFramework is installed."""
+    if f"{game_domain}/0" not in (_load_settings().get("experimental_frameworks") or {}):
+        return False
+    payload = [f for f in rel_files if not f.lower().endswith(experimental_games._DOC_EXTS)
+               and f.split("/")[-1].lower() not in ("modinfo.ini", "reframework_revision.txt")]
+    dll = [f for f in payload if f.split("/")[-1].lower() == "dinput8.dll"]
+    if len(dll) != 1 or any(f not in dll and "reframework/" not in "/" + f.lower()
+                            and not f.lower().endswith(("openvr_api.dll", "openxr_loader.dll"))
+                            for f in payload):
+        return False
+    src = dll[0]
+    try:
+        with open(os.path.join(scratch, *src.split("/")), "rb") as f:
+            blob = f.read()
+    except OSError:
+        return False
+    return b"REFramework" in blob or b"re2_fw_config.txt" in blob

@@ -226,3 +226,27 @@ class OrphanREFrameworkTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(root, "dinput8.dll")))
         self.assertFalse(os.path.exists(os.path.join(root, "re2_fw_config.txt")))
         shutil.rmtree(root)
+
+
+class RELoaderCopyTests(unittest.TestCase):
+    def test_collection_reframework_skipped(self):
+        from test_backend import main
+        import re_engine
+        g = {"nexusDomain": "residentevil22019", "installDirName": "RE2 copy", "appId": 883712}
+        re_engine.apply_re_profile(g, False)
+        root = main._game_dir("RE2 copy")
+        os.makedirs(root, exist_ok=True)
+        with open(os.path.join(root, "dinput8.dll"), "wb") as f:
+            f.write(b"MZ step1 REFramework")
+        main._save_settings({"experimental_games": {"883712": g}, "experimental_frameworks": {
+            "residentevil22019/0": {"files": ["dinput8.dll"], "backups": []}}})
+        sc = tempfile.mkdtemp()
+        with open(os.path.join(sc, "dinput8.dll"), "wb") as f:
+            f.write(b"MZ old REFramework")
+        open(os.path.join(sc, "modinfo.ini"), "w").close()
+        key = main._experimental_root_install(sc, root, "Mods", g, "residentevil22019", 1, {"name": "REFramework"})
+        self.assertEqual(key, "REFramework")
+        with open(os.path.join(root, "dinput8.dll"), "rb") as f:
+            self.assertIn(b"step1", f.read())
+        self.assertIn("Skipped", main._load_settings()["installed"]["residentevil22019"][key]["warning"])
+        shutil.rmtree(root)
