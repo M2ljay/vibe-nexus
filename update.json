@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.42",
- "hash": "63a7c9bfe29a7616d47737967f0d20b43d301c9fb9e241bc9e5ca42e19bfa253",
+ "version": "1.21.32-anygame.44",
+ "hash": "68df6a31c986a2d251aa5130a95dbe728de62874968e37c3d557d6369828edfe",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Mod check reads RAR archives too."
+ "notes": "New placement rules (Batman suit slots and more); fixed mixed-up archive lists."
 }
