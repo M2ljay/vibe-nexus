@@ -45,7 +45,7 @@ class ProgramTests(unittest.TestCase):
         info = loop.run_until_complete(plugin.get_mod_program("proggame", key))
         self.assertEqual(info["exe"], "Wish.exe")
 
-        def fake_run(exe, timeout):
+        def fake_run(exe, timeout, argv=None):
             with open(os.path.join(self.root, "data", "wish.x2d"), "w") as f:
                 f.write("new")
             with open(os.path.join(self.root, "data", "old.bin"), "wb") as f:

@@ -421,6 +421,19 @@ def listing(fetch, size: int):
             return seven_listing(fetch_abs, size)
         if head[:2] == ZIP_SIG:
             return zip_listing(reader)
+        if head[:2] == b"MZ":
+            # A self-extracting archive: the stub is a program, the rest an
+            # archive. Zip finds itself from the end; 7z/RAR start after it.
+            reader.seek(0)
+            stub = reader.read(1 << 20)
+            import installers
+            off = installers.sfx_offset(stub)
+            if off is not None:
+                return listing(lambda o, n: fetch(o + off, n), size - off)
+            try:
+                return zip_listing(reader)
+            except zipfile.BadZipFile:
+                return None
         if head[:7] == RAR4_SIG or head[:8] == RAR5_SIG:
             small = RangeReader(fetch, size, block=8 << 10)
 

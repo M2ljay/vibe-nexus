@@ -35,6 +35,7 @@ import archive_peek  # noqa: E402
 import gta_img  # noqa: E402
 import memoria  # noqa: E402
 import re_engine  # noqa: E402
+import installers  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7503,6 +7504,18 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     if tfc:
         return _install_tfc_mod(scratch, rel_files, tfc, game, game_domain, base_record, choice)
     if experimental_games.only_programs(rel_files):
+        sfx = [f for f in rel_files if f.lower().endswith(".exe")]
+        if len(sfx) == 1 and installers.kind(os.path.join(scratch, *sfx[0].split("/"))) in ("7z", "rar", "zip"):
+            inner = scratch + "-sfx"
+            _force_rmtree(inner)
+            if _unpack_sfx(os.path.join(scratch, *sfx[0].split("/")), inner):
+                decky.logger.info(f"{base_record.get('name')!r}: a self-extracting archive - installing its contents")
+                key = _experimental_root_install(inner, install_path, mods_subdir, game, game_domain,
+                                                 app_id, base_record, choice)
+                if key:
+                    _force_rmtree(scratch)
+                    return key
+            _force_rmtree(inner)
         key = _keep_program(scratch, rel_files, game, game_domain, base_record)
         if key:
             return key
@@ -8004,6 +8017,41 @@ def _pick_program(rel_files: list, mod_name: str) -> str:
     return max(exes, key=score)
 
 
+def _unpack_sfx(exe: str, dest: str) -> bool:
+    """Unpack a self-extracting archive (.exe) without running it."""
+    import subprocess
+    import zipfile
+    os.makedirs(dest, exist_ok=True)
+    k = installers.kind(exe)
+    try:
+        if k == "zip":
+            with zipfile.ZipFile(exe) as z:
+                for m in z.infolist():
+                    if not m.is_dir() and _safe_rel_path(m.filename.replace("\\", "/")):
+                        z.extract(m, dest)
+            return bool(os.listdir(dest))
+        with open(exe, "rb") as f:
+            off = installers.sfx_offset(f.read(installers.SCAN))
+            if off is None:
+                return False
+            arch = os.path.join(dest, "__sfx." + k)
+            f.seek(off)
+            with open(arch, "wb") as out:
+                shutil.copyfileobj(f, out, 1 << 20)
+        for _name, build in _extractor_order(arch):
+            argv = build(arch, dest)
+            if not (shutil.which(argv[0]) or os.path.isfile(argv[0])):
+                continue
+            if subprocess.run(argv, capture_output=True, env=_host_env(), timeout=900,
+                              **_NO_WINDOW).returncode == 0:
+                os.remove(arch)
+                return bool(os.listdir(dest))
+        os.remove(arch)
+    except (OSError, zipfile.BadZipFile, subprocess.SubprocessError) as e:
+        decky.logger.info(f"self-extracting archive {os.path.basename(exe)}: {e}")
+    return False
+
+
 def _keep_program(scratch: str, rel_files: list, game: dict, game_domain: str,
                   base_record: dict) -> str:
     """Keep an installer-program mod (an LB Installer .exe, a resolution
@@ -8022,7 +8070,8 @@ def _keep_program(scratch: str, rel_files: list, game: dict, game_domain: str,
     installed[key] = _merge_install_record(prev or None, {
         **base_record, "mode": "files", "target": ".", "files": prev.get("files") or [],
         "backups": prev.get("backups") or [],
-        "program": {"dir": home, "exe": exe, "runs": (prev.get("program") or {}).get("runs", 0)},
+        "program": {"dir": home, "exe": exe, "runs": (prev.get("program") or {}).get("runs", 0),
+                    "kind": installers.kind(os.path.join(home, *exe.split("/")))},
         "warning": ("This mod is an installer program. Press Run installer on this page: it opens "
                     "on the desktop, and the files it adds are noted so uninstalling removes them."),
     })
@@ -8044,13 +8093,14 @@ def _snapshot(root: str) -> dict:
     return out
 
 
-def _run_program_blocking(exe: str, timeout: float) -> int:
+def _run_program_blocking(exe: str, timeout: float, argv: list = None) -> int:
     import subprocess
+    argv = argv or [exe]
     try:
-        proc = subprocess.Popen([exe], cwd=os.path.dirname(exe), env=_host_env())
+        proc = subprocess.Popen(argv, cwd=os.path.dirname(exe), env=_host_env())
     except OSError as e:
         if getattr(e, "winerror", None) == 740:
-            return _run_elevated(exe, [], timeout)
+            return _run_elevated(argv[0], argv[1:], timeout)
         raise
     try:
         return proc.wait(timeout=timeout)
@@ -8058,7 +8108,7 @@ def _run_program_blocking(exe: str, timeout: float) -> int:
         return None
 
 
-async def _run_mod_program(game_domain: str, key: str) -> dict:
+async def _run_mod_program(game_domain: str, key: str, silent: bool = False) -> dict:
     settings = _load_settings()
     rec = (settings.get("installed", {}).get(game_domain) or {}).get(key) or {}
     prog = rec.get("program") or {}
@@ -8074,7 +8124,10 @@ async def _run_mod_program(game_domain: str, key: str) -> dict:
 
     async def watch():
         try:
-            rc = await asyncio.to_thread(_run_program_blocking, exe, 3600)
+            argv = installers.silent_args(prog.get("kind") or "", exe, root) if silent else None
+            if silent and argv:
+                decky.logger.info(f"installer {key!r}: running silently into the game folder ({prog.get('kind')})")
+            rc = await asyncio.to_thread(_run_program_blocking, exe, 3600, argv)
             after = await asyncio.to_thread(_snapshot, root)
             added = sorted(set(after) - set(before))
             changed = sorted(r for r in set(after) & set(before) if after[r] != before[r])
@@ -34617,12 +34670,13 @@ query CollectionInstructions($slug: String!) {
                         f"{main_file.get('file_name')}.json")
                     paths = await _preview_paths(link)
                     fname = str(main_file.get("file_name") or "")
-                    if not paths and fname.lower().endswith((".exe", ".msi")):
-                        paths = [fname]  # the download is the installer itself
                     if not paths and main_file.get("file_id"):
                         # No listing published: read the archive's own table
                         # of contents from its end (a few KB, not the file).
+                        # Self-extracting .exe archives are read the same way.
                         paths = await _peek_paths(domain, mid, int(main_file["file_id"]))
+                    if not paths and fname.lower().endswith((".exe", ".msi")):
+                        paths = [fname]  # the download is the installer itself
             verdict = experimental_games.classify_mod(
                 paths, game, roots, index, is_framework=(mid == fw_id),
                 file_index=file_index)
@@ -35362,6 +35416,15 @@ def _wrap_install_checks() -> None:
                     "first (Settings > Storage in the plugin shows what it keeps).")}
         result = await original(self, game_domain, *args, **kwargs)
         if game and isinstance(result, dict) and result.get("ok") and result.get("folder"):
+            rec = (_load_settings().get("installed", {}).get(game_domain) or {}).get(result["folder"]) or {}
+            prog = rec.get("program") or {}
+            if prog and not prog.get("runs") and installers.auto_ok(
+                    prog.get("kind") or "", rec.get("name") or "", prog.get("exe") or ""):
+                started = await _run_mod_program(game_domain, result["folder"], silent=True)
+                if started.get("ok"):
+                    result["warning"] = ("Its installer is running silently into the game folder; "
+                                         "the files it adds are noted so uninstalling removes them.")
+                return result
             note = await asyncio.to_thread(_verify_record, game_domain, result["folder"])
             if note:
                 decky.logger.warning(f"install check {game_domain}/{result['folder']}: {note}")
