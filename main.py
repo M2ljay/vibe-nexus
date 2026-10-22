@@ -34642,6 +34642,13 @@ query CollectionInstructions($slug: String!) {
             game = (settings.get("experimental_games") or {}).get(str(int(app_id)))
             fw = (game or {}).get("framework") or {}
             key = f"{(game or {}).get('nexusDomain')}/{int(fw.get('nexusModId') or 0)}"
+            if game and key not in (settings.get("experimental_frameworks") or {}) \
+                    and re_engine.is_re(game):
+                # No record (it went with a mod that brought its own copy):
+                # REFramework is still known by its files.
+                gone = await asyncio.to_thread(_remove_orphan_reframework, game)
+                if gone:
+                    return {"ok": True, "removed": gone}
             if not game or key not in (settings.get("experimental_frameworks") or {}):
                 return {"ok": False, "error": "No install record for this loader"}
             removed = await asyncio.to_thread(
@@ -36442,3 +36449,37 @@ def _flag_wrong_build(game: dict) -> int:
         _save_settings(settings)
         decky.logger.info(f"{domain}: {n} installed mod(s) are for the other build")
     return n
+
+
+def _remove_orphan_reframework(game: dict) -> int:
+    """Take out a REFramework no record owns (dinput8.dll that is
+    REFramework, its config, a set-aside copy) unless an installed mod
+    owns the dll. Returns the number of files removed."""
+    root = _game_dir(game.get("installDirName") or "")
+    owned = {f.lower() for r in (_load_settings().get("installed", {}).get(game.get("nexusDomain") or "")
+                                 or {}).values() if isinstance(r, dict) for f in r.get("files") or []}
+    removed = 0
+    for name in ("dinput8.dll", "dinput8.dll.nexusbak"):
+        p = os.path.join(root, name)
+        if name.split(".nexusbak")[0] in owned or not os.path.isfile(p):
+            continue
+        try:
+            with open(p, "rb") as f:
+                blob = f.read()
+        except OSError:
+            continue
+        if b"re2_fw_config.txt" in blob or b"REFramework" in blob:
+            try:
+                os.remove(p)
+                removed += 1
+            except OSError:
+                pass
+    cfg = os.path.join(root, re_engine.CONFIG)
+    if removed and os.path.isfile(cfg):
+        try:
+            os.remove(cfg)
+            removed += 1
+        except OSError:
+            pass
+    decky.logger.info(f"REFramework with no install record removed from {root}: {removed} file(s)")
+    return removed

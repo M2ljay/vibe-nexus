@@ -205,3 +205,24 @@ class REBuildFlagTests(unittest.TestCase):
         recs = main._load_settings()["installed"]["residentevil22019"]
         self.assertIn("dx11_non-rt", recs["Old"]["warning"])
         self.assertNotIn("warning", recs["New"])
+
+
+class OrphanREFrameworkTests(unittest.TestCase):
+    def test_remove_without_record(self):
+        import asyncio
+        from test_backend import main
+        import re_engine
+        g = {"nexusDomain": "residentevil22019", "installDirName": "RE2 orphan", "appId": 883711}
+        re_engine.apply_re_profile(g, False)
+        root = main._game_dir("RE2 orphan")
+        os.makedirs(root, exist_ok=True)
+        with open(os.path.join(root, "dinput8.dll"), "wb") as f:
+            f.write(b"MZ...REFramework...re2_fw_config.txt")
+        with open(os.path.join(root, "re2_fw_config.txt"), "w") as f:
+            f.write("LooseFileLoader_Enabled=true\\n")
+        main._save_settings({"experimental_games": {"883711": g}})
+        r = asyncio.run(main.Plugin().remove_experimental_framework(883711))
+        self.assertTrue(r["ok"], r)
+        self.assertFalse(os.path.exists(os.path.join(root, "dinput8.dll")))
+        self.assertFalse(os.path.exists(os.path.join(root, "re2_fw_config.txt")))
+        shutil.rmtree(root)
