@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.51",
- "hash": "4643ae9c17149ccdb319975a301d2fa3dd180d443ea3289f59abc533e9aa6410",
+ "version": "1.21.32-anygame.52",
+ "hash": "785ecae123f4f06444c9d4a0f9f759ed192839cf772d5ad6a1cb610bf58443c4",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Installer .exe downloads are handled instead of refused."
+ "notes": "Installer downloads fixed (Hollow Knight's Git Gud Patch)."
 }
