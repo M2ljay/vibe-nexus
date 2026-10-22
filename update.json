@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.45",
- "hash": "1d9c0cd9b689db14cbd26945180f58349dc293bb0876782a9487f84ae1589e5d",
+ "version": "1.21.32-anygame.46",
+ "hash": "972bb2a870c7bc457b4f113948c4b42f6b59363db97700faea25cef64a86c163",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Mods with alternatives ask which one to install."
+ "notes": "Final Fantasy IX (Memoria), GTA III and Vice City, Forza media paths."
 }
