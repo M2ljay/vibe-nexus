@@ -8387,8 +8387,17 @@ def _remove_tracked_framework(game: dict, mod_id: int, subdir: str = "") -> int:
         return 0
     root = _game_dir(rec.get("install_dir") or game.get("installDirName") or "")
     removed = 0
+    # A file an installed mod now owns (a collection's own copy of the same
+    # loader, installed over Step 1's) is that mod's: removing it would only
+    # have the plugin put it back, as it did for RE2's dinput8.dll.
+    owned = {f.lower() for r in (settings.get("installed", {}).get(game.get("nexusDomain") or "") or {}).values()
+             if isinstance(r, dict) and r.get("mode") == "files" and not r.get("base")
+             for f in r.get("files") or []}
+    kept = [rel for rel in rec.get("files") or [] if rel.lower() in owned]
+    if kept:
+        decky.logger.info(f"framework {key}: left {kept} - an installed mod owns them now")
     for rel in rec.get("files") or []:
-        if not _safe_rel_path(rel):
+        if not _safe_rel_path(rel) or rel.lower() in owned:
             continue
         path = os.path.join(root, *rel.split("/"))
         for candidate in (path, path + ".nexusoff"):
@@ -8397,7 +8406,7 @@ def _remove_tracked_framework(game: dict, mod_id: int, subdir: str = "") -> int:
                 removed += 1
             except OSError:
                 pass
-    _restore_backups(root, rec.get("backups"))
+    _restore_backups(root, [b for b in rec.get("backups") or [] if b.lower() not in owned])
     # Only folders BELOW where the loader was put: that folder itself
     # belongs to the game, empty or not.
     base = os.path.join(root, *[x for x in (subdir or "").split("/") if x])
