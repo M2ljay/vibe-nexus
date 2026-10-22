@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.55",
- "hash": "7b4cd9d7a75ae1de72db4546e925abe92bc3400525067966e7fefea9cece4ec2",
+ "version": "1.21.32-anygame.56",
+ "hash": "572bf6cf3cd67f6139ee14063163704ece322df08659d6b4cba30337153c97f3",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Step 1 removal no longer fights a mod that owns the same file."
+ "notes": "REFramework can be removed when no record owns it."
 }
