@@ -2407,6 +2407,7 @@ export interface CoverageRow {
     | "reshade_ready"
     | "texmod"
     | "old_version"
+    | "docs_only"
     | "unknown";
   file: string;
 }

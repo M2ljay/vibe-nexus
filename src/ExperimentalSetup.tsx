@@ -169,6 +169,7 @@ const VERDICT_TEXT: Record<CoverageRow["verdict"], string> = {
   reshade_ready: "Works · ReShade preset",
   texmod: "TexMod package - needs TexMod/uMod, not installed",
   old_version: "Made for an older version of the game",
+  docs_only: "Only instructions - nothing to install",
   unknown: "Can't check (no file list)",
 };
 

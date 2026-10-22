@@ -94,5 +94,75 @@ class OtherGames(unittest.TestCase):
                          [(files[0], files[0])])
 
 
+class Alternatives(unittest.TestCase):
+    def test_slow_slower_slowest(self):
+        g = {"nexusDomain": "bullyscholarshipedition", "engine": "unknown", "processName": "Bully.exe"}
+        files = [f"Slower Game Clock/{v}/_derpy_script_loader/scripts/{v}Clock.lua" for v in ("Slow", "Slower", "Slowest")]
+        files.append("Slower Game Clock/ReadMe.txt")
+        self.assertIsNone(plan(files, g, {"Bully.exe"}, {}, {}))
+        v = eg.plan_variants(files, {"Bully.exe"}, {}, "", "", {}, "", "")
+        self.assertEqual(sorted(v), ["Slow", "Slower", "Slowest"])
+        self.assertEqual(v["Slower"], [(files[1], "_derpy_script_loader/scripts/SlowerClock.lua")])
+        self.assertEqual(verdict(files, g, {"Bully.exe"}, {}, {}), "game_folder")
+
+    def test_batman_slot_or_replace(self):
+        w = "The Batman (Remastered)/"
+        files = [w + "Default Suit (Original File Backups)/SinglePlayer/BMGame/CookedPCConsole/BCChar_Batman_SF.upk",
+                 w + "fun (unecessary)  tip.txt",
+                 w + "New Suit Slot/Batman_TheBat/Batman_TheBat.int",
+                 w + "New Suit Slot/Batman_TheBat/DLC_TheBat-BmGame.ini",
+                 w + "Replace Default Suit/SinglePlayer/BMGame/CookedPCConsole/BCChar_Batman_SF.upk"]
+        args = (files, B_ROOTS, B_DIRS, "Mods", "SinglePlayer/Binaries/Win32", B_FILES, "SinglePlayer", "")
+        v = eg.plan_variants(*args)
+        self.assertEqual(sorted(v), ["New Suit Slot", "Replace Default Suit"])
+        self.assertEqual(verdict(files), "game_folder")
+
+
+class SmallFixes(unittest.TestCase):
+    def test_lone_shader(self):
+        self.assertEqual(verdict(["Limbo_Anaglyph_to_SBS_TAB.fx"], {"engine": "unknown"}, set(), {}, {}),
+                         "reshade_preset")
+
+    def test_game_text_file(self):
+        g = {"nexusDomain": "halflife", "engine": "unknown", "processName": "hl.exe"}
+        fidx = {"sentences.txt": ["valve/sound/sentences.txt", "cstrike/sound/sentences.txt"]}
+        self.assertEqual(plan(["sentences.txt"], g, {"valve"}, {"valve": ["valve"]}, fidx),
+                         [("sentences.txt", "valve/sound/sentences.txt")])
+
+    def test_docs_only(self):
+        self.assertEqual(verdict(["Remaster 3.0.txt"], {"engine": "unknown"}, set(), {}, {}), "docs_only")
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class InstallAsks(unittest.TestCase):
+    def test_install_offers_alternatives(self):
+        import shutil
+        import tempfile
+        from test_backend import main
+        root = main._game_dir("Bully Game")
+        shutil.rmtree(root, ignore_errors=True)
+        os.makedirs(root)
+        open(os.path.join(root, "Bully.exe"), "wb").close()
+        game = {"appId": 91, "nexusDomain": "bullytest", "installDirName": "Bully Game",
+                "processName": "Bully.exe", "engine": "unknown", "modsSubdir": "Mods"}
+        main._save_settings({"experimental_games": {"91": game}})
+
+        def scratch():
+            d = tempfile.mkdtemp()
+            for v in ("Slow", "Slower"):
+                p = os.path.join(d, "Clock", v, "_derpy_script_loader", "scripts", f"{v}.lua")
+                os.makedirs(os.path.dirname(p))
+                open(p, "w").close()
+            return d
+        with self.assertRaises(main.NeedsChoice) as cm:
+            main._experimental_root_install(scratch(), root, "Mods", game, "bullytest", 91, {"name": "Clock"})
+        self.assertEqual(cm.exception.options, ["Slow", "Slower"])
+        key = main._experimental_root_install(scratch(), root, "Mods", game, "bullytest", 91,
+                                              {"name": "Clock"}, "Slower")
+        self.assertTrue(key)
+        self.assertTrue(os.path.isfile(os.path.join(root, "_derpy_script_loader", "scripts", "Slower.lua")))
+        self.assertFalse(os.path.exists(os.path.join(root, "_derpy_script_loader", "scripts", "Slow.lua")))
+        shutil.rmtree(root, ignore_errors=True)

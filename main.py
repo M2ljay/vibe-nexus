@@ -7533,12 +7533,17 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
             f.lower().startswith(tuple(p.lower() + "/" for p in root_entries)) for f in rel_files):
         return ""  # plain pak/dll mod: the mods-folder install handles it
     if plan is None:
-        plan = experimental_games.plan_root_install(
-            rel_files, root_entries, experimental_games.index_game_dirs(install_path),
-            mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
-            experimental_games.index_game_files(install_path, mods_subdir),
-            experimental_games.content_root(game), game.get("installDirName") or "",
-        )
+        args = (rel_files, root_entries, experimental_games.index_game_dirs(install_path),
+                mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
+                experimental_games.index_game_files(install_path, mods_subdir),
+                experimental_games.content_root(game), game.get("installDirName") or "")
+        plan = experimental_games.plan_root_install(*args)
+        if plan is None:
+            variants = experimental_games.plan_variants(*args)
+            if variants:
+                if choice not in variants:
+                    raise NeedsChoice(sorted(variants))
+                plan = variants[choice]
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
     _record_vanilla_baseline(
@@ -34630,7 +34635,7 @@ query CollectionInstructions($slug: String!) {
                 paths = paths_by_mod.get(r["modId"]) or []
                 decky.logger.info(
                     f"library check {row['domain']}: {r['verdict']}: {r['name']!r} "
-                    f"(mod {r['modId']}, {r['file']}, {len(paths)} files) {paths[:14]}")
+                    f"(mod {r['modId']}, {r['file']}, {len(paths)} files) {paths[:60]}")
         return out
 
     async def check_experimental_coverage(self, app_id: int, count: int = 50,

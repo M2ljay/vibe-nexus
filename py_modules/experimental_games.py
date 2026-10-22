@@ -643,6 +643,43 @@ def _same_name(a: str, b: str) -> bool:
     return bool(a and b) and norm(a) == norm(b)
 
 
+def plan_variants(rel_files: list, root_entries: set, dir_index: dict, mods_subdir: str,
+                  exe_dir: str, file_index: dict = None, prefer: str = "", game_name: str = "") -> dict:
+    """Mods that ship alternatives side by side ("Slow/", "Slower/",
+    "Slowest/"; "New Suit Slot/" and "Replace Default Suit/"): {option:
+    plan} when the whole archive has no single place to go but each of
+    several folders, on its own, does. {} otherwise."""
+    files = drop_aside([f.replace("\\", "/").strip("/") for f in rel_files if f])
+    prefix = ""
+    for _ in range(3):  # wrappers around the alternatives
+        body = [f for f in files if f.startswith(prefix) and "/" in f[len(prefix):]]
+        tops = {f[len(prefix):].split("/")[0] for f in body}
+        if len(tops) != 1:
+            break
+        prefix += next(iter(tops)) + "/"
+    groups = {}
+    for f in files:
+        if not f.startswith(prefix) or "/" not in f[len(prefix):]:
+            continue
+        top, rest = f[len(prefix):].split("/", 1)
+        groups.setdefault(top, []).append((f, rest))
+    if len(groups) < 2:
+        return {}
+    out = {}
+    for name, items in sorted(groups.items()):
+        p = plan_root_install([r for _f, r in items], root_entries, dir_index, mods_subdir,
+                              exe_dir, file_index, prefer, game_name)
+        if not p:
+            continue
+        back = {r: f for f, r in items}
+        out[name] = [(back.get(s, s), d) for s, d in p]
+    # Only when the options cover the payload: a folder of extras that goes
+    # nowhere (screenshots aside) means this isn't a set of alternatives.
+    payload = {n for n, items in groups.items()
+               if any(not r.lower().endswith(_DOC_EXTS) for _f, r in items)}
+    return out if len(out) >= 2 and payload <= set(out) else {}
+
+
 def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
                       mods_subdir: str, exe_dir: str, file_index: dict = None,
                       prefer: str = "", game_name: str = ""):
@@ -720,6 +757,11 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
         parts = rel.split("/")
         top = parts[0].lower()
         if len(parts) == 1 and top.endswith(_DOC_EXTS):
+            own = (file_index or {}).get(top) or []
+            if prefer and len(own) > 1:
+                own = [h for h in own if h.lower().startswith(prefer.lower() + "/")]
+            if len(own) == 1 and "/" in own[0] and not re.search(r"read|licen|install|credit|change", top):
+                plan.append((src, own[0]))  # replaces the game's own file of that name
             continue  # a readme beside the payload
         dst = None
         if top in roots or top in ROOT_MARKERS:
@@ -1226,6 +1268,7 @@ VERDICTS = {
     "texmod": "is a TexMod package (.tpf) - it needs TexMod or uMod running with the game, "
               "which the plugin doesn't do",
     "old_version": "was made for an older version of the game and can't work on this one",
+    "docs_only": "is only instructions or screenshots - nothing to install",
 }
 
 
@@ -1272,8 +1315,16 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "wizard"
     payload_low = [f for f in low if not f.endswith(_DOC_EXTS)
                    and f.split("/")[-1] not in _BARE_DOCS]
+    if not payload_low and any(f.endswith((".txt", ".md", ".pdf", ".rtf", ".html", ".htm", ".url"))
+                               for f in low) \
+            and not any((file_index or {}).get(f.split("/")[-1]) for f in low):
+        return "docs_only"
     if payload_low and all(f.endswith(".tpf") for f in payload_low):
         return "texmod"
+    if game.get("nexusDomain") == "vampiresurvivors" and payload_low and all(
+            f.endswith(".png") for f in payload_low) and not any(
+            (file_index or {}).get(f.split("/")[-1]) for f in payload_low):
+        return "old_version"  # sprite sheets of the old JavaScript build
     if game.get("engine") == "unity" and any(f.split("/")[-1] == "main.bundle.js" for f in low):
         return "old_version"  # Vampire Survivors' 2022 JavaScript build; it's Unity now
     if payload_low and all(f.endswith(".ct") or f.endswith(_EXE_OR_INSTALLER) for f in payload_low) \
@@ -1287,7 +1338,8 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon32", ".addon64"))
                            or "reshade-shaders/" in f for f in payload_low) \
             and not any(f.split("/")[-1] in PROXY_DLLS for f in low) \
-            and not all(engine_config_ini(f) for f in payload_low if f.endswith(".ini")):
+            and (not any(f.endswith(".ini") for f in payload_low)
+                 or not all(engine_config_ini(f) for f in payload_low if f.endswith(".ini"))):
         return "reshade_ready" if game.get("reshadeSetup") else "reshade_preset"
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
@@ -1322,7 +1374,10 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
             return "tool_managed" if game.get("toolApply") else "mods_folder"
         if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
                              exe_dir_of(game.get("processName") or ""), file_index,
-                             content_root(game), game.get("installDirName") or ""):
+                             content_root(game), game.get("installDirName") or "") or plan_variants(
+                files, root_entries, dir_index, game.get("modsSubdir") or "",
+                exe_dir_of(game.get("processName") or ""), file_index, content_root(game),
+                game.get("installDirName") or ""):
             return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
@@ -1340,7 +1395,9 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     plan = plan_root_install(files, root_entries, dir_index,
                              game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""),
                              file_index, content_root(game), game.get("installDirName") or "")
-    if plan:
+    if plan or plan_variants(files, root_entries, dir_index, game.get("modsSubdir") or "",
+                             exe_dir_of(game.get("processName") or ""), file_index,
+                             content_root(game), game.get("installDirName") or ""):
         return "game_folder"
     loadable = _LOADABLE.get(game.get("engine") or "")
     if loadable is None:
