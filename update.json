@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.50",
- "hash": "a44cad6a7d3aeba5167fc7cfd70bbdbb324f9034e115f4f29a60a63b6e63eb9b",
+ "version": "1.21.32-anygame.51",
+ "hash": "4643ae9c17149ccdb319975a301d2fa3dd180d443ea3289f59abc533e9aa6410",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Installer mods run by themselves: self-extracting archives unpacked, Inno/NSIS installers run silently."
+ "notes": "Installer .exe downloads are handled instead of refused."
 }
