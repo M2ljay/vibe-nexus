@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.44",
- "hash": "68df6a31c986a2d251aa5130a95dbe728de62874968e37c3d557d6369828edfe",
+ "version": "1.21.32-anygame.45",
+ "hash": "1d9c0cd9b689db14cbd26945180f58349dc293bb0876782a9487f84ae1589e5d",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "New placement rules (Batman suit slots and more); fixed mixed-up archive lists."
+ "notes": "Mods with alternatives ask which one to install."
 }
