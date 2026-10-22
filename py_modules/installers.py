@@ -30,7 +30,8 @@ _APP_WORDS = re.compile(r"manager|launcher|editor|unpacker|repacker|randomi[sz]e
 
 
 def kind(path: str) -> str:
-    """'7z', 'rar', 'zip' (self-extracting), 'inno', 'nsis', 'msi' or ''."""
+    """'7z', 'rar', 'zip' (self-extracting), 'inno', 'nsis', 'msi',
+    'clickteam' or ''."""
     low = path.lower()
     if low.endswith(".msi"):
         return "msi"
@@ -50,6 +51,8 @@ def kind(path: str) -> str:
         return "inno"
     if NSIS_MARK in head:
         return "nsis"
+    if b"clickteam.com" in head.lower():
+        return "clickteam"  # Install Creator: no documented target-folder switch, so run by hand
     off = sfx_offset(head)
     if off is not None:
         return "7z" if head[off:off + 6] == SEVEN_SIG else "rar"

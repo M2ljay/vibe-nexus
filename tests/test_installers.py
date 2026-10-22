@@ -35,6 +35,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(installers.kind(self.exe("d.exe", STUB + base64.b64decode(fx.RAR5))), "rar")
         self.assertEqual(installers.kind(self.exe("e.exe", STUB + base64.b64decode(fx.T_ZIP))), "zip")
         self.assertEqual(installers.kind(self.exe("f.exe", STUB)), "")
+        self.assertEqual(installers.kind(self.exe("g.exe", STUB + b"http://www.clickteam.com")), "clickteam")
+        self.assertFalse(installers.auto_ok("clickteam", "The Git Gud Patch", "x.exe"))
         self.assertEqual(installers.kind("x.msi"), "msi")
 
     def test_silent_and_auto(self):

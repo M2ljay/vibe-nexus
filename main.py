@@ -23469,6 +23469,11 @@ query Link($slug: String!, $domainName: String!) {
                 # on as a one-file archive - unpacked if it self-extracts, run
                 # silently if it's an Inno/NSIS installer, else kept to run.
                 name = _safe_name(os.path.splitext(file_name or "")[0] or "installer") + ".exe"
+                # Whatever a failed extractor left behind is not the mod: on
+                # 2026-10-22 a stray "6-21" beside the installer made it look
+                # like a mod folder, and it went into BepInEx/plugins.
+                _force_rmtree(scratch)
+                os.makedirs(scratch, exist_ok=True)
                 try:
                     shutil.copyfile(archive_path, os.path.join(scratch, name))
                     err = ""
