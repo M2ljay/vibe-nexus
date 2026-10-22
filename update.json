@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.52",
- "hash": "785ecae123f4f06444c9d4a0f9f759ed192839cf772d5ad6a1cb610bf58443c4",
+ "version": "1.21.32-anygame.53",
+ "hash": "f0b2fee630c762763915e04189f8f1ba20797d6f4fd9fc8d50b4a9d03fb7458c",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Installer downloads fixed (Hollow Knight's Git Gud Patch)."
+ "notes": "No false 'installed no files' warning for installer mods."
 }
