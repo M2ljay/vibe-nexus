@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.47",
- "hash": "ab6c315d96c331b12dd11044379607cb8e7400e3eb36526a8ca53478973ccabb",
+ "version": "1.21.32-anygame.48",
+ "hash": "0a9657e4d2a1e0a424fb4d3d43e1ef63a0b73a1430884950a8930bd3331f5b57",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Persona 4 Golden loose mods, Beat Saber songs and sabers."
+ "notes": "RE Engine games (RE2 and family) through REFramework."
 }
