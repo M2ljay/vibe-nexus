@@ -50,7 +50,9 @@ def apply_re_profile(game: dict, dx12: bool) -> bool:
         return False
     game["engine"] = "reengine"
     game["processName"] = info["exe"]
-    game["modsSubdir"] = "natives"
+    # Anything without a natives/ or reframework/ layout lands here, out of
+    # the way, rather than in natives/<mod name> where nothing reads it.
+    game["modsSubdir"] = "Mods"
     game["reBuild"] = "dx12" if dx12 or "dx11" not in info else "dx11"
     for k in ("flatModExtensions", "mergeInto", "mergeBase", "extraFrameworks", "toolApply"):
         game.pop(k, None)
@@ -129,6 +131,15 @@ def wrong_build(rel_files: list, game: dict) -> bool:
     mine = "natives/stm/" if other == "natives/x64/" else "natives/x64/"
     low = ["/" + f.replace("\\", "/").lower() for f in rel_files or []]
     return any("/" + other in f for f in low) and not any("/" + mine in f for f in low)
+
+
+def wrong_build_note(game: dict) -> str:
+    if game.get("reBuild") == "dx12":
+        return ("Made for the game's DX11 build (natives/x64), but yours is the ray-traced build, "
+                "which won't load it. To use DX11 mods: in Steam, the game's Properties > Betas > "
+                "dx11_non-rt, then run Step 1 again so REFramework matches.")
+    return ("Made for the ray-traced build (natives/stm), but yours is the DX11 build. Switch Steam's "
+            "beta back to None, then run Step 1 again.")
 
 
 def enable_loose_loader(text: str) -> str:

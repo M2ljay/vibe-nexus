@@ -67,3 +67,18 @@ class UnpackSfxTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NestedArchiveTests(unittest.TestCase):
+    def test_unpacks_archives_inside(self):
+        import zipfile
+        from test_backend import main
+        d = tempfile.mkdtemp()
+        with zipfile.ZipFile(os.path.join(d, "MoguriFiles.zip"), "w") as z:
+            z.writestr("MoguriFiles/StreamingAssets/a.bin", b"x")
+        open(os.path.join(d, "Moguri.exe"), "wb").close()
+        self.assertTrue(main._unpack_nested(d, ["MoguriFiles.zip", "Moguri.exe"], {"toolApply": "memoria"}))
+        self.assertTrue(os.path.isfile(os.path.join(d, "MoguriFiles", "MoguriFiles", "StreamingAssets", "a.bin")))
+        self.assertFalse(os.path.exists(os.path.join(d, "MoguriFiles.zip")))
+        self.assertFalse(main._unpack_nested(d, ["x.zip"], {"toolApply": "doommodloader"}))
+        shutil.rmtree(d)

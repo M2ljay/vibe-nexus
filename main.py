@@ -7462,6 +7462,9 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         for n in names:
             rel_files.append(
                 os.path.relpath(os.path.join(root, n), scratch).replace(os.sep, "/"))
+    if _unpack_nested(scratch, rel_files, game):
+        rel_files = [os.path.relpath(os.path.join(r, n), scratch).replace(os.sep, "/")
+                     for r, _d, ns in os.walk(scratch) for n in ns]
     aliases = experimental_games.alias_paths(rel_files, game.get("nexusDomain") or "")
     if any(a != s for a, s in aliases.items()):
         # Lay the archive out under the game's own folder names first.
@@ -7624,6 +7627,10 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         # folder; the apply step rebuilds the archives with them.
         store = f"{gta_img.STORE}/{_safe_name(base_record.get('name') or 'mod')}"
         plan = [(s, f"{store}/{d.split(gta_img.MARK, 1)[1]}" if gta_img.MARK in d else d) for s, d in plan]
+    if not plan and re_engine.is_re(game) and any(f.lower().endswith(".exe") for f in rel_files):
+        # A program shipped with its data (Fluffy Mod Manager): kept to run,
+        # not dropped into the game's folders.
+        return _keep_program(scratch, rel_files, game, game_domain, base_record)
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
     _record_vanilla_baseline(
@@ -8015,6 +8022,60 @@ def _pick_program(rel_files: list, mod_name: str) -> str:
         name = set(re.findall(r"[a-z0-9]+", f.lower().split("/")[-1]))
         return (len(words & name), f.lower().endswith(".exe"), -f.count("/"))
     return max(exes, key=score)
+
+
+_NESTED_EXTS = (".7z", ".zip", ".rar")
+
+
+def _extract_sync(archive: str, dest: str) -> bool:
+    import subprocess
+    import zipfile
+    os.makedirs(dest, exist_ok=True)
+    if archive.lower().endswith(".zip"):
+        try:
+            with zipfile.ZipFile(archive) as z:
+                for m in z.infolist():
+                    if not m.is_dir() and _safe_rel_path(m.filename.replace("\\", "/")):
+                        z.extract(m, dest)
+            return True
+        except (zipfile.BadZipFile, OSError):
+            pass
+    for _name, build in _extractor_order(archive):
+        argv = build(archive, dest)
+        if not (shutil.which(argv[0]) or os.path.isfile(argv[0])):
+            continue
+        try:
+            if subprocess.run(argv, capture_output=True, env=_host_env(), timeout=1800,
+                              **_NO_WINDOW).returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return False
+
+
+def _unpack_nested(scratch: str, rel_files: list, game: dict) -> bool:
+    """A download that is archives inside the archive (Moguri Mod: its
+    installer beside two .7z of the mod itself): each unpacked in place,
+    into a folder named after it, so the real files can be placed. Not for
+    games whose mods ARE zips (DOOMModLoader, Beat Saber song packs)."""
+    if game.get("toolApply") == "doommodloader" or game.get("beatSaber") or game.get("toolApply") == "xv2ins":
+        return False
+    low = [f.lower() for f in rel_files]
+    nested = [f for f, fl in zip(rel_files, low) if fl.endswith(_NESTED_EXTS)]
+    rest = [fl for fl in low if not fl.endswith(_NESTED_EXTS)
+            and not fl.endswith(experimental_games._DOC_EXTS + experimental_games._EXE_OR_INSTALLER)]
+    if not nested or rest:
+        return False
+    done = False
+    for f in nested:
+        src = os.path.join(scratch, *f.split("/"))
+        dest = os.path.join(scratch, *f.split("/")[:-1], os.path.splitext(f.split("/")[-1])[0])
+        if _extract_sync(src, dest):
+            os.remove(src)
+            done = True
+    if done:
+        decky.logger.info(f"unpacked {len(nested)} archive(s) inside the download: {nested[:4]}")
+    return done
 
 
 def _unpack_sfx(exe: str, dest: str) -> bool:
@@ -34102,7 +34163,10 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") == memoria.DOMAIN and g.get("toolApply") != "memoria")
                          or (g.get("nexusDomain") in gta_img.GAMES and g.get("toolApply") != "gtaimg")
                          or (g.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN and not g.get("beatSaber"))
-                         or (g.get("nexusDomain") in re_engine.GAMES and not g.get("reBuild"))
+                         or (g.get("nexusDomain") in re_engine.GAMES and (
+                             not g.get("reBuild") or g.get("modsSubdir") == "natives"
+                             or (g.get("reBuild") == "dx12") != os.path.isdir(os.path.join(
+                                 _game_dir(g.get("installDirName") or ""), "D3D12"))))
                          or (g.get("nexusDomain") in experimental_games.TFC_GAMES
                              and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
@@ -34314,6 +34378,8 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             decky.logger.info(f"experimental profile {domain}: "
                               f"{(game.get('framework') or {}).get('name') or game.get('engine')}")
+            if re_engine.is_re(game):
+                await asyncio.to_thread(_flag_wrong_build, game)
             return
         if kingdom_hearts.apply_kh_profile(game):
             game["frameworkChecked"] = True
@@ -35396,6 +35462,8 @@ def _verify_record(game_domain: str, key: str) -> str:
     if not rec or not game or not _record_is_on(rec) or (rec.get("program") and not rec.get("files")):
         return ""  # an installer not run yet has no files of its own
     root = _game_dir(game.get("installDirName") or "")
+    if re_engine.is_re(game) and re_engine.wrong_build(rec.get("files") or [], game):
+        return (re_engine.wrong_build_note(game))
     if rec.get("mode") == "files":
         _base, paths = _files_record_paths(rec, root)
         if not paths:
@@ -36340,3 +36408,28 @@ def _wrap_install_block() -> None:
 
 
 _wrap_install_block()
+
+
+def _flag_wrong_build(game: dict) -> int:
+    """Note on every installed mod made for the other build of an RE game
+    (a DX11 collection on the ray-traced build), so My Mods says why it
+    does nothing."""
+    domain = game.get("nexusDomain") or ""
+    settings = _load_settings()
+    records = settings.get("installed", {}).get(domain) or {}
+    note = re_engine.wrong_build_note(game)
+    n = 0
+    for rec in records.values():
+        if not isinstance(rec, dict):
+            continue
+        wrong = re_engine.wrong_build(rec.get("files") or [], game)
+        warn = rec.get("warning") or ""
+        if wrong and note not in warn:
+            rec["warning"] = " ".join(x for x in (warn, note) if x)
+            n += 1
+        elif not wrong and note in warn:
+            rec["warning"] = warn.replace(note, "").strip()
+    if n:
+        _save_settings(settings)
+        decky.logger.info(f"{domain}: {n} installed mod(s) are for the other build")
+    return n

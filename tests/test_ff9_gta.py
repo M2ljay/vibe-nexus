@@ -190,3 +190,18 @@ class REEngineTests(unittest.TestCase):
         cfg = re_engine.enable_loose_loader("Menu_Open=false\nLooseFileLoader_Enabled=false\n")
         self.assertIn("LooseFileLoader_Enabled=true", cfg)
         self.assertNotIn("Enabled=false", cfg)
+
+
+class REBuildFlagTests(unittest.TestCase):
+    def test_flags_dx11_mods_on_rt(self):
+        from test_backend import main
+        import re_engine
+        g = {"nexusDomain": "residentevil22019", "installDirName": "RE2 test", "appId": 883710}
+        re_engine.apply_re_profile(g, True)
+        main._save_settings({"experimental_games": {"883710": g}, "installed": {"residentevil22019": {
+            "Old": {"mode": "files", "target": ".", "files": ["natives/x64/a.tex.10"]},
+            "New": {"mode": "files", "target": ".", "files": ["natives/stm/a.tex.34"]}}}})
+        self.assertEqual(main._flag_wrong_build(g), 1)
+        recs = main._load_settings()["installed"]["residentevil22019"]
+        self.assertIn("dx11_non-rt", recs["Old"]["warning"])
+        self.assertNotIn("warning", recs["New"])
