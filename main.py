@@ -18125,6 +18125,9 @@ def _is_rar(archive_path: str) -> bool:
         return False
 
 
+PROGRAM_DOWNLOAD = "This download is a Windows program"
+
+
 def _extractor_order(archive_path: str) -> tuple:
     """bsdtar first, except for RAR: libarchive can read a RAR5 from a
     recent WinRAR wrongly AND exit 0, so no fallback ever ran. Perkaholic
@@ -18205,7 +18208,7 @@ async def _extract_archive(archive_path: str, dest_dir: str) -> str:
         is_program = False
     if is_program:
         # Not an archive at all: the author uploaded the tool itself.
-        return ("This download is a Windows program (a modding tool), not "
+        return (PROGRAM_DOWNLOAD + " (a modding tool), not "
                 "mod files - it has to be run from the desktop, so the "
                 "plugin can't install it.")
     if (sys.platform == "win32" and _is_rar(archive_path)
@@ -23461,6 +23464,16 @@ query Link($slug: String!, $domainName: String!) {
             _force_rmtree(scratch)
             os.makedirs(scratch, exist_ok=True)
             err = await _extract_archive(archive_path, scratch)
+            if err and err.startswith(PROGRAM_DOWNLOAD) and _experimental_game_for(game_domain):
+                # Any-game mode: a download that is the installer itself goes
+                # on as a one-file archive - unpacked if it self-extracts, run
+                # silently if it's an Inno/NSIS installer, else kept to run.
+                name = _safe_name(os.path.splitext(file_name or "")[0] or "installer") + ".exe"
+                try:
+                    shutil.copyfile(archive_path, os.path.join(scratch, name))
+                    err = ""
+                except OSError as e:
+                    err = f"copy: {e}"
             if err:
                 _force_rmtree(scratch)
                 # Evict the cached archive: a corrupt download must not
