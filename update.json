@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.54",
- "hash": "b1b33cf4c0fe189b4e6491591ed319dc02cef5e51bf4b1058b23a0e33902e341",
+ "version": "1.21.32-anygame.55",
+ "hash": "7b4cd9d7a75ae1de72db4546e925abe92bc3400525067966e7fefea9cece4ec2",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "Nested archives unpacked; RE2 DX11/RT mismatch flagged."
+ "notes": "Step 1 removal no longer fights a mod that owns the same file."
 }
