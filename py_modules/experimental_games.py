@@ -482,7 +482,9 @@ PROXY_DLLS = {
 ROOT_MARKERS = {"bepinex", "melonloader", "doorstop_config.ini", "winhttp.dll",
                 "version.dll", ".doorstop_version",
                 # Bully: Derpy's Script Loader keeps its scripts beside the exe.
-                "_derpy_script_loader"}
+                "_derpy_script_loader",
+                # GTA III / Vice City: CLEO's script folder.
+                "cleo"}
 # Loose documentation that has no business in a game folder.
 _DOC_EXTS = (".txt", ".md", ".url", ".jpg", ".jpeg", ".png", ".pdf", ".html",
              ".htm", ".rtf", ".webp", ".gif")
@@ -532,7 +534,23 @@ def index_game_files(install_path: str, mods_subdir: str = "", max_depth: int = 
             n += 1
             if n >= cap:
                 return index
+    _add_archive_entries(install_path, index)
     return index
+
+
+def _add_archive_entries(install_path: str, index: dict) -> None:
+    """GTA III / Vice City: the models and textures inside models/gta3.img
+    are game files too (as "models/gta3.img::name"), and CLEO's folders are
+    where scripts go even before Step 1 has made them."""
+    import gta_img
+    if not gta_img.is_v1_game(install_path):
+        return
+    for name, img in gta_img.names(install_path).items():
+        if name not in index:
+            index[name] = [f"{img}{gta_img.MARK}{name}"]
+    index.setdefault("\0cleo-home.cs", ["cleo/\0cleo-home.cs"])
+    index.setdefault("\0cleo-home.fxt", ["cleo/cleo_text/\0cleo-home.fxt"])
+    index.setdefault("\0cleo-home.cleo", ["cleo/cleo_plugins/\0cleo-home.cleo"])
 
 
 # Where a game's own content lives when the same folder name appears in
@@ -641,6 +659,35 @@ def ue3_dlc_plan(files: list, dir_index: dict, prefer: str = ""):
 def _same_name(a: str, b: str) -> bool:
     norm = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())  # noqa: E731
     return bool(a and b) and norm(a) == norm(b)
+
+
+# Games whose mods are laid out with other names for the game's folders:
+# Forza Horizon's mods say "mediapc/" (and "Content/" for the game folder)
+# for what the Steam game calls media/.
+PATH_ALIASES = {
+    "forzahorizon6": {"content": "", "mediapc": "media"},
+    "forzahorizon5": {"content": "", "mediapc": "media"},
+    "forzahorizon4": {"content": "", "mediapc": "media"},
+}
+
+
+def alias_paths(rel_files: list, domain: str) -> dict:
+    """{path as the game names it: path in the archive}."""
+    rules = PATH_ALIASES.get(domain or "")
+    out = {}
+    for f in rel_files or []:
+        g = f.replace("\\", "/")
+        if rules:
+            parts = g.split("/")
+            for _ in range(2):
+                low = parts[0].lower() if parts else ""
+                if low in rules and len(parts) > 1:
+                    parts = ([rules[low]] if rules[low] else []) + parts[1:]
+                else:
+                    break
+            g = "/".join(parts)
+        out.setdefault(g, f)
+    return out
 
 
 def plan_variants(rel_files: list, root_entries: set, dir_index: dict, mods_subdir: str,
@@ -1310,6 +1357,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if paths is None:
         return "unknown"
     files = [p.replace("\\", "/").strip("/") for p in paths if p]
+    files = list(alias_paths(files, game.get("nexusDomain") or ""))
     low = [f.lower() for f in files]
     if any(f.endswith("fomod/moduleconfig.xml") for f in low):
         return "wizard"
@@ -1349,6 +1397,10 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if game.get("toolApply") == "khpatch" and any(
             f.endswith((".kh1pcpatch", ".kh2pcpatch", ".compcpatch", ".bbspcpatch", ".lua")) for f in low):
         return "tool_managed"
+    if game.get("toolApply") == "memoria":
+        import memoria
+        if memoria.mod_folders(files):
+            return "tool_managed"
     if game.get("toolApply") == "tfcinstaller" and tfc_mod_roots(files):
         return "tool_managed"
     if game.get("toolApply") == "doommodloader" and payload_low and not any(

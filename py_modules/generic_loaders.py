@@ -82,6 +82,28 @@ LOADERS = {
         "detect": "DOOMModLoader.exe",
         "url": "https://github.com/ZwipZwapZapony/DOOMModLoader",
     },
+    "cleo3": {
+        "name": "CLEO (GTA III)",
+        "repo": "cleolibrary/III.VC.CLEO",
+        "tag": r"^v?\d",
+        "asset64": r"^III\.CLEO-v?[\d.]+\.zip$",
+        "asset32": r"^III\.CLEO-v?[\d.]+\.zip$",
+        "prerelease": False,
+        "target": "root",
+        "detect": "III.CLEO.asi",
+        "url": "https://github.com/cleolibrary/III.VC.CLEO",
+    },
+    "cleovc": {
+        "name": "CLEO (Vice City)",
+        "repo": "cleolibrary/III.VC.CLEO",
+        "tag": r"^v?\d",
+        "asset64": r"^VC\.CLEO-v?[\d.]+\.zip$",
+        "asset32": r"^VC\.CLEO-v?[\d.]+\.zip$",
+        "prerelease": False,
+        "target": "root",
+        "detect": "VC.CLEO.asi",
+        "url": "https://github.com/cleolibrary/III.VC.CLEO",
+    },
     "sr2juiced": {
         "name": "Juiced Patch",
         # The project's releases live here; Clippy95's repo is the source mirror.

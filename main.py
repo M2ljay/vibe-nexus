@@ -32,6 +32,8 @@ import xenoverse2  # noqa: E402
 import reshade_setup  # noqa: E402
 import kingdom_hearts  # noqa: E402
 import archive_peek  # noqa: E402
+import gta_img  # noqa: E402
+import memoria  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7458,6 +7460,15 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         for n in names:
             rel_files.append(
                 os.path.relpath(os.path.join(root, n), scratch).replace(os.sep, "/"))
+    aliases = experimental_games.alias_paths(rel_files, game.get("nexusDomain") or "")
+    if any(a != s for a, s in aliases.items()):
+        # Lay the archive out under the game's own folder names first.
+        for a, s in aliases.items():
+            if a != s and _safe_rel_path(a):
+                dst = os.path.join(scratch, *a.split("/"))
+                _makedirs_for(dst)
+                shutil.move(os.path.join(scratch, *s.split("/")), dst)
+        rel_files = list(aliases)
     if reloaded_ii.is_reloaded_game(game):
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
@@ -7487,6 +7498,8 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
         return ""
     base = install_path
     plan = None
+    if game.get("toolApply") == "memoria":
+        plan = memoria.plan(rel_files, _safe_name(base_record.get("name") or "mod")) or None
     merge = game.get("mergeInto")
     if merge and experimental_games.only_programs(rel_files):
         return ""  # an installer program: refused as one, not merged
@@ -7544,6 +7557,11 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
                 if choice not in variants:
                     raise NeedsChoice(sorted(variants))
                 plan = variants[choice]
+    if plan and any(gta_img.MARK in d for _s, d in plan):
+        # Entries of the game's model/texture archives: kept in the mods
+        # folder; the apply step rebuilds the archives with them.
+        store = f"{gta_img.STORE}/{_safe_name(base_record.get('name') or 'mod')}"
+        plan = [(s, f"{store}/{d.split(gta_img.MARK, 1)[1]}" if gta_img.MARK in d else d) for s, d in plan]
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
     _record_vanilla_baseline(
@@ -8552,6 +8570,44 @@ def _reloaded_register_helpers(game: dict) -> list:
     return done
 
 
+async def _fetch_loader_tree(spec: dict, is64: bool, loader_id: str) -> tuple:
+    """(error, tag, (work dir, unwrapped source dir)) for one loader release."""
+    try:
+        releases = json.loads(await _fetch_bytes(
+            generic_loaders.GITHUB_API.format(repo=spec["repo"]), 60))
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as e:
+        return f"Could not reach {spec['name']}'s releases: {e}", "", None
+    picked = generic_loaders.pick_asset(releases, spec, is64)
+    if not picked:
+        return f"{spec['name']} has no release to install.", "", None
+    tag, asset, url = picked
+    work = os.path.join(DOWNLOADS_DIR, "loader-" + loader_id)
+    _force_rmtree(work)
+    os.makedirs(work, exist_ok=True)
+    archive = os.path.join(DOWNLOADS_DIR, "loader-" + asset)
+    try:
+        with open(archive, "wb") as f:
+            f.write(await _fetch_bytes(url, 600))
+        err = await _extract_archive(archive, work)
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, OSError) as e:
+        _force_rmtree(work)
+        return f"Could not download {spec['name']}: {e}", "", None
+    finally:
+        try:
+            os.remove(archive)
+        except OSError:
+            pass
+    if err:
+        _force_rmtree(work)
+        return f"Could not unpack {spec['name']}: {err}", "", None
+    entries = os.listdir(work)
+    src = work
+    if len(entries) == 1 and os.path.isdir(os.path.join(work, entries[0])) and \
+            entries[0].lower() not in ("bepinex", "melonloader", "ue4ss", "mods", "cleo"):
+        src = os.path.join(work, entries[0])
+    return "", tag, (work, src)
+
+
 async def _github_loader_setup(game_domain: str) -> dict:
     """Step 1 for a game whose mods need an engine-wide loader: download
     it from the project's GitHub releases and copy it into the game,
@@ -8635,6 +8691,30 @@ async def _github_loader_setup(game_domain: str) -> dict:
             shutil.copyfile(os.path.join(cur, n), dst)
             files.append(dst_rel)
     _force_rmtree(work)
+    # Loaders that come with it (GTA III: CLEO beside the ASI loader).
+    for extra_id in fw.get("with") or []:
+        extra = generic_loaders.LOADERS.get(extra_id)
+        if not extra:
+            continue
+        err, etag, etree = await _fetch_loader_tree(extra, is64, extra_id)
+        if err:
+            return {"ok": False, "error": err}
+        ebase = exe_dir_rel if extra["target"] == "exe" else ""
+        for cur, _dirs, names in os.walk(etree[1]):
+            for n in names:
+                rel = os.path.relpath(os.path.join(cur, n), etree[1]).replace(os.sep, "/")
+                dst_rel = "/".join(x for x in (ebase, rel) if x)
+                if not _safe_rel_path(dst_rel) or dst_rel in files:
+                    continue
+                dst = os.path.join(root, *dst_rel.split("/"))
+                _makedirs_for(dst)
+                if os.path.isfile(dst) and not os.path.exists(dst + ".nexusbak"):
+                    os.replace(dst, dst + ".nexusbak")
+                    backups.append(dst_rel)
+                shutil.copyfile(os.path.join(cur, n), dst)
+                files.append(dst_rel)
+        _force_rmtree(etree[0])
+        tag = f"{tag}, {extra['name']} {etag}"
     settings = _load_settings()
     settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
         "install_dir": game.get("installDirName") or "",
@@ -9713,7 +9793,8 @@ def _sr2_restore_exe(root: str) -> bool:
     return True
 
 
-TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader", "tfcinstaller", "khpatch")
+TOOL_KINDS = ("overstrike", "reloaded", "xv2ins", "doommodloader", "tfcinstaller", "khpatch",
+              "memoria", "gtaimg")
 
 
 async def _gh_asset(spec: dict) -> tuple:
@@ -10169,6 +10250,10 @@ async def _tool_apply(game: dict) -> dict:
         return await _tfc_apply(game)
     if kind == "khpatch":
         return await _kh_apply(game)
+    if kind == "memoria":
+        return await _memoria_apply(game)
+    if kind == "gtaimg":
+        return await _gta_apply(game)
     result = await _overstrike_apply(game)
     result.setdefault("tool", "Overstrike")
     return result
@@ -26181,6 +26266,11 @@ query Link($slug: String!, $domainName: String!) {
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
             return result
+        if install_kind == "memoria":
+            result = await _memoria_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"Memoria Step 1: {result.get('error')}")
+            return result
         if install_kind == "khTools":
             result = await _kh_setup(game_domain)
             if not result.get("ok"):
@@ -33884,6 +33974,8 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") == experimental_games.DOOM_DOMAIN
                              and g.get("toolApply") != "doommodloader")
                          or (g.get("nexusDomain") in kingdom_hearts.GAMES and g.get("toolApply") != "khpatch")
+                         or (g.get("nexusDomain") == memoria.DOMAIN and g.get("toolApply") != "memoria")
+                         or (g.get("nexusDomain") in gta_img.GAMES and g.get("toolApply") != "gtaimg")
                          or (g.get("nexusDomain") in experimental_games.TFC_GAMES
                              and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
@@ -34087,6 +34179,11 @@ query CollectionInstructions($slug: String!) {
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
+            return
+        if memoria.apply_ff9_profile(game) or gta_img.apply_gta_profile(game):
+            game["frameworkChecked"] = True
+            game["profileVersion"] = experimental_games.PROFILE_VERSION
+            decky.logger.info(f"experimental profile {domain}: {game['framework']['name']}")
             return
         if kingdom_hearts.apply_kh_profile(game):
             game["frameworkChecked"] = True
@@ -34602,7 +34699,8 @@ query CollectionInstructions($slug: String!) {
             rule = _vortex_rules().get(row["domain"])
             if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
                     game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()) \
-                    or kingdom_hearts.apply_kh_profile(game):
+                    or kingdom_hearts.apply_kh_profile(game) or memoria.apply_ff9_profile(game) \
+                    or gta_img.apply_gta_profile(game):
                 rule = None
             if rule:
                 exe = experimental_games.exe_from_rule(rule, path)
@@ -35222,14 +35320,26 @@ _wrap_install_checks()
 # ---- Re-apply after a game update ---------------------------------------------
 # Overstrike records its own state (build id + toc). The other tools that
 # write into the game's own files record theirs here after each apply.
-REAPPLY_KINDS = ("khpatch", "doommodloader")
+REAPPLY_KINDS = ("khpatch", "doommodloader", "memoria", "gtaimg")
 
 
 def _tool_fingerprint(game: dict) -> dict:
     root = _game_dir(game.get("installDirName") or "")
     if game.get("toolApply") == "khpatch":
         return _kh_hed_state(root)
+    if game.get("toolApply") == "memoria":
+        return _file_fp(os.path.join(root, *memoria.PATCHED_DLL.split("/")))
+    if game.get("toolApply") == "gtaimg":
+        return {b: _file_fp(os.path.join(root, *b.split("/")) + ".dir") for b in gta_img.PAIRS}
     return {}
+
+
+def _file_fp(path: str) -> list:
+    try:
+        st = os.stat(path)
+        return [st.st_size, int(st.st_mtime)]
+    except OSError:
+        return []
 
 
 def _record_tool_state(game: dict, result: dict) -> None:
@@ -35854,3 +35964,118 @@ async def _peek_paths(game_domain: str, mod_id: int, file_id: int):
     _peek_cache_put(key, paths)
     decky.logger.info(f"archive peek {game_domain}/{mod_id}: {len(paths)} files")
     return paths or None
+
+
+# ---- Final Fantasy IX: Memoria --------------------------------------------------
+def _memoria_run_patcher(root: str) -> tuple:
+    import subprocess
+    exe = os.path.join(root, "Memoria.Patcher.exe")
+    # It waits for Enter only when it fails; on success it closes itself.
+    proc = subprocess.run([exe, root], cwd=root, env=_host_env(), input=b"\r\n\r\n",
+                          capture_output=True, timeout=900, **_NO_WINDOW)
+    out = (proc.stdout or b"").decode("utf-8", "replace") + (proc.stderr or b"").decode("utf-8", "replace")
+    return proc.returncode, out
+
+
+async def _memoria_patch(game: dict) -> str:
+    """Run Memoria's patcher; "" when it worked, else why not."""
+    root = _game_dir(game.get("installDirName") or "")
+    for exe in ("FF9.exe", "FF9_Launcher.exe"):
+        if await _process_running(exe):
+            return "Close the game first."
+    try:
+        rc, out = await asyncio.to_thread(_memoria_run_patcher, root)
+    except (OSError, ValueError) as e:
+        return f"Memoria's patcher didn't run: {e}"
+    decky.logger.info(f"Memoria patcher: exit {rc}: {out.strip()[-600:]}")
+    if rc != 0 or not memoria.patch_ok(out):
+        return "Memoria's patcher didn't finish - see the plugin log."
+    return ""
+
+
+async def _memoria_setup(game_domain: str) -> dict:
+    game = _experimental_game_for(game_domain)
+    if not game or game.get("toolApply") != "memoria":
+        return {"ok": False, "error": "Not Final Fantasy IX"}
+    root = _game_dir(game.get("installDirName") or "")
+    try:
+        tag, blob = await _gh_asset(memoria.PATCHER)
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError, OSError) as e:
+        return {"ok": False, "error": f"Couldn't download Memoria: {e}"}
+    with open(os.path.join(root, "Memoria.Patcher.exe"), "wb") as f:
+        f.write(blob)
+    err = await _memoria_patch(game)
+    if err:
+        return {"ok": False, "error": err}
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
+        "install_dir": game.get("installDirName") or "", "files": ["Memoria.Patcher.exe"],
+        "backups": [], "tool": "memoria", "version": tag}
+    _save_settings(settings)
+    return {"ok": True, "install_path": root, "version": tag}
+
+
+def _memoria_folders(game_domain: str) -> tuple:
+    """(our switched-on mod folders, newest first; every folder of ours)."""
+    records = (_load_settings().get("installed", {}).get(game_domain) or {})
+    on, every = [], set()
+    for rec in sorted(records.values(), key=lambda r: -(r.get("install_seq") or 0)):
+        tops = {f.split("/")[0] for f in rec.get("files") or [] if "/" in f}
+        every |= tops
+        if _record_is_on(rec):
+            on += [t for t in sorted(tops) if t not in on]
+    return on, every
+
+
+async def _memoria_apply(game: dict) -> dict:
+    tool = "Memoria"
+    root = _game_dir(game.get("installDirName") or "")
+    ini = os.path.join(root, "Memoria.ini")
+    state = (_load_settings().get("tool_apply_state") or {}).get(game.get("nexusDomain") or "") or {}
+    fp = _file_fp(os.path.join(root, *memoria.PATCHED_DLL.split("/")))
+    if state.get("fp") and fp != state["fp"] and os.path.isfile(os.path.join(root, "Memoria.Patcher.exe")):
+        err = await _memoria_patch(game)  # Steam put the game's own code back
+        if err:
+            return {"ok": False, "tool": tool, "error": err}
+    if not os.path.isfile(ini):
+        return {"ok": False, "tool": tool, "error": "Memoria isn't installed - run Step 1 first."}
+    on, every = _memoria_folders(game.get("nexusDomain") or "")
+    with open(ini, encoding="utf-8-sig", errors="replace") as f:
+        text = f.read()
+    new = memoria.set_folder_names(text, on, every)
+    if new != text:
+        with open(ini, "w", encoding="utf-8") as f:
+            f.write(new)
+    return {"ok": True, "tool": tool, "count": len(on)}
+
+
+# ---- GTA III / Vice City: model and texture archives ----------------------------
+async def _gta_apply(game: dict) -> dict:
+    tool = "GTA archives"
+    domain = game.get("nexusDomain") or ""
+    root = _game_dir(game.get("installDirName") or "")
+    exe = os.path.basename(game.get("processName") or "")
+    if exe and await _process_running(exe):
+        return {"ok": False, "tool": tool, "error": "Close the game first."}
+    records = _load_settings().get("installed", {}).get(domain) or {}
+    reps = []
+    for rec in sorted(records.values(), key=lambda r: r.get("install_seq") or 0):
+        if not _record_is_on(rec):
+            continue
+        for f in rec.get("files") or []:
+            if f.lower().startswith(gta_img.STORE.lower() + "/"):
+                p = os.path.join(root, *f.split("/"))
+                if os.path.isfile(p):
+                    reps.append((f.split("/")[-1], p))
+    settings = _load_settings()
+    state = (settings.get("gta_img") or {}).get(domain) or {}
+    if not reps and not state:
+        return {"ok": True, "tool": tool, "count": 0}
+    try:
+        state = await asyncio.to_thread(gta_img.rebuild, root, state, reps)
+    except OSError as e:
+        return {"ok": False, "tool": tool, "error": f"Couldn't rebuild the game's archives: {e}"}
+    settings = _load_settings()
+    settings.setdefault("gta_img", {})[domain] = state
+    _save_settings(settings)
+    return {"ok": True, "tool": tool, "count": len(reps)}

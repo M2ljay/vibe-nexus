@@ -88,7 +88,7 @@ export interface GameFramework {
   aliasModIds?: number[];
   /** How the framework archive installs: SMAPI's install.dat method, or
    * flatten-and-copy into the game dir (SKSE-style) */
-  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools" | "tfcInstaller" | "khTools";
+  installKind?: "smapi" | "copyRoot" | "masseffectBink" | "copyRootTracked" | "reloaded2" | "githubLoader" | "xv2tools" | "tfcInstaller" | "khTools" | "memoria";
   /** Shown with Step 1 and confirmed before installing (experimental
    * games: the loader is inferred, and may carry a ban risk). */
   warning?: string;
@@ -314,7 +314,7 @@ export interface SupportedGame {
   /** Experimental tool-managed games: the backend applies installed mods
    * with this tool after every change (Insomniac ports: Overstrike;
    * Persona and friends: Reloaded-II). */
-  toolApply?: "overstrike" | "reloaded" | "xv2ins" | "doommodloader" | "tfcinstaller" | "khpatch";
+  toolApply?: "overstrike" | "reloaded" | "xv2ins" | "doommodloader" | "tfcinstaller" | "khpatch" | "memoria" | "gtaimg";
   /** Experimental: Nexus games one install can be modded as (Kingdom Hearts collection). */
   domainChoices?: { domain: string; name: string }[];
   /** Experimental: bring the game's window to the front after launch. */
@@ -1945,7 +1945,7 @@ export function getActiveGame(runningAppId: number | undefined): SupportedGame {
 /** Experimental loaders whose files the backend tracks: switched off by
  * renaming them, removed exactly. */
 export function isTrackedLoader(kind?: string): boolean {
-  return kind === "copyRootTracked" || kind === "reloaded2" || kind === "githubLoader" || kind === "xv2tools" || kind === "tfcInstaller" || kind === "khTools";
+  return kind === "copyRootTracked" || kind === "reloaded2" || kind === "githubLoader" || kind === "xv2tools" || kind === "tfcInstaller" || kind === "khTools" || kind === "memoria";
 }
 
 /** The display name of a tool-managed game's mod tool. */
@@ -1953,5 +1953,7 @@ export function toolName(kind?: string): string {
   return kind === "reloaded" ? "Reloaded-II" : kind === "xv2ins" ? "XV2 Mods Installer"
     : kind === "doommodloader" ? "DOOMModLoader"
     : kind === "tfcinstaller" ? "TFC Installer"
-    : kind === "khpatch" ? "KHPCPatchManager" : "Overstrike";
+    : kind === "khpatch" ? "KHPCPatchManager"
+    : kind === "memoria" ? "Memoria"
+    : kind === "gtaimg" ? "the game's archives" : "Overstrike";
 }
