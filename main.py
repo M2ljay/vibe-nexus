@@ -7469,6 +7469,27 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
                 _makedirs_for(dst)
                 shutil.move(os.path.join(scratch, *s.split("/")), dst)
         rel_files = list(aliases)
+    if reloaded_ii.is_reloaded_game(game) and game_domain in reloaded_ii.ESSENTIALS_GAMES \
+            and not reloaded_ii.find_mods(rel_files):
+        try:
+            cpks = {n for n in os.listdir(install_path) if n.lower().endswith(".cpk")}
+        except OSError:
+            cpks = set()
+        wrap = reloaded_ii.persona_wrap(rel_files, cpks)
+        if wrap:
+            # Loose game files: packed into a Reloaded mod for Persona Essentials.
+            name = base_record.get("name") or "Mod"
+            mod_id = "nexus." + re.sub(r"[^a-z0-9]+", ".", f"{game_domain}.{name}".lower()).strip(".")
+            mod_dir = os.path.join(scratch, "__wrapped", reloaded_ii.safe_id(mod_id))
+            for src, dst in wrap:
+                d = os.path.join(mod_dir, *dst.split("/"))
+                _makedirs_for(d)
+                shutil.move(os.path.join(scratch, *src.split("/")), d)
+            _write_json(os.path.join(mod_dir, "ModConfig.json"), reloaded_ii.wrapped_mod_config(
+                mod_id, name, str(base_record.get("author") or ""),
+                reloaded_ii.ESSENTIALS_GAMES[game_domain]))
+            rel_files = [os.path.relpath(os.path.join(r, n), scratch).replace(os.sep, "/")
+                         for r, _d, ns in os.walk(mod_dir) for n in ns]
     if reloaded_ii.is_reloaded_game(game):
         key = _reloaded_install_mods(scratch, rel_files, game, game_domain, base_record)
         if key:
@@ -7500,6 +7521,31 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     plan = None
     if game.get("toolApply") == "memoria":
         plan = memoria.plan(rel_files, _safe_name(base_record.get("name") or "mod")) or None
+    if game.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN:
+        plan = experimental_games.beatsaber_plan(rel_files, _safe_name(base_record.get("name") or "Song"))
+        if plan and any(d.endswith(".zip") for _s, d in plan):
+            # A pack of zipped songs: each zip unpacked into its own folder.
+            import zipfile
+            flat = []
+            for s, d in plan:
+                if not d.endswith(".zip"):
+                    flat.append((s, d))
+                    continue
+                try:
+                    with zipfile.ZipFile(os.path.join(scratch, *s.split("/"))) as z:
+                        sub_dir = d[:-4]
+                        for m in z.namelist():
+                            if m.endswith("/") or not _safe_rel_path(m):
+                                continue
+                            out = os.path.join(scratch, "__songs", *sub_dir.split("/"), *m.split("/")[-1:])
+                            _makedirs_for(out)
+                            with z.open(m) as src, open(out, "wb") as dst:
+                                shutil.copyfileobj(src, dst)
+                            flat.append((os.path.relpath(out, scratch).replace(os.sep, "/"),
+                                         f"{sub_dir}/{m.split('/')[-1]}"))
+                except (zipfile.BadZipFile, OSError):
+                    continue
+            plan = flat or None
     merge = game.get("mergeInto")
     if merge and experimental_games.only_programs(rel_files):
         return ""  # an installer program: refused as one, not merged
@@ -33976,6 +34022,7 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") in kingdom_hearts.GAMES and g.get("toolApply") != "khpatch")
                          or (g.get("nexusDomain") == memoria.DOMAIN and g.get("toolApply") != "memoria")
                          or (g.get("nexusDomain") in gta_img.GAMES and g.get("toolApply") != "gtaimg")
+                         or (g.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN and not g.get("beatSaber"))
                          or (g.get("nexusDomain") in experimental_games.TFC_GAMES
                              and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
@@ -34180,10 +34227,12 @@ query CollectionInstructions($slug: String!) {
             game.pop("framework", None)
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
             return
-        if memoria.apply_ff9_profile(game) or gta_img.apply_gta_profile(game):
+        if memoria.apply_ff9_profile(game) or gta_img.apply_gta_profile(game) or \
+                experimental_games.apply_beatsaber_profile(game):
             game["frameworkChecked"] = True
             game["profileVersion"] = experimental_games.PROFILE_VERSION
-            decky.logger.info(f"experimental profile {domain}: {game['framework']['name']}")
+            decky.logger.info(f"experimental profile {domain}: "
+                              f"{(game.get('framework') or {}).get('name') or game.get('engine')}")
             return
         if kingdom_hearts.apply_kh_profile(game):
             game["frameworkChecked"] = True
@@ -34700,7 +34749,7 @@ query CollectionInstructions($slug: String!) {
             if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
                     game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()) \
                     or kingdom_hearts.apply_kh_profile(game) or memoria.apply_ff9_profile(game) \
-                    or gta_img.apply_gta_profile(game):
+                    or gta_img.apply_gta_profile(game) or experimental_games.apply_beatsaber_profile(game):
                 rule = None
             if rule:
                 exe = experimental_games.exe_from_rule(rule, path)

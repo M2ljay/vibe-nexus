@@ -118,3 +118,38 @@ class ForzaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PersonaTests(unittest.TestCase):
+    def test_old_and_new_layouts(self):
+        import reloaded_ii
+        g = {"nexusDomain": "persona4golden", "toolApply": "reloaded", "engine": "reloaded"}
+        roots = {"data.cpk", "data_e.cpk", "P4G.exe"}
+        self.assertEqual(eg.classify_mod(["ReaperEverywhere/data00004/field/script/dungeon.bf"], g, roots, {},
+                                         False, {}), "old_version")
+        self.assertEqual(eg.classify_mod(["BGM.xwb"], g, roots, {}, False, {}), "old_version")
+        self.assertEqual(eg.classify_mod(["Culprit/tblpatches/SKILL_Patches.tbp", "Culprit/Package.xml"], g, roots,
+                                         {}, False, {}), "old_version")
+        files = ["My Mod/data_e/init_free/battle/AICALC.TBL", "My Mod/readme.txt"]
+        self.assertEqual(eg.classify_mod(files, g, roots, {}, False, {}), "tool_managed")
+        self.assertEqual(reloaded_ii.persona_wrap(files, {"data_e.cpk"}),
+                         [(files[0], "P5REssentials/CPK/data_e.cpk/init_free/battle/AICALC.TBL")])
+        cfg = reloaded_ii.wrapped_mod_config("nexus.x", "X", "", "p4g.exe")
+        self.assertEqual(cfg["ModDependencies"], ["p5rpc.modloader"])
+
+
+class BeatSaberTests(unittest.TestCase):
+    def test_songs_and_sabers(self):
+        g = {"nexusDomain": "beatsaber", "engine": "unity"}
+        eg.apply_beatsaber_profile(g)
+        song = ["info.dat", "cover.jpg", "Hard.dat", "song.egg"]
+        self.assertEqual(dict(eg.beatsaber_plan(song, "Tenacious D"))["song.egg"],
+                         "Beat Saber_Data/CustomLevels/Tenacious D/song.egg")
+        pack = [f"Beat Sage_ Call Me/{n}" for n in ("Info.dat", "song.ogg")] + ["Other/info.dat", "Other/a.ogg"]
+        dsts = {d for _s, d in eg.beatsaber_plan(pack, "x")}
+        self.assertIn("Beat Saber_Data/CustomLevels/Beat Sage_ Call Me/song.ogg", dsts)
+        self.assertIn("Beat Saber_Data/CustomLevels/Other/a.ogg", dsts)
+        self.assertEqual(eg.beatsaber_plan(["Virtuous Contract & Cruel Oath.saber"], "x"),
+                         [("Virtuous Contract & Cruel Oath.saber", "CustomSabers/Virtuous Contract & Cruel Oath.saber")])
+        self.assertEqual(eg.classify_mod(["Pack/a.zip", "Pack/b.zip"], g, set(), {}, False, {}), "game_folder")
+        self.assertNotIn("framework", g)

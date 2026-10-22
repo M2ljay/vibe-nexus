@@ -661,6 +661,57 @@ def _same_name(a: str, b: str) -> bool:
     return bool(a and b) and norm(a) == norm(b)
 
 
+# ---- Beat Saber: custom songs and sabers -----------------------------------
+# Songs are folders with an info.dat and their audio; SongCore (installed
+# with BSManager, the game's mod manager) reads them from
+# Beat Saber_Data/CustomLevels. Sabers (.saber) live in CustomSabers.
+BEATSABER_DOMAIN = "beatsaber"
+BS_LEVELS = "Beat Saber_Data/CustomLevels"
+BS_SABERS = "CustomSabers"
+_BS_AUDIO = (".egg", ".ogg", ".wav")
+
+
+def beatsaber_plan(rel_files: list, fallback: str):
+    """[(archive path, game-relative destination)] for songs and sabers, or
+    None. A song pack of zips counts too (the install unpacks each zip
+    into its own song folder; here they plan as <name>/.zip)."""
+    files = [f.replace("\\", "/").strip("/") for f in rel_files or [] if f]
+    low = [f.lower() for f in files]
+    song_dirs = sorted({f.rsplit("/", 1)[0] if "/" in f else "" for f in low
+                        if f.split("/")[-1] == "info.dat"})
+    out = []
+    for f, fl in zip(files, low):
+        if fl.endswith(".saber"):
+            out.append((f, f"{BS_SABERS}/{f.split('/')[-1]}"))
+            continue
+        d = next((s for s in song_dirs if s == "" or fl.startswith(s + "/")), None)
+        if d is not None:
+            name = (f.split("/")[len(d.split("/")) - 1] if d else "") or fallback
+            rest = f[len(d) + 1:] if d else f
+            out.append((f, f"{BS_LEVELS}/{name}/{rest}"))
+        elif fl.endswith(".zip"):
+            out.append((f, f"{BS_LEVELS}/{os.path.splitext(f.split('/')[-1])[0]}.zip"))
+        elif not fl.endswith(_DOC_EXTS):
+            return None
+    return out or None
+
+
+def apply_beatsaber_profile(game: dict) -> bool:
+    if game.get("nexusDomain") != BEATSABER_DOMAIN:
+        return False
+    game["engine"] = "unity"
+    game["modsSubdir"] = BS_LEVELS
+    game["beatSaber"] = True
+    # Its mods need BSIPA, not a Unity loader: none is suggested.
+    game.pop("framework", None)
+    game["underConstruction"] = (
+        "Experimental generic support for Beat Saber: custom songs go into "
+        "Beat Saber_Data/CustomLevels and sabers into CustomSabers. The game reads them through "
+        "its mods (SongCore, a saber mod), which BSManager installs - it's on this game's Nexus "
+        "page; run it from the mod's page after installing it.")
+    return True
+
+
 # Games whose mods are laid out with other names for the game's folders:
 # Forza Horizon's mods say "mediapc/" (and "Content/" for the game folder)
 # for what the Steam game calls media/.
@@ -1392,11 +1443,19 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if game.get("toolApply") == "reloaded" and any(
             f.split("/")[-1] == "modconfig.json" for f in low):
         return "tool_managed"
+    if game.get("toolApply") == "reloaded" and game.get("nexusDomain") in ("persona4golden",):
+        import reloaded_ii
+        if reloaded_ii.persona_old_layout(files):
+            return "old_version"  # the 32-bit release's layout; Steam's game is 64-bit now
+        if reloaded_ii.persona_wrap(files, {e for e in root_entries if e.lower().endswith(".cpk")}):
+            return "tool_managed"
     if game.get("toolApply") == "xv2ins" and any(f.endswith(".x2m") for f in low):
         return "tool_managed"
     if game.get("toolApply") == "khpatch" and any(
             f.endswith((".kh1pcpatch", ".kh2pcpatch", ".compcpatch", ".bbspcpatch", ".lua")) for f in low):
         return "tool_managed"
+    if game.get("nexusDomain") == BEATSABER_DOMAIN and beatsaber_plan(files, "x"):
+        return "game_folder"
     if game.get("toolApply") == "memoria":
         import memoria
         if memoria.mod_folders(files):

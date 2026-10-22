@@ -159,6 +159,57 @@ def find_mods(rel_files: list) -> list:
     return sorted(set(out))
 
 
+# Persona Essentials (Sewer56/p5rpc.modloader) - one mod for P3P, P4G
+# (64-bit) and P5R. Files inside a CPK go in <mod>/P5REssentials/CPK/<cpk>/.
+ESSENTIALS_ID = "p5rpc.modloader"
+ESSENTIALS_GAMES = {"persona4golden": "p4g.exe", "persona5royal": "p5r.exe",
+                    "persona3portable": "p3p.exe"}
+_OLD_P4G = re.compile(r"^data0000\d$", re.I)
+
+
+def persona_old_layout(rel_files: list) -> bool:
+    """A mod for P4G's old 32-bit release (data00000-6 folders, Aemulus
+    packages, the XWB music bank), which the 64-bit game doesn't have."""
+    low = [f.replace("\\", "/").lower() for f in rel_files or []]
+    return any(any(_OLD_P4G.match(p) for p in f.split("/")[:-1]) for f in low) or \
+        any(f.endswith(".tbp") or f.split("/")[-1] == "bgm.xwb" for f in low) or \
+        any(f.split("/")[-1] == "package.xml" for f in low) and not any(
+            f.split("/")[-1] == "modconfig.json" for f in low)
+
+
+def persona_wrap(rel_files: list, cpks: set) -> list:
+    """[(archive path, path inside a new Reloaded mod)] for loose files laid
+    out by CPK name ("data_e/init_free/..." for data_e.cpk), the way
+    Persona Essentials loads them; [] when the archive isn't that."""
+    files = [f.replace("\\", "/").strip("/") for f in rel_files or [] if f]
+    want = {c.lower()[:-4] if c.lower().endswith(".cpk") else c.lower() for c in cpks}
+    for depth in range(3):  # wrapper folders around the CPK folders
+        tops = {}
+        for f in files:
+            parts = f.split("/")
+            if len(parts) > depth + 1:
+                tops.setdefault(parts[depth].lower(), []).append(f)
+        hits = [t for t in tops if t in want or (t.endswith(".cpk") and t[:-4] in want)]
+        if hits:
+            out = []
+            for t in hits:
+                cpk = t if t.endswith(".cpk") else t + ".cpk"
+                for f in tops[t]:
+                    rest = "/".join(f.split("/")[depth + 1:])
+                    out.append((f, f"P5REssentials/CPK/{cpk.upper() if cpk.isupper() else cpk}/{rest}"))
+            return out
+    return []
+
+
+def wrapped_mod_config(mod_id: str, name: str, author: str, exe: str) -> dict:
+    return {"ModId": mod_id, "ModName": name, "ModAuthor": author or "Nexus Mods",
+            "ModVersion": "1.0.0", "ModDescription": "Packed by the Nexus Mods plugin from a loose-file mod.",
+            "ModDll": "", "ModIcon": "", "ModR2RManagedDll32": "", "ModR2RManagedDll64": "",
+            "ModNativeDll32": "", "ModNativeDll64": "", "IsLibrary": False, "ReleaseMetadataFileName": "",
+            "PluginData": {}, "IsUniversalMod": False, "ModDependencies": [ESSENTIALS_ID],
+            "OptionalDependencies": [], "SupportedAppId": [exe]}
+
+
 def read_mod_config(path: str) -> dict:
     try:
         with open(path, encoding="utf-8-sig") as f:
