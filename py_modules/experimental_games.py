@@ -557,6 +557,7 @@ def _add_archive_entries(install_path: str, index: dict) -> None:
 # several places (Half-Life's models/ exists under valve/ and every
 # expansion): the base game's folder wins.
 GAME_CONTENT_ROOT = {
+    "finalfantasy9": "x64",
     "halflife": "valve",
     "halflife2": "hl2",
     "halflifeblueshift": "valve",
@@ -868,7 +869,9 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
             base = _pick_dir(dir_index[top], [prefer, mods_subdir, exe_hint])
             if base:
                 dst = base + "/" + "/".join(parts[1:])
-        elif len(parts) == 1 and (top in PROXY_DLLS or top.endswith(".asi")):
+        elif len(parts) == 1 and (top in PROXY_DLLS or top.endswith(".asi")
+                                  or (top.startswith("nvngx_") and top.endswith(".dll"))):
+            # NVIDIA's DLSS / Streamline dlls are loaded from beside the exe.
             dst = (exe_hint + "/" + rel) if exe_hint else rel
         elif top == "plugins" and any(r.lower().endswith(".asi") for _s, r in rels):
             dst = (exe_hint + "/" + rel) if exe_hint else rel
@@ -1454,6 +1457,12 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     if game.get("toolApply") == "khpatch" and any(
             f.endswith((".kh1pcpatch", ".kh2pcpatch", ".compcpatch", ".bbspcpatch", ".lua")) for f in low):
         return "tool_managed"
+    if game.get("engine") == "reengine":
+        import re_engine
+        if re_engine.wrong_build(files, game):
+            return "old_version"  # the other build (DX11 vs ray-traced) of the game
+        if re_engine.plan(files):
+            return "game_folder"
     if game.get("nexusDomain") == BEATSABER_DOMAIN and beatsaber_plan(files, "x"):
         return "game_folder"
     if game.get("toolApply") == "memoria":

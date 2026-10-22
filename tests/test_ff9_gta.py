@@ -153,3 +153,40 @@ class BeatSaberTests(unittest.TestCase):
                          [("Virtuous Contract & Cruel Oath.saber", "CustomSabers/Virtuous Contract & Cruel Oath.saber")])
         self.assertEqual(eg.classify_mod(["Pack/a.zip", "Pack/b.zip"], g, set(), {}, False, {}), "game_folder")
         self.assertNotIn("framework", g)
+
+
+class SmallRules(unittest.TestCase):
+    def test_dlss_and_ff9_assets(self):
+        self.assertEqual(eg.plan_root_install(["nvngx_dlssnr.dll"], {"forzahorizon6.exe"}, {}, "", "", {}, "", ""),
+                         [("nvngx_dlssnr.dll", "nvngx_dlssnr.dll")])
+        fidx = {"sharedassets2.assets": ["x64/FF9_Data/sharedassets2.assets", "x86/FF9_Data/sharedassets2.assets"]}
+        g = {"nexusDomain": "finalfantasy9", "processName": "x64/FF9.exe"}
+        self.assertEqual(eg.plan_root_install(["sharedassets2.assets"], {"x64", "x86"}, {}, "", "x64", fidx,
+                                              eg.content_root(g), ""),
+                         [("sharedassets2.assets", "x64/FF9_Data/sharedassets2.assets")])
+
+
+class REEngineTests(unittest.TestCase):
+    def test_re2(self):
+        import re_engine
+        g = {"nexusDomain": "residentevil22019"}
+        self.assertTrue(re_engine.apply_re_profile(g, True))
+        self.assertEqual(re_engine.release_url(g), re_engine.RELEASE + "RE2.zip")
+        stm = ["Mod/modinfo.ini", "Mod/screenshot.jpg",
+               "Mod/natives/stm/sectionroot/character/player/pl1000/pl1003/a.tex.34"]
+        self.assertEqual(re_engine.plan(stm), [(stm[2], "natives/stm/sectionroot/character/player/pl1000/pl1003/a.tex.34")])
+        self.assertEqual(eg.classify_mod(stm, g, set(), {}, False, {}), "game_folder")
+        x64 = ["natives/x64/objectroot/prefab/character/enemy/em6200.pfb.16", "modinfo.ini"]
+        self.assertEqual(eg.classify_mod(x64, g, set(), {}, False, {}), "old_version")
+        g11 = {"nexusDomain": "residentevil22019"}
+        re_engine.apply_re_profile(g11, False)
+        self.assertEqual(eg.classify_mod(x64, g11, set(), {}, False, {}), "game_folder")
+        self.assertTrue(re_engine.release_url(g11).endswith("RE2_TDB66.zip"))
+        plug = ["reframework/plugins/re2r_ultimate_trainer.dll", "modinfo.ini", "re2r_ut_trainer.png"]
+        self.assertEqual(re_engine.plan(plug), [(plug[0], plug[0])])
+        dlc = ["920563/re_dlc_000.pak", "natives/stm/x/a.pfb.17", "readme.txt"]
+        self.assertEqual(len(re_engine.plan(dlc)), 2)
+        self.assertIsNone(re_engine.plan(["Updater.exe", "Data/Data.pkg"]))
+        cfg = re_engine.enable_loose_loader("Menu_Open=false\nLooseFileLoader_Enabled=false\n")
+        self.assertIn("LooseFileLoader_Enabled=true", cfg)
+        self.assertNotIn("Enabled=false", cfg)

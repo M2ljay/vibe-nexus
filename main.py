@@ -34,6 +34,7 @@ import kingdom_hearts  # noqa: E402
 import archive_peek  # noqa: E402
 import gta_img  # noqa: E402
 import memoria  # noqa: E402
+import re_engine  # noqa: E402
 import generic_loaders  # noqa: E402
 
 
@@ -7521,6 +7522,8 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
     plan = None
     if game.get("toolApply") == "memoria":
         plan = memoria.plan(rel_files, _safe_name(base_record.get("name") or "mod")) or None
+    if re_engine.is_re(game):
+        plan = re_engine.plan(rel_files)
     if game.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN:
         plan = experimental_games.beatsaber_plan(rel_files, _safe_name(base_record.get("name") or "Song"))
         if plan and any(d.endswith(".zip") for _s, d in plan):
@@ -26312,6 +26315,11 @@ query Link($slug: String!, $domainName: String!) {
             if not result.get("ok"):
                 decky.logger.warning(f"loader Step 1 for {game_domain}: {result.get('error')}")
             return result
+        if install_kind == "reframework":
+            result = await _reframework_setup(game_domain)
+            if not result.get("ok"):
+                decky.logger.warning(f"REFramework Step 1: {result.get('error')}")
+            return result
         if install_kind == "memoria":
             result = await _memoria_setup(game_domain)
             if not result.get("ok"):
@@ -34023,6 +34031,7 @@ query CollectionInstructions($slug: String!) {
                          or (g.get("nexusDomain") == memoria.DOMAIN and g.get("toolApply") != "memoria")
                          or (g.get("nexusDomain") in gta_img.GAMES and g.get("toolApply") != "gtaimg")
                          or (g.get("nexusDomain") == experimental_games.BEATSABER_DOMAIN and not g.get("beatSaber"))
+                         or (g.get("nexusDomain") in re_engine.GAMES and not g.get("reBuild"))
                          or (g.get("nexusDomain") in experimental_games.TFC_GAMES
                              and g.get("toolApply") != "tfcinstaller")
                          or (not g.get("processName")
@@ -34228,7 +34237,8 @@ query CollectionInstructions($slug: String!) {
             decky.logger.info(f"experimental profile {domain}: Bethesda dataDir")
             return
         if memoria.apply_ff9_profile(game) or gta_img.apply_gta_profile(game) or \
-                experimental_games.apply_beatsaber_profile(game):
+                experimental_games.apply_beatsaber_profile(game) or re_engine.apply_re_profile(
+                    game, os.path.isdir(os.path.join(_game_dir(game.get("installDirName") or ""), "D3D12"))):
             game["frameworkChecked"] = True
             game["profileVersion"] = experimental_games.PROFILE_VERSION
             decky.logger.info(f"experimental profile {domain}: "
@@ -34749,7 +34759,8 @@ query CollectionInstructions($slug: String!) {
             if xenoverse2.apply_xv2_profile(game) or experimental_games.apply_sr2_profile(
                     game, _sr2_framework()) or experimental_games.apply_doom_profile(game, _doom_framework()) \
                     or kingdom_hearts.apply_kh_profile(game) or memoria.apply_ff9_profile(game) \
-                    or gta_img.apply_gta_profile(game) or experimental_games.apply_beatsaber_profile(game):
+                    or gta_img.apply_gta_profile(game) or experimental_games.apply_beatsaber_profile(game) \
+                    or re_engine.apply_re_profile(game, os.path.isdir(os.path.join(path, "D3D12"))):
                 rule = None
             if rule:
                 exe = experimental_games.exe_from_rule(rule, path)
@@ -36128,3 +36139,49 @@ async def _gta_apply(game: dict) -> dict:
     settings.setdefault("gta_img", {})[domain] = state
     _save_settings(settings)
     return {"ok": True, "tool": tool, "count": len(reps)}
+
+
+# ---- RE Engine games: REFramework ---------------------------------------------
+async def _reframework_setup(game_domain: str) -> dict:
+    """Step 1: REFramework's dinput8.dll beside the exe, its Loose File
+    Loader switched on."""
+    import zipfile
+    game = _experimental_game_for(game_domain)
+    if not game or not re_engine.is_re(game):
+        return {"ok": False, "error": "Not an RE Engine game"}
+    root = _game_dir(game.get("installDirName") or "")
+    if await _process_running(os.path.basename(game.get("processName") or "")):
+        return {"ok": False, "error": "Close the game first."}
+    url = re_engine.release_url(game)
+    try:
+        blob = await _fetch_bytes(url, 600)
+        z = zipfile.ZipFile(io.BytesIO(blob))
+        dll = z.read("dinput8.dll")
+        rev = z.read("reframework_revision.txt").decode("utf-8", "replace").strip() \
+            if "reframework_revision.txt" in z.namelist() else ""
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, OSError, KeyError,
+            zipfile.BadZipFile) as e:
+        return {"ok": False, "error": f"Couldn't get REFramework ({os.path.basename(url)}): {e}"}
+    files, backups = [], []
+    dst = os.path.join(root, "dinput8.dll")
+    if os.path.isfile(dst) and not os.path.exists(dst + ".nexusbak"):
+        os.replace(dst, dst + ".nexusbak")
+        backups.append("dinput8.dll")
+    with open(dst, "wb") as f:
+        f.write(dll)
+    files.append("dinput8.dll")
+    cfg = os.path.join(root, re_engine.CONFIG)
+    try:
+        with open(cfg, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    with open(cfg, "w", encoding="utf-8") as f:
+        f.write(re_engine.enable_loose_loader(text))
+    settings = _load_settings()
+    settings.setdefault("experimental_frameworks", {})[f"{game_domain}/0"] = {
+        "install_dir": game.get("installDirName") or "", "files": files, "backups": backups,
+        "tool": "reframework", "version": rev or os.path.basename(url)}
+    _save_settings(settings)
+    decky.logger.info(f"REFramework for {game_domain}: {os.path.basename(url)} {rev}, loose files on")
+    return {"ok": True, "install_path": root, "version": rev}
