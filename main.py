@@ -7521,7 +7521,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
                     rel_files, root_entries, experimental_games.index_game_dirs(install_path),
                     mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
                     experimental_games.index_game_files(install_path, mods_subdir),
-                    experimental_games.content_root(game))
+                    experimental_games.content_root(game), game.get("installDirName") or "")
     cfg = (experimental_games.ue_config_plan(rel_files)
            if plan is None and game.get("engine") == "unreal" else None)
     if cfg:
@@ -7537,7 +7537,7 @@ def _experimental_root_install(scratch: str, install_path: str, mods_subdir: str
             rel_files, root_entries, experimental_games.index_game_dirs(install_path),
             mods_subdir, experimental_games.exe_dir_of(game.get("processName") or ""),
             experimental_games.index_game_files(install_path, mods_subdir),
-            experimental_games.content_root(game),
+            experimental_games.content_root(game), game.get("installDirName") or "",
         )
     if not plan or not all(_safe_rel_path(d) for _s, d in plan):
         return ""
@@ -35762,12 +35762,14 @@ _wrap_plugin_update()
 
 
 # ---- What's in an archive Nexus has no listing for -------------------------------
-# v2: v1 had every RAR down as unreadable.
-PEEK_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "archive-listings-2.json")
+# v3: keyed by game too - Nexus numbers files per game, so v2 mixed up two
+# games' files that shared a number (a Hollow Knight mod listed a
+# Danganronpa mod's files).
+PEEK_CACHE = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "archive-listings-3.json")
 _PEEK_LOCK = threading.Lock()
 
 
-def _peek_cache_get(file_id: int):
+def _peek_cache_get(file_id):
     try:
         with open(PEEK_CACHE, encoding="utf-8") as f:
             return json.load(f).get(str(file_id))
@@ -35775,7 +35777,7 @@ def _peek_cache_get(file_id: int):
         return None
 
 
-def _peek_cache_put(file_id: int, paths: list) -> None:
+def _peek_cache_put(file_id, paths: list) -> None:
     with _PEEK_LOCK:
         try:
             with open(PEEK_CACHE, encoding="utf-8") as f:
@@ -35814,7 +35816,8 @@ def _ranged_listing(uri: str):
 
 
 async def _peek_paths(game_domain: str, mod_id: int, file_id: int):
-    cached = _peek_cache_get(file_id)
+    key = f"{game_domain}/{int(mod_id)}/{int(file_id)}"
+    cached = _peek_cache_get(key)
     if cached is not None:
         return cached or None
     api_key = _load_settings().get("api_key")
@@ -35841,8 +35844,8 @@ async def _peek_paths(game_domain: str, mod_id: int, file_id: int):
         decky.logger.info(f"archive peek {game_domain}/{mod_id}: {type(e).__name__}: {e}")
         return None
     if paths is None:
-        _peek_cache_put(file_id, [])  # rar, encrypted: same answer next time
+        _peek_cache_put(key, [])  # encrypted, not an archive: same answer next time
         return None
-    _peek_cache_put(file_id, paths)
+    _peek_cache_put(key, paths)
     decky.logger.info(f"archive peek {game_domain}/{mod_id}: {len(paths)} files")
     return paths or None

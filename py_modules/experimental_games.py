@@ -480,7 +480,9 @@ PROXY_DLLS = {
 }
 # Top-level names that mean "this archive is laid out from the game root".
 ROOT_MARKERS = {"bepinex", "melonloader", "doorstop_config.ini", "winhttp.dll",
-                "version.dll", ".doorstop_version"}
+                "version.dll", ".doorstop_version",
+                # Bully: Derpy's Script Loader keeps its scripts beside the exe.
+                "_derpy_script_loader"}
 # Loose documentation that has no business in a game folder.
 _DOC_EXTS = (".txt", ".md", ".url", ".jpg", ".jpeg", ".png", ".pdf", ".html",
              ".htm", ".rtf", ".webp", ".gif")
@@ -580,9 +582,70 @@ def _ext_homes(file_index: dict) -> dict:
     return homes
 
 
+# Folders of the game's own files a mod ships so they can be put back
+# ("Original Game Files", "Default Suit (Original File Backups)",
+# "Games files that was changed (just ignore)"): never installed.
+_ASIDE_RX = re.compile(r"original|backup|vanilla|uninstall|restore|ign?n?ore\b|ingnore", re.I)
+# Checksum tools some authors bundle (QuickSFV) are not part of the mod.
+_JUNK_DIRS = {"quicksfv", "__macosx", "fomod"}
+
+
+def drop_aside(files: list) -> list:
+    """Files without the folders of originals/backups shipped beside a mod,
+    and without bundled checksum tools. A folder is only dropped when a
+    sibling folder (the mod itself) is left."""
+    out = [f for f in files if not f.lower().endswith(".sfv")
+           and not any(p.lower() in _JUNK_DIRS for p in f.split("/")[:-1])]
+    for depth in range(3):
+        children = {}
+        for f in out:
+            parts = f.split("/")
+            if len(parts) > depth + 1:
+                children.setdefault("/".join(parts[:depth]), set()).add(parts[depth])
+        drop = set()
+        for parent, names in children.items():
+            aside = {n for n in names if _ASIDE_RX.search(n)}
+            if aside and names - aside:
+                drop |= {(parent + "/" if parent else "") + n + "/" for n in aside}
+        if drop:
+            out = [f for f in out if not any(f.startswith(d) for d in drop)]
+    return out or files
+
+
+_UE3_DLC_INI = re.compile(r"^dlc_[^/]*-\w*game\.ini$", re.I)
+
+
+def ue3_dlc_plan(files: list, dir_index: dict, prefer: str = ""):
+    """Unreal Engine 3 add-on folders (a DLC_<name>-BmGame.ini with its
+    .upk and .int beside it - Arkham Origins' new suit slots): each such
+    folder goes into the game's DLC folder under its own name."""
+    homes = [d for d in dir_index.get("dlc") or [] if d.count("/") <= 1]
+    if prefer:
+        homes = [d for d in homes if d.lower().split("/")[0] == prefer.lower()] or homes
+    if len(homes) != 1:
+        return None
+    folders = {f.rsplit("/", 1)[0] for f in files if "/" in f and _UE3_DLC_INI.match(f.split("/")[-1])}
+    if not folders:
+        return None
+    plan = []
+    for f in files:
+        owner = next((d for d in folders if f.startswith(d + "/")), None)
+        if owner is None:
+            if f.lower().endswith(_DOC_EXTS) or f.split("/")[-1].lower().endswith(".ini"):
+                continue
+            return None
+        plan.append((f, f"{homes[0]}/{owner.split('/')[-1]}/{f[len(owner) + 1:]}"))
+    return plan or None
+
+
+def _same_name(a: str, b: str) -> bool:
+    norm = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())  # noqa: E731
+    return bool(a and b) and norm(a) == norm(b)
+
+
 def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
                       mods_subdir: str, exe_dir: str, file_index: dict = None,
-                      prefer: str = ""):
+                      prefer: str = "", game_name: str = ""):
     """Map an archive's files onto the game folder, or return None.
 
     rel_files are the extracted archive's files (forward slashes). Returns
@@ -593,8 +656,12 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
     """
     files = [f.replace("\\", "/").strip("/") for f in rel_files if f]
     files = [f for f in files if f and not f.lower().startswith(("__macosx/", "fomod/"))]
+    files = drop_aside(files)
     if not files:
         return None
+    dlc = ue3_dlc_plan(files, dir_index, prefer)
+    if dlc:
+        return dlc
     roots = {e.lower() for e in root_entries}
     mods_parts = [p.lower() for p in (mods_subdir or "").split("/") if p]
     # The mods folder's own name ("~mods", "plugins") at the top of an
@@ -628,7 +695,9 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
         if len(tops) != 1 or not body:
             break
         top = next(iter(tops))
-        if not all("/" in f[len(prefix):] for f in body) or known(top.lower()):
+        if not all("/" in f[len(prefix):] for f in body):
+            break
+        if known(top.lower()) and not _same_name(top, game_name):
             break
         if top.lower() == leaf:
             break
@@ -666,6 +735,16 @@ def plan_root_install(rel_files: list, root_entries: set, dir_index: dict,
         if dst is None and file_index:
             # A replacement: the game has exactly one file of this name.
             hits = file_index.get(parts[-1].lower()) or []
+            if len(hits) > 1:
+                # Several game files of this name: the one under the folder
+                # the game's content lives in (Batman's SinglePlayer/, Half-
+                # Life's valve/), and among those the one whose folders the
+                # mod's own path repeats.
+                inside = [h for h in hits if prefer and h.lower().startswith(prefer.lower() + "/")]
+                hits = inside or hits
+                tail = [h for h in hits if len(parts) > 1
+                        and h.lower().endswith("/".join(parts[-2:]).lower())]
+                hits = tail if len(tail) == 1 else hits
             if len(hits) == 1:
                 dst = hits[0]
             elif len(parts) == 1:
@@ -1019,7 +1098,10 @@ def loose_without_gotr(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-_ENGINE_INI = re.compile(r"^(default|bm|base|ud|ut)\w*\.ini$|(engine|input|game|ui|system|settings|scalability)\.ini$")
+_ENGINE_INI = re.compile(
+    r"^default(engine|game|input|editor|ui|compat|scalability|lightmass|deviceprofiles|hardware|"
+    r"gameusersettings|engineplatform)\w*\.ini$|^(bm|base|ud|ut)\w*\.ini$|"
+    r"(engine|input|game|ui|system|settings|scalability)\.ini$")
 
 
 def engine_config_ini(path: str) -> bool:
@@ -1029,12 +1111,24 @@ def engine_config_ini(path: str) -> bool:
     return "/config/" in "/" + low or bool(_ENGINE_INI.search(low.split("/")[-1]))
 
 
+_SAVE_DIR_RX = re.compile(r"^(slot\d+|quicksave|autosave|savegames?|saves?|savedata)$", re.I)
+_BARE_DOCS = {"license", "licence", "readme", "changelog", "copying", "authors"}
+
+
+def _is_save_path(f: str) -> bool:
+    low = f.lower()
+    name = low.split("/")[-1]
+    return (any(h in name for h in _SAVE_HINTS) or "savedata" in low
+            or name.startswith("save_") and "." in name
+            or any(_SAVE_DIR_RX.match(p) for p in low.split("/")[:-1]))
+
+
 def save_files(rel_files: list) -> list:
     """The save files of an archive made only of saves (and readmes), else []."""
     files = [f.replace("\\", "/") for f in rel_files or [] if f and not f.endswith("/")]
-    payload = [f for f in files if not f.lower().endswith(_DOC_EXTS)]
-    if payload and all(any(h in f.lower().split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f.lower()
-                       for f in payload):
+    payload = [f for f in files if not f.lower().endswith(_DOC_EXTS)
+               or any(_SAVE_DIR_RX.match(p) for p in f.lower().split("/")[:-1])]
+    if payload and all(_is_save_path(f) for f in payload):
         return payload
     return []
 
@@ -1129,6 +1223,9 @@ VERDICTS = {
     "reshade_preset": "is a ReShade preset - set up ReShade for this game first",
     "reshade_ready": "is a ReShade preset - installs beside the game, with the effects it uses",
     "unknown": "has no published file list to check",
+    "texmod": "is a TexMod package (.tpf) - it needs TexMod or uMod running with the game, "
+              "which the plugin doesn't do",
+    "old_version": "was made for an older version of the game and can't work on this one",
 }
 
 
@@ -1173,17 +1270,21 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
     low = [f.lower() for f in files]
     if any(f.endswith("fomod/moduleconfig.xml") for f in low):
         return "wizard"
-    payload_low = [f for f in low if not f.endswith(_DOC_EXTS)]
+    payload_low = [f for f in low if not f.endswith(_DOC_EXTS)
+                   and f.split("/")[-1] not in _BARE_DOCS]
+    if payload_low and all(f.endswith(".tpf") for f in payload_low):
+        return "texmod"
+    if game.get("engine") == "unity" and any(f.split("/")[-1] == "main.bundle.js" for f in low):
+        return "old_version"  # Vampire Survivors' 2022 JavaScript build; it's Unity now
     if payload_low and all(f.endswith(".ct") or f.endswith(_EXE_OR_INSTALLER) for f in payload_low) \
             and any(f.endswith(".ct") for f in payload_low):
         return "cheat_table"
-    if payload_low and all(any(h in f.split("/")[-1] for h in _SAVE_HINTS) or "savedata" in f
-                           for f in payload_low):
+    if payload_low and all(_is_save_path(f) for f in payload_low):
         return "save_file"
     if game.get("engine") == "unreal" and (ue_config_plan(files) or (
             payload_low and all(f.split("/")[-1] in UE_CONFIG_NAMES for f in payload_low))):
         return "ue_config"
-    if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon64"))
+    if payload_low and all(f.endswith((".ini", ".fx", ".fxh", ".addon", ".addon32", ".addon64"))
                            or "reshade-shaders/" in f for f in payload_low) \
             and not any(f.split("/")[-1] in PROXY_DLLS for f in low) \
             and not all(engine_config_ini(f) for f in payload_low if f.endswith(".ini")):
@@ -1221,7 +1322,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
             return "tool_managed" if game.get("toolApply") else "mods_folder"
         if plan_root_install(files, root_entries, dir_index, game.get("modsSubdir") or "",
                              exe_dir_of(game.get("processName") or ""), file_index,
-                             content_root(game)):
+                             content_root(game), game.get("installDirName") or ""):
             return "game_folder"
         if any(f.endswith(_EXE_OR_INSTALLER) for f in low):
             return "program"
@@ -1238,7 +1339,7 @@ def classify_mod(paths, game: dict, root_entries: set, dir_index: dict,
         return "mods_folder"
     plan = plan_root_install(files, root_entries, dir_index,
                              game.get("modsSubdir") or "", exe_dir_of(game.get("processName") or ""),
-                             file_index, content_root(game))
+                             file_index, content_root(game), game.get("installDirName") or "")
     if plan:
         return "game_folder"
     loadable = _LOADABLE.get(game.get("engine") or "")

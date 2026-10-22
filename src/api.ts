@@ -2404,6 +2404,9 @@ export interface CoverageRow {
     | "save_file"
     | "cheat_table"
     | "reshade_preset"
+    | "reshade_ready"
+    | "texmod"
+    | "old_version"
     | "unknown";
   file: string;
 }
