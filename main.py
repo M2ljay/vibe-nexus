@@ -35393,8 +35393,8 @@ def _verify_record(game_domain: str, key: str) -> str:
     settings = _load_settings()
     rec = (settings.get("installed", {}).get(game_domain) or {}).get(key)
     game = _experimental_game_for(game_domain)
-    if not rec or not game or not _record_is_on(rec):
-        return ""
+    if not rec or not game or not _record_is_on(rec) or (rec.get("program") and not rec.get("files")):
+        return ""  # an installer not run yet has no files of its own
     root = _game_dir(game.get("installDirName") or "")
     if rec.get("mode") == "files":
         _base, paths = _files_record_paths(rec, root)

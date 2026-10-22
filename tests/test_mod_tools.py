@@ -52,6 +52,11 @@ class ToolsTests(unittest.TestCase):
         self.assertEqual(main._verify_record("toolgame", k), "")
         os.remove(os.path.join(self.root, "Data", "x.dat"))
         self.assertIn("1 of 2", main._verify_record("toolgame", k))
+        settings = main._load_settings()
+        settings["installed"]["toolgame"]["Prog"] = {"mode": "files", "target": ".", "files": [],
+                                                     "program": {"exe": "x.exe"}}
+        main._save_settings(settings)
+        self.assertEqual(main._verify_record("toolgame", "Prog"), "")
 
     def test_vanilla_remembers(self):
         a = self.install("A", {"Data/a.dat": b"a"}, 1)
