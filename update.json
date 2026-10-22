@@ -1,6 +1,6 @@
 {
- "version": "1.21.32-anygame.53",
- "hash": "f0b2fee630c762763915e04189f8f1ba20797d6f4fd9fc8d50b4a9d03fb7458c",
+ "version": "1.21.32-anygame.54",
+ "hash": "b1b33cf4c0fe189b4e6491591ed319dc02cef5e51bf4b1058b23a0e33902e341",
  "artifact": "https://raw.githubusercontent.com/M2ljay/vibe-nexus/release/Nexus-Mods.zip",
- "notes": "No false 'installed no files' warning for installer mods."
+ "notes": "Nested archives unpacked; RE2 DX11/RT mismatch flagged."
 }
